@@ -39,6 +39,8 @@ const useKokoroWebWorkerTts = ({ onError }: UseKokoroWebWorkerTtsProps) => {
   const completeAudioSourceRef = useRef<AudioBufferSourceNode | null>(null);
   const playbackStartTimeRef = useRef<number>(0);
   const playbackOffsetRef = useRef<number>(0);
+  const seekTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const progressIntervalRef = useRef<NodeJS.Timeout | null>(null);
   
   // New continuous audio buffer system
   const audioBufferRef = useRef<Float32Array[]>([]);
@@ -270,7 +272,15 @@ const useKokoroWebWorkerTts = ({ onError }: UseKokoroWebWorkerTtsProps) => {
     
     console.log(`🎯 Seeking to ${clampedTime.toFixed(2)}s`);
     
-    // Stop current playback
+    const wasPlaying = isPlaying;
+    
+    // Clear any pending seek operations
+    if (seekTimeoutRef.current) {
+      clearTimeout(seekTimeoutRef.current);
+      seekTimeoutRef.current = null;
+    }
+    
+    // Stop current playback immediately
     if (completeAudioSourceRef.current) {
       try {
         completeAudioSourceRef.current.stop();
@@ -280,13 +290,16 @@ const useKokoroWebWorkerTts = ({ onError }: UseKokoroWebWorkerTtsProps) => {
       completeAudioSourceRef.current = null;
     }
     
-    // Update current time
+    // Update current time immediately
     setCurrentTime(clampedTime);
     playbackOffsetRef.current = clampedTime;
     
-    // If playing, start from new position
-    if (isPlaying) {
-      playCompleteAudio(clampedTime);
+    // If was playing, restart from new position with debouncing
+    if (wasPlaying) {
+      seekTimeoutRef.current = setTimeout(() => {
+        seekTimeoutRef.current = null;
+        playCompleteAudio(clampedTime);
+      }, 50); // Slightly longer delay to handle rapid clicks
     }
   }, [completeAudioBuffer, canScrub, duration, isPlaying]);
 
@@ -294,6 +307,16 @@ const useKokoroWebWorkerTts = ({ onError }: UseKokoroWebWorkerTtsProps) => {
     if (!completeAudioBuffer || !audioContextRef.current) return;
     
     try {
+      // Stop any existing playback first
+      if (completeAudioSourceRef.current) {
+        try {
+          completeAudioSourceRef.current.stop();
+        } catch (e) {
+          // Already stopped
+        }
+        completeAudioSourceRef.current = null;
+      }
+      
       // Resume audio context if suspended
       if (audioContextRef.current.state === 'suspended') {
         await audioContextRef.current.resume();
@@ -317,34 +340,66 @@ const useKokoroWebWorkerTts = ({ onError }: UseKokoroWebWorkerTtsProps) => {
       playbackStartTimeRef.current = audioContextRef.current.currentTime;
       playbackOffsetRef.current = startTime;
       
-      // Start progress updates
+      // Start progress updates with both animation frame and interval for reliability
+      const progressAnimationRef = { current: 0 };
       const updateProgress = () => {
-        if (isPlaying && completeAudioSourceRef.current) {
-          const elapsed = audioContextRef.current!.currentTime - playbackStartTimeRef.current;
-          const currentPos = playbackOffsetRef.current + elapsed;
-          
-          if (currentPos >= duration) {
-            // Playback completed
-            setIsPlaying(false);
-            setCurrentTime(duration);
-            completeAudioSourceRef.current = null;
-          } else {
-            setCurrentTime(currentPos);
-            requestAnimationFrame(updateProgress);
+        // Check if we should continue updating
+        if (!completeAudioSourceRef.current) {
+          return; // Audio stopped, stop updating
+        }
+        
+        const elapsed = audioContextRef.current!.currentTime - playbackStartTimeRef.current;
+        const currentPos = playbackOffsetRef.current + elapsed;
+        
+        if (currentPos >= duration) {
+          // Playback completed
+          setIsPlaying(false);
+          setCurrentTime(duration);
+          completeAudioSourceRef.current = null;
+          if (progressIntervalRef.current) {
+            clearInterval(progressIntervalRef.current);
+            progressIntervalRef.current = null;
           }
+        } else {
+          setCurrentTime(currentPos);
+          // Continue updating regardless of isPlaying state for smooth progress
+          progressAnimationRef.current = requestAnimationFrame(updateProgress);
         }
       };
       
+      // Also use an interval as backup for consistent updates
+      progressIntervalRef.current = setInterval(() => {
+        if (completeAudioSourceRef.current && audioContextRef.current) {
+          const elapsed = audioContextRef.current.currentTime - playbackStartTimeRef.current;
+          const currentPos = playbackOffsetRef.current + elapsed;
+          
+          if (currentPos < duration) {
+            setCurrentTime(currentPos);
+          }
+        }
+      }, 100); // Update every 100ms
+      
       source.onended = () => {
         console.log('🏁 Complete audio playback ended');
-        setIsPlaying(false);
-        setCurrentTime(duration);
+        // Only set to end if we're actually playing (not manually paused)
+        if (isPlaying) {
+          setIsPlaying(false);
+          setCurrentTime(duration);
+          console.log('🏁 Audio completed naturally');
+        }
         completeAudioSourceRef.current = null;
+        if (progressAnimationRef.current) {
+          cancelAnimationFrame(progressAnimationRef.current);
+        }
+        if (progressIntervalRef.current) {
+          clearInterval(progressIntervalRef.current);
+          progressIntervalRef.current = null;
+        }
       };
       
       // Start playing from offset
       source.start(0, startTime);
-      requestAnimationFrame(updateProgress);
+      progressAnimationRef.current = requestAnimationFrame(updateProgress);
       
       console.log(`▶️ Started complete audio playback from ${startTime.toFixed(2)}s`);
       
@@ -352,13 +407,34 @@ const useKokoroWebWorkerTts = ({ onError }: UseKokoroWebWorkerTtsProps) => {
       console.error('Error playing complete audio:', error);
       setIsPlaying(false);
     }
-  }, [completeAudioBuffer, completeAudioSampleRate, duration, isPlaying]);
+  }, [completeAudioBuffer, completeAudioSampleRate, duration]);
 
   const togglePlayPause = useCallback(() => {
     if (!canScrub) return;
     
     if (isPlaying) {
-      // Pause
+      // Pause - capture current time BEFORE stopping to avoid jumping to end
+      console.log('⏸️ Pausing audio');
+      
+      // Calculate and save current position before stopping
+      if (completeAudioSourceRef.current && audioContextRef.current) {
+        const elapsed = audioContextRef.current.currentTime - playbackStartTimeRef.current;
+        const currentPos = playbackOffsetRef.current + elapsed;
+        const pausedTime = Math.max(0, Math.min(currentPos, duration));
+        console.log(`⏸️ Pausing at ${pausedTime.toFixed(2)}s`);
+        setCurrentTime(pausedTime);
+        playbackOffsetRef.current = pausedTime;
+      }
+      
+      setIsPlaying(false);
+      
+      // Clear progress updates when paused
+      if (progressIntervalRef.current) {
+        clearInterval(progressIntervalRef.current);
+        progressIntervalRef.current = null;
+      }
+      
+      // Stop audio source AFTER capturing position
       if (completeAudioSourceRef.current) {
         try {
           completeAudioSourceRef.current.stop();
@@ -367,24 +443,16 @@ const useKokoroWebWorkerTts = ({ onError }: UseKokoroWebWorkerTtsProps) => {
         }
         completeAudioSourceRef.current = null;
       }
-      setIsPlaying(false);
-      console.log('⏸️ Audio paused');
     } else {
       // Play from current position
+      console.log('▶️ Starting audio playback');
       setIsPlaying(true);
       playCompleteAudio(currentTime);
-      console.log('▶️ Audio resumed');
     }
   }, [canScrub, isPlaying, currentTime, playCompleteAudio]);
 
-  // Auto-play when audio becomes available
-  useEffect(() => {
-    if (completeAudioBuffer && canScrub && !isPlaying && currentTime === 0) {
-      console.log('🚀 Auto-starting scrubbing playback (audio ready)');
-      setIsPlaying(true);
-      playCompleteAudio(0);
-    }
-  }, [completeAudioBuffer, canScrub, isPlaying, currentTime, playCompleteAudio]);
+  // Don't auto-play - let user control playback
+  // Audio is ready when completeAudioBuffer is set
 
   // Initialize audio context when needed
   useEffect(() => {
@@ -560,8 +628,8 @@ const useKokoroWebWorkerTts = ({ onError }: UseKokoroWebWorkerTtsProps) => {
     try {
       console.log(`📚 Processing text (${text.length} characters)`);
       
-      // Chunk text for better processing
-      const chunks = chunkText(text, 2000);
+      // Chunk text for better processing - shorter chunks to avoid TTS cutoff
+      const chunks = chunkText(text, 500);
       console.log(`📝 Split into ${chunks.length} chunks for processing`);
       
       const allAudioChunks: Float32Array[] = [];
@@ -651,6 +719,7 @@ const useKokoroWebWorkerTts = ({ onError }: UseKokoroWebWorkerTtsProps) => {
       setDuration(combinedAudio.length / sampleRate);
       setCanScrub(true);
       setCurrentTime(0);
+      setIsPlaying(false); // Don't auto-play, user must click play
 
       onProgress?.(100);
       setStatus(`🎵 Audio ready! ${(combinedAudio.length / sampleRate).toFixed(1)}s of audio generated`);
@@ -712,6 +781,16 @@ const useKokoroWebWorkerTts = ({ onError }: UseKokoroWebWorkerTtsProps) => {
     setCurrentTime(0);
     setDuration(0);
     setCanScrub(false);
+    
+    // Clear any pending seek operations and progress updates
+    if (seekTimeoutRef.current) {
+      clearTimeout(seekTimeoutRef.current);
+      seekTimeoutRef.current = null;
+    }
+    if (progressIntervalRef.current) {
+      clearInterval(progressIntervalRef.current);
+      progressIntervalRef.current = null;
+    }
 
     setIsPlaying(false);
     setStatus(isReady ? '🚀 Kokoro AI ready - All international voices available!' : 'Loading Kokoro model...');

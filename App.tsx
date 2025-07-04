@@ -42,7 +42,7 @@ const App: React.FC = () => {
       await speak(inputText.trim(), selectedVoice);
       console.log('✅ Audio generation completed');
       
-      // Don't auto-reset since we now have scrubbing controls
+      // Audio is ready, user can now use play/pause controls
       setIsReading(false);
       
     } catch (error) {
@@ -64,6 +64,11 @@ const App: React.FC = () => {
     const secs = Math.floor(seconds % 60);
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
+
+  // State for enhanced seeking
+  const [isSeekingHover, setIsSeekingHover] = useState(false);
+  const [hoverTime, setHoverTime] = useState(0);
+  const [isDragging, setIsDragging] = useState(false);
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -376,11 +381,12 @@ const App: React.FC = () => {
                   <div 
                     style={{
                       width: '100%',
-                      height: '8px',
+                      height: '12px',
                       backgroundColor: '#4a5568',
-                      borderRadius: '4px',
+                      borderRadius: '6px',
                       cursor: 'pointer',
-                      position: 'relative'
+                      position: 'relative',
+                      padding: '2px 0'
                     }}
                     onClick={(e) => {
                       const rect = e.currentTarget.getBoundingClientRect();
@@ -389,32 +395,100 @@ const App: React.FC = () => {
                       const seekTime = percentage * duration;
                       seekToTime(seekTime);
                     }}
+                    onMouseMove={(e) => {
+                      const rect = e.currentTarget.getBoundingClientRect();
+                      const hoverX = e.clientX - rect.left;
+                      const percentage = Math.max(0, Math.min(1, hoverX / rect.width));
+                      const hoverSeconds = percentage * duration;
+                      setHoverTime(hoverSeconds);
+                      setIsSeekingHover(true);
+                    }}
+                    onMouseLeave={() => {
+                      setIsSeekingHover(false);
+                      setIsDragging(false);
+                    }}
+                    onMouseDown={() => setIsDragging(true)}
+                    onMouseUp={() => setIsDragging(false)}
                   >
+                    {/* Background track */}
+                    <div style={{
+                      position: 'absolute',
+                      top: '4px',
+                      left: '0',
+                      right: '0',
+                      height: '4px',
+                      backgroundColor: '#4a5568',
+                      borderRadius: '2px'
+                    }} />
+                    
+                    {/* Progress fill */}
                     <div 
                       style={{
+                        position: 'absolute',
+                        top: '4px',
+                        left: '0',
                         width: `${(currentTime / duration) * 100}%`,
-                        height: '100%',
+                        height: '4px',
                         backgroundColor: '#4a90e2',
-                        borderRadius: '4px',
-                        transition: 'width 0.1s ease'
+                        borderRadius: '2px',
+                        transition: isDragging ? 'none' : 'width 0.1s ease'
                       }}
                     />
+                    
+                    {/* Hover position indicator */}
+                    {isSeekingHover && (
+                      <div style={{
+                        position: 'absolute',
+                        top: '2px',
+                        left: `${(hoverTime / duration) * 100}%`,
+                        width: '2px',
+                        height: '8px',
+                        backgroundColor: '#e2e8f0',
+                        borderRadius: '1px',
+                        transform: 'translateX(-50%)',
+                        opacity: 0.7
+                      }} />
+                    )}
+                    
                     {/* Scrub handle */}
                     <div 
                       style={{
                         position: 'absolute',
                         top: '50%',
                         left: `${(currentTime / duration) * 100}%`,
-                        width: '16px',
-                        height: '16px',
+                        width: '20px',
+                        height: '20px',
                         backgroundColor: '#4a90e2',
                         borderRadius: '50%',
                         transform: 'translate(-50%, -50%)',
-                        cursor: 'grab',
-                        border: '2px solid white',
-                        boxShadow: '0 2px 4px rgba(0,0,0,0.3)'
+                        cursor: isDragging ? 'grabbing' : 'grab',
+                        border: '3px solid white',
+                        boxShadow: '0 2px 6px rgba(0,0,0,0.3)',
+                        transition: isDragging ? 'none' : 'all 0.1s ease',
+                        scale: isDragging ? '1.1' : '1'
                       }}
                     />
+                    
+                    {/* Time tooltip on hover */}
+                    {isSeekingHover && (
+                      <div style={{
+                        position: 'absolute',
+                        top: '-35px',
+                        left: `${(hoverTime / duration) * 100}%`,
+                        transform: 'translateX(-50%)',
+                        backgroundColor: '#2d3748',
+                        color: 'white',
+                        padding: '4px 8px',
+                        borderRadius: '4px',
+                        fontSize: '12px',
+                        fontWeight: '500',
+                        boxShadow: '0 2px 8px rgba(0,0,0,0.4)',
+                        pointerEvents: 'none',
+                        zIndex: 10
+                      }}>
+                        {formatTime(hoverTime)}
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
