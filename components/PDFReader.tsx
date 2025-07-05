@@ -190,16 +190,17 @@ const PDFReader: React.FC<PDFReaderProps> = ({
       flex: 1,
       display: 'flex',
       flexDirection: 'column',
-      backgroundColor: '#262626',
-      overflow: 'hidden'
+      backgroundColor: '#1a1e26',
+      overflow: 'hidden',
+      width: '100%'
     }}>
       {/* Text Stats */}
       <div style={{
         padding: '12px 24px',
-        borderBottom: '1px solid #333',
-        backgroundColor: '#1a1a1a',
+        borderBottom: '1px solid #2d3748',
+        backgroundColor: '#1a1e26',
         fontSize: '14px',
-        color: '#888',
+        color: '#a0a0a0',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between'
@@ -217,15 +218,14 @@ const PDFReader: React.FC<PDFReaderProps> = ({
         flex: 1,
         overflow: 'auto',
         padding: '24px',
-        backgroundColor: '#2a2a2a'
+        backgroundColor: '#0f1419'
       }}>
         <div style={{
-          maxWidth: '800px',
-          margin: '0 auto',
-          backgroundColor: '#1a1a1a',
+          width: '100%',
+          backgroundColor: '#1a1e26',
           borderRadius: '12px',
           padding: '32px',
-          boxShadow: '0 8px 24px rgba(0, 0, 0, 0.3)'
+          border: '1px solid #2d3748'
         }}>
           {/* Success Message */}
           <div style={{
@@ -243,26 +243,29 @@ const PDFReader: React.FC<PDFReaderProps> = ({
 
           {/* Text Preview */}
           <div style={{
-            backgroundColor: '#262626',
-            border: '1px solid #333',
+            backgroundColor: '#0f1419',
+            border: '1px solid #2d3748',
             borderRadius: '8px',
             padding: '20px',
-            maxHeight: '300px',
-            overflow: 'auto'
+            maxHeight: '400px',
+            overflow: 'auto',
+            width: '100%'
           }}>
-            <div style={{ fontSize: '12px', color: '#666', marginBottom: '12px' }}>
+            <div style={{ fontSize: '12px', color: '#a0a0a0', marginBottom: '12px' }}>
               Text Preview:
             </div>
             <div style={{
               fontSize: '14px',
               lineHeight: '1.6',
-              color: '#d0d0d0',
-              fontFamily: 'monospace'
+              color: '#e5e5e5',
+              fontFamily: 'system-ui, -apple-system, sans-serif',
+              whiteSpace: 'pre-wrap',
+              wordBreak: 'break-word'
             }}>
-              {extractedText.substring(0, 1000)}
-              {extractedText.length > 1000 && (
-                <span style={{ color: '#666' }}>
-                  ... ({(extractedText.length - 1000).toLocaleString()} more characters)
+              {extractedText.substring(0, 2000)}
+              {extractedText.length > 2000 && (
+                <span style={{ color: '#888' }}>
+                  ... ({(extractedText.length - 2000).toLocaleString()} more characters)
                 </span>
               )}
             </div>

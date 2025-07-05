@@ -28,7 +28,64 @@ const useKokoroWebWorkerTts = ({ onError }: UseKokoroWebWorkerTtsProps) => {
   const [completeAudioSampleRate, setCompleteAudioSampleRate] = useState<number>(24000);
   const [currentTime, setCurrentTime] = useState<number>(0);
   const [duration, setDuration] = useState<number>(0);
+  const [synthesizedDuration, setSynthesizedDuration] = useState<number>(0);
   const [canScrub, setCanScrub] = useState<boolean>(false);
+  const [isStreaming, setIsStreaming] = useState<boolean>(false);
+  
+  // Word timing for highlighting
+  const [wordTimings, setWordTimings] = useState<Array<{word: string, start: number, end: number}>>([]);
+  const [currentWordIndex, setCurrentWordIndex] = useState(-1);
+  
+  // Helper function to update current word index based on time
+  const updateCurrentWordIndex = useCallback((currentTime: number) => {
+    if (wordTimings.length === 0) {
+      console.log('📝 No word timings available');
+      return;
+    }
+    
+    // Find the current word index based on time
+    let newIndex = -1;
+    for (let i = 0; i < wordTimings.length; i++) {
+      const timing = wordTimings[i];
+      if (currentTime >= timing.start && currentTime < timing.end) {
+        newIndex = i;
+        break;
+      }
+    }
+    
+    // If we're past the last word, set to -1
+    if (newIndex === -1 && currentTime > (wordTimings[wordTimings.length - 1]?.end || 0)) {
+      newIndex = -1;
+    }
+    
+    // If we didn't find a word but we're in the middle of the text, find the closest word
+    if (newIndex === -1 && currentTime > 0 && currentTime < (wordTimings[wordTimings.length - 1]?.end || 0)) {
+      // Find the word we're closest to
+      let closestIndex = 0;
+      let closestDistance = Math.abs(currentTime - wordTimings[0].start);
+      
+      for (let i = 1; i < wordTimings.length; i++) {
+        const distance = Math.abs(currentTime - wordTimings[i].start);
+        if (distance < closestDistance) {
+          closestDistance = distance;
+          closestIndex = i;
+        }
+      }
+      newIndex = closestIndex;
+    }
+    
+    // Update the index using a setter function to avoid stale closure
+    setCurrentWordIndex(prevIndex => {
+      if (newIndex !== prevIndex) {
+        console.log(`📝 Word highlight: ${prevIndex} → ${newIndex} (time: ${currentTime.toFixed(2)}s)`);
+        if (newIndex >= 0 && newIndex < wordTimings.length) {
+          console.log(`📝 Current word: "${wordTimings[newIndex].word}" (${wordTimings[newIndex].start.toFixed(2)}s - ${wordTimings[newIndex].end.toFixed(2)}s)`);
+        }
+        return newIndex;
+      }
+      return prevIndex;
+    });
+  }, [wordTimings]);
 
   const ttsRef = useRef<any>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -47,6 +104,8 @@ const useKokoroWebWorkerTts = ({ onError }: UseKokoroWebWorkerTtsProps) => {
   const sampleRateRef = useRef<number>(24000);
   const playbackPositionRef = useRef<number>(0);
   const isPlaybackActiveRef = useRef<boolean>(false);
+  const streamingAudioRef = useRef<Float32Array[]>([]);
+  const streamingStartTimeRef = useRef<number>(0);
 
   // Complete list of all Kokoro voices from Hugging Face
   const voices = [
@@ -146,131 +205,16 @@ const useKokoroWebWorkerTts = ({ onError }: UseKokoroWebWorkerTtsProps) => {
     console.log('⚠️ addAudioChunk called but chunking system is in use');
   }, []);
 
-  // Continuous audio playback system
-  const startContinuousPlayback = useCallback(async () => {
-    if (isPlaybackActiveRef.current) return;
-    
-    isPlaybackActiveRef.current = true;
-    console.log('🎵 Starting continuous audio playback');
-    
-    try {
-      // Create audio context if needed
-      if (!audioContextRef.current) {
-        audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
-        console.log('🎵 Created new audio context');
-      }
-
-      console.log(`🎵 Audio context state: ${audioContextRef.current.state}`);
-
-      // Resume context if suspended
-      if (audioContextRef.current.state === 'suspended') {
-        console.log('🎵 Resuming suspended audio context...');
-        await audioContextRef.current.resume();
-        console.log(`🎵 Audio context resumed, new state: ${audioContextRef.current.state}`);
-      }
-
-      const playNextChunk = async () => {
-        // Check if we have audio data to play
-        if (audioBufferRef.current.length === 0) {
-          // No more audio, check if synthesis is still active
-          if (currentSynthesisRef.current) {
-            // Synthesis still running, wait a bit and try again
-                    console.log(`⏳ Buffer empty, waiting for audio... (synthesis active)`);
-        setTimeout(playNextChunk, 100);
-            return;
-          } else {
-            // Synthesis complete and no more audio
-            isPlaybackActiveRef.current = false;
-            setIsPlaying(false);
-            setStatus('🚀 Kokoro AI ready - All international voices available!');
-            console.log('🎉 Continuous playback completed');
-            return;
-          }
-        }
-
-        // Get next audio chunk
-        const audioData = audioBufferRef.current.shift()!;
-        console.log(`🔊 Playing continuous chunk - ${audioData.length} samples (${audioBufferRef.current.length} remaining in buffer)`);
-
-        // Create and play audio buffer
-        const audioBuffer = audioContextRef.current!.createBuffer(1, audioData.length, sampleRateRef.current);
-        const channelData = audioBuffer.getChannelData(0);
-        channelData.set(audioData);
-
-        const source = audioContextRef.current!.createBufferSource();
-        source.buffer = audioBuffer;
-        source.connect(audioContextRef.current!.destination);
-        
-        sourceNodeRef.current = source;
-        
-        // Set up audio completion handling
-        let hasEnded = false;
-        let startTime = performance.now();
-        
-        const continueToNext = () => {
-          if (hasEnded) return; // Prevent double-triggering
-          hasEnded = true;
-          
-          const actualDurationMs = performance.now() - startTime;
-          const expectedDurationMs = (audioData.length / sampleRateRef.current) * 1000;
-          console.log(`➡️ Audio finished after ${actualDurationMs.toFixed(0)}ms (expected ${expectedDurationMs.toFixed(0)}ms)`);
-          console.log(`   ${audioBufferRef.current.length} items remaining in buffer`);
-          
-          if (Math.abs(actualDurationMs - expectedDurationMs) > 1000) {
-            console.warn(`⚠️ Audio duration mismatch! Expected ${expectedDurationMs.toFixed(0)}ms, got ${actualDurationMs.toFixed(0)}ms`);
-          }
-          
-          if (isPlaybackActiveRef.current) {
-            // Small delay to prevent audio glitches
-            setTimeout(playNextChunk, 10);
-          }
-        };
-        
-        // Backup: timeout based on audio duration
-        const audioDurationMs = (audioData.length / sampleRateRef.current) * 1000;
-        const timeoutId = setTimeout(() => {
-          console.log(`⏰ Timeout triggered after ${(performance.now() - startTime).toFixed(0)}ms`);
-          console.log(`   Expected duration: ${audioDurationMs.toFixed(0)}ms`);
-          continueToNext();
-        }, audioDurationMs + 500); // Increased buffer to 500ms
-        
-        // Primary: normal end event (with timeout cleanup)
-        source.onended = () => {
-          console.log(`🏁 Source onended fired after ${(performance.now() - startTime).toFixed(0)}ms`);
-          clearTimeout(timeoutId);
-          continueToNext();
-        };
-        
-        try {
-          startTime = performance.now(); // Reset start time right before starting
-          source.start();
-          console.log(`▶️ Audio started playing - ${audioDurationMs.toFixed(0)}ms expected duration`);
-          console.log(`   Samples: ${audioData.length}, Sample rate: ${sampleRateRef.current}Hz`);
-        } catch (error) {
-          console.error('Error starting audio source:', error);
-          clearTimeout(timeoutId);
-          continueToNext();
-        }
-      };
-
-      // Start the continuous playback chain
-      playNextChunk();
-      
-    } catch (error) {
-      console.error('Continuous playback error:', error);
-      isPlaybackActiveRef.current = false;
-      setIsPlaying(false);
-    }
-  }, []);
+  // Old continuous playback system removed - now using streaming system
 
   // Scrubbing functions
   const seekToTime = useCallback((time: number) => {
-    if (!completeAudioBuffer || !canScrub) return;
+    if (!canScrub) return;
     
-    const maxTime = duration;
+    const maxTime = isStreaming ? synthesizedDuration : duration;
     const clampedTime = Math.max(0, Math.min(time, maxTime));
     
-    console.log(`🎯 Seeking to ${clampedTime.toFixed(2)}s`);
+    console.log(`🎯 Seeking to ${clampedTime.toFixed(2)}s (${isStreaming ? 'streaming' : 'complete'})`);
     
     const wasPlaying = isPlaying;
     
@@ -290,6 +234,11 @@ const useKokoroWebWorkerTts = ({ onError }: UseKokoroWebWorkerTtsProps) => {
       completeAudioSourceRef.current = null;
     }
     
+    // Stop streaming playback
+    if (isPlaybackActiveRef.current) {
+      isPlaybackActiveRef.current = false;
+    }
+    
     // Update current time immediately
     setCurrentTime(clampedTime);
     playbackOffsetRef.current = clampedTime;
@@ -298,10 +247,160 @@ const useKokoroWebWorkerTts = ({ onError }: UseKokoroWebWorkerTtsProps) => {
     if (wasPlaying) {
       seekTimeoutRef.current = setTimeout(() => {
         seekTimeoutRef.current = null;
-        playCompleteAudio(clampedTime);
-      }, 50); // Slightly longer delay to handle rapid clicks
+        if (isStreaming && clampedTime < synthesizedDuration) {
+          // For streaming, restart streaming playback from position
+          startStreamingFromPosition(clampedTime);
+        } else if (completeAudioBuffer) {
+          // For complete audio, use complete playback
+          playCompleteAudio(clampedTime);
+        }
+      }, 50);
     }
-  }, [completeAudioBuffer, canScrub, duration, isPlaying]);
+  }, [canScrub, duration, synthesizedDuration, isStreaming, isPlaying, completeAudioBuffer]);
+
+  // Start streaming playback from a specific position
+  const startStreamingFromPosition = useCallback(async (startTime: number = 0) => {
+    if (isPlaybackActiveRef.current) return;
+    
+    console.log(`🎵 Starting streaming playback from ${startTime.toFixed(2)}s`);
+    isPlaybackActiveRef.current = true;
+    
+    try {
+      if (!audioContextRef.current) {
+        audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+      }
+      
+      if (audioContextRef.current.state === 'suspended') {
+        await audioContextRef.current.resume();
+      }
+      
+      // Calculate which chunk to start from
+      let samplesPerSecond = sampleRateRef.current;
+      let targetSample = Math.floor(startTime * samplesPerSecond);
+      let currentSample = 0;
+      let chunkIndex = 0;
+      
+      // Find the starting chunk
+      for (let i = 0; i < streamingAudioRef.current.length; i++) {
+        if (currentSample + streamingAudioRef.current[i].length > targetSample) {
+          chunkIndex = i;
+          break;
+        }
+        currentSample += streamingAudioRef.current[i].length;
+      }
+      
+             // Start playback from the appropriate chunk
+       streamingStartTimeRef.current = audioContextRef.current.currentTime - startTime;
+       
+       // Start progress tracking for streaming
+       const trackStreamingProgress = () => {
+         if (isPlaybackActiveRef.current && audioContextRef.current) {
+           const elapsed = audioContextRef.current.currentTime - streamingStartTimeRef.current;
+           // Calculate max time from streaming audio length
+           const totalStreamingSamples = streamingAudioRef.current.reduce((sum, chunk) => sum + chunk.length, 0);
+           const maxStreamTime = totalStreamingSamples / sampleRateRef.current;
+           const currentPos = Math.max(0, Math.min(elapsed, maxStreamTime));
+           setCurrentTime(currentPos);
+           
+           // Update current word index for highlighting
+           updateCurrentWordIndex(currentPos);
+           
+           requestAnimationFrame(trackStreamingProgress);
+         }
+       };
+       trackStreamingProgress();
+       
+       playStreamingChunks(chunkIndex, targetSample - currentSample);
+      
+    } catch (error) {
+      console.error('Error starting streaming playback:', error);
+      isPlaybackActiveRef.current = false;
+      setIsPlaying(false);
+    }
+  }, []);
+
+  // Play streaming chunks sequentially
+  const playStreamingChunks = useCallback(async (startChunkIndex: number = 0, offsetSamples: number = 0) => {
+    if (!isPlaybackActiveRef.current) return;
+    
+    for (let i = startChunkIndex; i < streamingAudioRef.current.length && isPlaybackActiveRef.current; i++) {
+      const chunk = streamingAudioRef.current[i];
+      const actualChunk = offsetSamples > 0 && i === startChunkIndex 
+        ? chunk.slice(offsetSamples) 
+        : chunk;
+      
+      if (actualChunk.length === 0) continue;
+      
+      // Check if we're still supposed to be playing before each chunk
+      if (!isPlaybackActiveRef.current) {
+        console.log('🛑 Streaming playback stopped');
+        return;
+      }
+      
+      await new Promise<void>((resolve) => {
+        if (!audioContextRef.current || !isPlaybackActiveRef.current) {
+          resolve();
+          return;
+        }
+        
+        const audioBuffer = audioContextRef.current.createBuffer(1, actualChunk.length, sampleRateRef.current);
+        audioBuffer.getChannelData(0).set(actualChunk);
+        
+        const source = audioContextRef.current.createBufferSource();
+        source.buffer = audioBuffer;
+        source.connect(audioContextRef.current.destination);
+        
+        // Store the source so we can stop it if needed
+        completeAudioSourceRef.current = source;
+        
+        let chunkEnded = false;
+        source.onended = () => {
+          if (!chunkEnded) {
+            chunkEnded = true;
+            completeAudioSourceRef.current = null;
+            resolve();
+          }
+        };
+        
+        // If playback is stopped while this chunk is playing, stop immediately
+        const checkStop = () => {
+          if (!isPlaybackActiveRef.current && !chunkEnded) {
+            chunkEnded = true;
+            try {
+              source.stop();
+            } catch (e) {
+              // Already stopped
+            }
+            completeAudioSourceRef.current = null;
+            resolve();
+          } else if (isPlaybackActiveRef.current && !chunkEnded) {
+            setTimeout(checkStop, 50);
+          }
+        };
+        checkStop();
+        
+        source.start();
+        console.log(`🎵 Playing streaming chunk ${i + 1}/${streamingAudioRef.current.length}`);
+      });
+      
+      offsetSamples = 0; // Reset offset after first chunk
+    }
+    
+    // Check if we need to wait for more chunks or if synthesis is complete
+    if (isPlaybackActiveRef.current && currentSynthesisRef.current) {
+      // Still synthesizing, wait a bit and check for new chunks
+      setTimeout(() => {
+        if (isPlaybackActiveRef.current) {
+          playStreamingChunks(streamingAudioRef.current.length);
+        }
+      }, 100);
+    } else if (isPlaybackActiveRef.current) {
+      // Synthesis complete, end of audio
+      console.log('🏁 Streaming playback completed');
+      setIsPlaying(false);
+      isPlaybackActiveRef.current = false;
+    }
+  }, []);
 
   const playCompleteAudio = useCallback(async (startTime: number = 0) => {
     if (!completeAudioBuffer || !audioContextRef.current) return;
@@ -355,6 +454,7 @@ const useKokoroWebWorkerTts = ({ onError }: UseKokoroWebWorkerTtsProps) => {
           // Playback completed
           setIsPlaying(false);
           setCurrentTime(duration);
+          updateCurrentWordIndex(duration);
           completeAudioSourceRef.current = null;
           if (progressIntervalRef.current) {
             clearInterval(progressIntervalRef.current);
@@ -362,6 +462,8 @@ const useKokoroWebWorkerTts = ({ onError }: UseKokoroWebWorkerTtsProps) => {
           }
         } else {
           setCurrentTime(currentPos);
+          // Update current word index for highlighting
+          updateCurrentWordIndex(currentPos);
           // Continue updating regardless of isPlaying state for smooth progress
           progressAnimationRef.current = requestAnimationFrame(updateProgress);
         }
@@ -375,6 +477,7 @@ const useKokoroWebWorkerTts = ({ onError }: UseKokoroWebWorkerTtsProps) => {
           
           if (currentPos < duration) {
             setCurrentTime(currentPos);
+            updateCurrentWordIndex(currentPos);
           }
         }
       }, 100); // Update every 100ms
@@ -417,16 +520,24 @@ const useKokoroWebWorkerTts = ({ onError }: UseKokoroWebWorkerTtsProps) => {
       console.log('⏸️ Pausing audio');
       
       // Calculate and save current position before stopping
-      if (completeAudioSourceRef.current && audioContextRef.current) {
+      if (isStreaming && audioContextRef.current) {
+        // For streaming mode, use the current time from progress tracking
+        const pausedTime = Math.max(0, Math.min(currentTime, synthesizedDuration));
+        console.log(`⏸️ Pausing streaming at ${pausedTime.toFixed(2)}s`);
+        setCurrentTime(pausedTime);
+        playbackOffsetRef.current = pausedTime;
+      } else if (completeAudioSourceRef.current && audioContextRef.current) {
+        // For complete audio mode
         const elapsed = audioContextRef.current.currentTime - playbackStartTimeRef.current;
         const currentPos = playbackOffsetRef.current + elapsed;
         const pausedTime = Math.max(0, Math.min(currentPos, duration));
-        console.log(`⏸️ Pausing at ${pausedTime.toFixed(2)}s`);
+        console.log(`⏸️ Pausing complete audio at ${pausedTime.toFixed(2)}s`);
         setCurrentTime(pausedTime);
         playbackOffsetRef.current = pausedTime;
       }
       
       setIsPlaying(false);
+      isPlaybackActiveRef.current = false; // Stop streaming playback
       
       // Clear progress updates when paused
       if (progressIntervalRef.current) {
@@ -434,7 +545,7 @@ const useKokoroWebWorkerTts = ({ onError }: UseKokoroWebWorkerTtsProps) => {
         progressIntervalRef.current = null;
       }
       
-      // Stop audio source AFTER capturing position
+      // Stop any current audio source
       if (completeAudioSourceRef.current) {
         try {
           completeAudioSourceRef.current.stop();
@@ -443,13 +554,22 @@ const useKokoroWebWorkerTts = ({ onError }: UseKokoroWebWorkerTtsProps) => {
         }
         completeAudioSourceRef.current = null;
       }
+      
+      console.log('⏸️ Paused - all playback stopped');
     } else {
       // Play from current position
       console.log('▶️ Starting audio playback');
       setIsPlaying(true);
-      playCompleteAudio(currentTime);
+      
+      if (isStreaming && currentTime < synthesizedDuration) {
+        // For streaming mode, restart streaming playback
+        startStreamingFromPosition(currentTime);
+      } else if (completeAudioBuffer) {
+        // For complete audio mode
+        playCompleteAudio(currentTime);
+      }
     }
-  }, [canScrub, isPlaying, currentTime, playCompleteAudio]);
+  }, [canScrub, isPlaying, currentTime, isStreaming, synthesizedDuration, completeAudioBuffer, startStreamingFromPosition, playCompleteAudio]);
 
   // Don't auto-play - let user control playback
   // Audio is ready when completeAudioBuffer is set
@@ -613,17 +733,25 @@ const useKokoroWebWorkerTts = ({ onError }: UseKokoroWebWorkerTtsProps) => {
       return;
     }
 
-    setIsPlaying(true);
+    setIsPlaying(false); // Will be set to true when first chunk starts playing
     currentSynthesisRef.current = text;
     onProgress?.(0);
 
     // Clear previous audio buffer and scrubbing state
     audioBufferRef.current = [];
+    streamingAudioRef.current = [];
     isPlaybackActiveRef.current = false;
     setCompleteAudioBuffer(null);
     setCurrentTime(0);
     setDuration(0);
+    setSynthesizedDuration(0);
     setCanScrub(false);
+    setIsStreaming(false);
+    
+    // Clear word timing data
+    setWordTimings([]);
+    setCurrentWordIndex(-1);
+    console.log('📝 Cleared word timings and reset current word index');
 
     try {
       console.log(`📚 Processing text (${text.length} characters)`);
@@ -684,10 +812,26 @@ const useKokoroWebWorkerTts = ({ onError }: UseKokoroWebWorkerTtsProps) => {
           continue; // Skip this chunk and continue
         }
 
-        allAudioChunks.push(audioData);
+                allAudioChunks.push(audioData);
         totalSamples += audioData.length;
         
-        console.log(`✅ Chunk ${i + 1} processed: ${audioData.length} samples`);
+        // Add to streaming buffer for immediate playback
+        streamingAudioRef.current.push(audioData);
+        const currentStreamDuration = (totalSamples / sampleRate);
+        setSynthesizedDuration(currentStreamDuration);
+        
+        // Enable streaming controls after first chunk
+        if (i === 0) {
+          setCanScrub(true);
+          setIsStreaming(true);
+          
+          // Start streaming playback immediately with proper state management
+          console.log('🎵 Starting streaming playback with first chunk');
+          setIsPlaying(true);
+          startStreamingFromPosition(0);
+        }
+        
+        console.log(`✅ Chunk ${i + 1} processed: ${audioData.length} samples (${currentStreamDuration.toFixed(1)}s total)`);
       }
 
       // Combine all audio chunks
@@ -713,16 +857,82 @@ const useKokoroWebWorkerTts = ({ onError }: UseKokoroWebWorkerTtsProps) => {
       console.log(`   Duration: ${(combinedAudio.length / sampleRate).toFixed(1)}s`);
       console.log(`   Time: ${synthTime.toFixed(0)}ms`);
 
-      // Store complete audio for scrubbing
+      // Store complete audio for scrubbing and switch from streaming to complete mode
       setCompleteAudioBuffer(combinedAudio);
       setCompleteAudioSampleRate(sampleRate);
       setDuration(combinedAudio.length / sampleRate);
-      setCanScrub(true);
-      setCurrentTime(0);
-      setIsPlaying(false); // Don't auto-play, user must click play
+      setSynthesizedDuration(combinedAudio.length / sampleRate);
+      
+      // Stop streaming playback before switching to complete mode
+      const wasPlaying = isPlaybackActiveRef.current;
+      isPlaybackActiveRef.current = false;
+      
+      // Stop any current streaming audio source
+      if (completeAudioSourceRef.current) {
+        try {
+          completeAudioSourceRef.current.stop();
+        } catch (e) {
+          console.log('Streaming audio source already stopped');
+        }
+        completeAudioSourceRef.current = null;
+      }
+      
+      setIsStreaming(false); // Switch from streaming to complete mode
+      
+      // If audio was playing, seamlessly switch to complete audio playback
+      if (wasPlaying) {
+        console.log('🔄 Switching from streaming to complete audio playback');
+        setTimeout(() => {
+          playCompleteAudio(currentTime);
+        }, 100);
+      }
 
       onProgress?.(100);
-      setStatus(`🎵 Audio ready! ${(combinedAudio.length / sampleRate).toFixed(1)}s of audio generated`);
+      setStatus(`🎵 Audio complete! ${(combinedAudio.length / sampleRate).toFixed(1)}s of audio ready`);
+      
+      // Calculate and set word timings now that we have the final audio duration
+      const actualDuration = combinedAudio.length / sampleRate;
+      
+      // Calculate word timings - split text into words and estimate timing
+      const words = text.split(/\s+/).filter(word => word.length > 0);
+      const initialWordTimings: Array<{word: string, start: number, end: number}> = [];
+      
+      // Estimate timing based on average speaking rate
+      let currentWordStart = 0;
+      
+      words.forEach((word, index) => {
+        // More realistic word duration: ~0.4s per word on average
+        const wordDuration = Math.max(0.3, word.length * 0.05); // 0.05s per character, min 0.3s
+        const wordEnd = currentWordStart + wordDuration;
+        
+        initialWordTimings.push({
+          word: word,
+          start: currentWordStart,
+          end: wordEnd
+        });
+        
+        currentWordStart = wordEnd; // No gap between words for more accurate timing
+      });
+      
+      // Scale timings to match actual audio duration
+      const estimatedDuration = initialWordTimings[initialWordTimings.length - 1]?.end || 1;
+      const scaleFactor = actualDuration / estimatedDuration;
+      
+      const correctedWordTimings = initialWordTimings.map(timing => ({
+        word: timing.word,
+        start: timing.start * scaleFactor,
+        end: timing.end * scaleFactor
+      }));
+      
+      setWordTimings(correctedWordTimings);
+      console.log(`📝 ✅ WORD TIMINGS SET! ${words.length} words, ${correctedWordTimings.length} timings`);
+      console.log(`📝 Estimated: ${estimatedDuration.toFixed(2)}s → Actual: ${actualDuration.toFixed(2)}s (scale: ${scaleFactor.toFixed(3)})`);
+      console.log(`📝 Final word timings:`, correctedWordTimings.slice(0, 3), '...', correctedWordTimings.slice(-3));
+      
+      // Immediately verify the word timings are set
+      setTimeout(() => {
+        console.log(`📝 Word timings verification - should not be empty:`, correctedWordTimings.length);
+      }, 100);
       
       console.log(`📊 Synthesis Performance:
         • Total characters: ${text.length.toLocaleString()}
@@ -782,6 +992,10 @@ const useKokoroWebWorkerTts = ({ onError }: UseKokoroWebWorkerTtsProps) => {
     setDuration(0);
     setCanScrub(false);
     
+    // Reset word highlighting
+    setWordTimings([]);
+    setCurrentWordIndex(-1);
+    
     // Clear any pending seek operations and progress updates
     if (seekTimeoutRef.current) {
       clearTimeout(seekTimeoutRef.current);
@@ -814,6 +1028,20 @@ const useKokoroWebWorkerTts = ({ onError }: UseKokoroWebWorkerTtsProps) => {
     console.log('🧹 Cleared stored audio');
   }, []);
 
+  // Skip forward/backward functions
+  const skipForward = useCallback(() => {
+    if (!canScrub) return;
+    const maxTime = isStreaming ? synthesizedDuration : duration;
+    const newTime = Math.min(currentTime + 15, maxTime);
+    seekToTime(newTime);
+  }, [canScrub, currentTime, duration, synthesizedDuration, isStreaming, seekToTime]);
+
+  const skipBackward = useCallback(() => {
+    if (!canScrub) return;
+    const newTime = Math.max(currentTime - 15, 0);
+    seekToTime(newTime);
+  }, [canScrub, currentTime, seekToTime]);
+
   return {
     speak,
     stop,
@@ -833,7 +1061,12 @@ const useKokoroWebWorkerTts = ({ onError }: UseKokoroWebWorkerTtsProps) => {
     currentTime,
     duration,
     seekToTime,
-    togglePlayPause
+    togglePlayPause,
+    skipForward,
+    skipBackward,
+    // Word highlighting
+    wordTimings,
+    currentWordIndex
   };
 };
 
