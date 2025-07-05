@@ -62,6 +62,12 @@ const useKokoroWebWorkerTts = ({ onError }: UseKokoroWebWorkerTtsProps) => {
   const [wordTimings, setWordTimings] = useState<Array<{word: string, start: number, end: number}>>([]);
   const [currentWordIndex, setCurrentWordIndex] = useState(-1);
   
+     // Debug flag to force WASM mode (for WebGPU audio scaling issues)
+   const [forceWasmMode, setForceWasmMode] = useState(false);
+   
+   // Audio normalization flag to fix scaling issues
+   const [normalizeAudio, setNormalizeAudio] = useState(false);
+  
   // Helper function to update current word index based on time
   const updateCurrentWordIndex = useCallback((currentTime: number) => {
     if (wordTimings.length === 0) {
@@ -608,22 +614,54 @@ const useKokoroWebWorkerTts = ({ onError }: UseKokoroWebWorkerTtsProps) => {
     }
   }, [canScrub]);
 
-  // Detect WebGPU support
-  const detectWebGPU = useCallback(async (): Promise<boolean> => {
-    if (!(navigator as any).gpu) return false;
-    
-    try {
-      const adapter = await (navigator as any).gpu.requestAdapter();
-      if (!adapter) return false;
-      
-      const device = await adapter.requestDevice();
-      device.destroy();
-      return true;
-    } catch (error) {
-      console.warn('WebGPU detection failed:', error);
-      return false;
-    }
-  }, []);
+     // Function to toggle WASM mode
+   const toggleForceWasm = useCallback(() => {
+     setForceWasmMode(prev => !prev);
+     console.log('🔧 Force WASM mode:', !forceWasmMode);
+   }, [forceWasmMode]);
+
+   // Function to toggle audio normalization
+   const toggleNormalizeAudio = useCallback(() => {
+     setNormalizeAudio(prev => !prev);
+     console.log('🔧 Audio normalization:', !normalizeAudio);
+   }, [normalizeAudio]);
+
+   // Function to normalize audio if it's clipped/scaled wrong
+   const normalizeAudioData = useCallback((audioData: Float32Array): Float32Array => {
+     if (!normalizeAudio) return audioData;
+     
+     const peak = Math.max(...audioData.map(Math.abs));
+     if (peak > 1.0) {
+       // Audio is clipped/too loud - normalize it
+       const scale = 0.95 / peak; // Scale to 95% to prevent clipping
+       console.log(`🔧 Normalizing audio: peak ${peak.toFixed(4)} → scaling by ${scale.toFixed(4)}`);
+       return audioData.map(sample => sample * scale);
+     }
+     return audioData;
+   }, [normalizeAudio]);
+
+     // Modified detectWebGPU to respect force WASM setting
+   const detectWebGPU = useCallback(async (): Promise<{ device: 'webgpu' | 'wasm', dtype: 'fp32' | 'q8' }> => {
+     // Check if WASM mode is forced
+     if (forceWasmMode) {
+       console.log('🔧 Forcing WASM mode (WebGPU disabled by user)');
+       return { device: 'wasm', dtype: 'q8' };
+     }
+
+     if (!(navigator as any).gpu) return { device: 'wasm', dtype: 'q8' };
+     
+     try {
+       const adapter = await (navigator as any).gpu.requestAdapter();
+       if (!adapter) return { device: 'wasm', dtype: 'q8' };
+       
+       const device = await adapter.requestDevice();
+       device.destroy();
+       return { device: 'webgpu', dtype: 'fp32' };
+     } catch (error) {
+       console.warn('WebGPU detection failed:', error);
+       return { device: 'wasm', dtype: 'q8' };
+     }
+   }, [forceWasmMode]);
 
   // Initialize TTS model
   const initializeTts = useCallback(async () => {
@@ -634,19 +672,8 @@ const useKokoroWebWorkerTts = ({ onError }: UseKokoroWebWorkerTtsProps) => {
 
     try {
       // Try WebGPU first, fallback to WASM
-      const supportsWebGPU = await detectWebGPU();
-      let device: 'wasm' | 'webgpu' = 'wasm';
-      let dtype: 'q8' | 'fp32' = 'q8';
-      
-      if (supportsWebGPU) {
-        device = 'webgpu';
-        dtype = 'fp32';
-        setStatus('🚀 WebGPU detected! Loading model with GPU acceleration... (82MB)');
-      } else {
-        setStatus('💻 Using CPU optimization - Loading Kokoro AI model... (82MB)');
-      }
-
-      console.log(`🎯 TTS Device: ${device} (${dtype})`);
+      const { device, dtype } = await detectWebGPU();
+      setStatus(`🎯 TTS Device: ${device} (${dtype})`);
 
       // Check if cache is available
       if (typeof window !== 'undefined' && 'caches' in window) {
@@ -863,7 +890,19 @@ const useKokoroWebWorkerTts = ({ onError }: UseKokoroWebWorkerTtsProps) => {
           continue; // Skip this chunk and continue
         }
 
-                allAudioChunks.push(audioData);
+                // Debug audio sample rate and scaling
+        console.log(`🎵 Chunk ${i + 1} audio info:`, {
+          samples: audioData.length,
+          sampleRate: sampleRate,
+          duration: (audioData.length / sampleRate).toFixed(3) + 's',
+          peak: Math.max(...audioData.map(Math.abs)).toFixed(4),
+          rms: Math.sqrt(audioData.reduce((sum, val) => sum + val * val, 0) / audioData.length).toFixed(4)
+        });
+
+        // Apply normalization if enabled
+        audioData = normalizeAudioData(audioData);
+
+        allAudioChunks.push(audioData);
         totalSamples += audioData.length;
         
         // Add to streaming buffer for immediate playback
@@ -1374,7 +1413,12 @@ const useKokoroWebWorkerTts = ({ onError }: UseKokoroWebWorkerTtsProps) => {
     skipBackward,
     // Word highlighting
     wordTimings,
-    currentWordIndex
+    currentWordIndex,
+         // Debug mode controls
+     forceWasmMode,
+     toggleForceWasm,
+     normalizeAudio,
+     toggleNormalizeAudio
   };
 };
 

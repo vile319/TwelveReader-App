@@ -32,7 +32,9 @@ const App: React.FC = () => {
     clearModel,
     checkCacheStatus,
     debugAudioQuality,
-    checkAudioQuality
+    checkAudioQuality,
+    normalizeAudio,
+    toggleNormalizeAudio
   } = useKokoroWebWorkerTts({
     onError: setError
   });
@@ -362,7 +364,7 @@ const App: React.FC = () => {
             cursor: 'pointer',
             fontSize: '12px',
             fontWeight: '500',
-            marginBottom: '24px',
+            marginBottom: '8px',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -371,6 +373,30 @@ const App: React.FC = () => {
           title="Debug audio quality issues - compare results between computers"
         >
           🔍 Debug Audio
+        </button>
+        
+        {/* Audio Normalization Toggle */}
+        <button
+          onClick={toggleNormalizeAudio}
+          style={{
+            width: '100%',
+            padding: '8px',
+            borderRadius: '8px',
+            border: `1px solid ${normalizeAudio ? '#10b981' : '#6b7280'}`,
+            backgroundColor: normalizeAudio ? 'rgba(16, 185, 129, 0.1)' : 'transparent',
+            color: normalizeAudio ? '#10b981' : '#6b7280',
+            cursor: 'pointer',
+            fontSize: '12px',
+            fontWeight: '500',
+            marginBottom: '24px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '4px'
+          }}
+          title="Fix audio clipping/scaling issues (enable if audio sounds distorted)"
+        >
+          {normalizeAudio ? '✅' : '📢'} Audio Fix: {normalizeAudio ? 'ON' : 'OFF'}
         </button>
 
         {/* Error Display */}
