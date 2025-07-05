@@ -3,7 +3,7 @@ import HighlightedText from './HighlightedText';
 
 interface PDFReaderProps {
   file: File;
-  onTextExtracted: (text: string, chapters: Array<{id: string, title: string, page: number}>) => void;
+  onTextExtracted: (text: string) => void;
   currentSentence: string;
   readingProgress: number;
   wordTimings?: Array<{word: string, start: number, end: number}>;
@@ -88,8 +88,8 @@ const PDFReader: React.FC<PDFReaderProps> = ({
         // Create simple chapters based on length
         const chapters = createChapters(finalText);
         
-        console.log(`🎯 Final text ready: ${finalText.length} characters, ${chapters.length} chapters`);
-        onTextExtracted(finalText, chapters);
+        console.log(`🎯 Final text ready: ${finalText.length} characters`);
+        onTextExtracted(finalText);
         
       } else {
         throw new Error('Could not extract readable text from this PDF');
@@ -99,7 +99,7 @@ const PDFReader: React.FC<PDFReaderProps> = ({
       console.error('❌ PDF extraction failed:', error);
       const errorMessage = 'Unable to extract text from this PDF. This might be a scanned PDF (image-based) or password-protected. Please try a different PDF file that contains selectable text.';
       setError(errorMessage);
-      onTextExtracted('', []); // Pass empty text instead of error message
+      onTextExtracted(''); // Pass empty text instead of error message
     } finally {
       setIsLoading(false);
     }

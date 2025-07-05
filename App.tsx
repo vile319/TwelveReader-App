@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import useKokoroWebWorkerTts from './hooks/useKokoroWebWorkerTts';
 import PDFReader from './components/PDFReader';
 import HighlightedText from './components/HighlightedText';
+import AdSenseBanner from './components/AdSenseBanner';
+import AdSensePopup from './components/AdSensePopup';
 import { AppError } from './types';
 
 const App: React.FC = () => {
@@ -10,7 +12,6 @@ const App: React.FC = () => {
   const [inputText, setInputText] = useState<string>('');
   const [isReading, setIsReading] = useState(false);
   const [currentSentence, setCurrentSentence] = useState('');
-  const [inputMode, setInputMode] = useState<'text' | 'pdf'>('text');
   const [uploadedPDF, setUploadedPDF] = useState<File | null>(null);
 
   const {
@@ -80,15 +81,34 @@ const App: React.FC = () => {
   const [isSeekingHover, setIsSeekingHover] = useState(false);
   const [hoverTime, setHoverTime] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
+  const [isExtractingPDF, setIsExtractingPDF] = useState(false);
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file && file.type === 'application/pdf') {
       setUploadedPDF(file);
-      setInputMode('pdf');
+      setIsExtractingPDF(true);
+      setError(null);
     } else {
       setError({ title: 'Invalid File', message: 'Please upload a PDF file.' });
     }
+  };
+
+  const handlePDFTextExtracted = (text: string) => {
+    if (text.trim()) {
+      setInputText(text);
+      setError(null);
+    } else {
+      setError({ title: 'PDF Error', message: 'Unable to extract text from this PDF. It might be a scanned PDF or password-protected.' });
+    }
+    setIsExtractingPDF(false);
+    setUploadedPDF(null); // Clear PDF after extraction
+  };
+
+  const handlePDFError = (errorMsg: string) => {
+    setError({ title: 'PDF Error', message: errorMsg });
+    setIsExtractingPDF(false);
+    setUploadedPDF(null);
   };
 
   const sampleTexts = [
@@ -118,6 +138,12 @@ const App: React.FC = () => {
       fontFamily: 'Inter, system-ui, -apple-system, sans-serif',
       display: 'flex'
     }}>
+      <style>{`
+        @keyframes spin {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+      `}</style>
       {/* Sidebar */}
       <div style={{
         width: '320px',
@@ -199,7 +225,7 @@ const App: React.FC = () => {
           </select>
         </div>
 
-        {/* Input Mode Toggle */}
+        {/* PDF Upload */}
         <div style={{ marginBottom: '24px' }}>
           <label style={{
             display: 'block',
@@ -208,49 +234,43 @@ const App: React.FC = () => {
             fontWeight: '600',
             color: '#e5e5e5'
           }}>
-            📝 Input Mode
+            📄 PDF Upload
           </label>
-          <div style={{
-            backgroundColor: '#2d3748',
-            padding: '4px',
-            borderRadius: '8px',
-            display: 'flex',
-            border: '1px solid #4a5568'
-          }}>
-            <button
-              onClick={() => {
-                setInputMode('text');
-                setUploadedPDF(null);
-              }}
-              style={{
-                flex: 1,
-                padding: '8px 12px',
-                backgroundColor: inputMode === 'text' ? '#4a90e2' : 'transparent',
-                color: inputMode === 'text' ? 'white' : '#a0a0a0',
-                border: 'none',
-                borderRadius: '4px',
-                cursor: 'pointer',
-                fontSize: '13px'
-              }}
-            >
-              Text
-            </button>
-            <button
-              onClick={() => setInputMode('pdf')}
-              style={{
-                flex: 1,
-                padding: '8px 12px',
-                backgroundColor: inputMode === 'pdf' ? '#4a90e2' : 'transparent',
-                color: inputMode === 'pdf' ? 'white' : '#a0a0a0',
-                border: 'none',
-                borderRadius: '4px',
-                cursor: 'pointer',
-                fontSize: '13px'
-              }}
-            >
-              PDF
-            </button>
-          </div>
+          <input
+            type="file"
+            accept=".pdf"
+            onChange={handleFileUpload}
+            style={{
+              width: '100%',
+              padding: '12px',
+              backgroundColor: '#2d3748',
+              border: '1px solid #4a5568',
+              borderRadius: '8px',
+              color: '#e5e5e5',
+              fontSize: '14px',
+              cursor: 'pointer'
+            }}
+          />
+          {isExtractingPDF && (
+            <div style={{
+              fontSize: '12px',
+              color: '#4a90e2',
+              marginTop: '8px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px'
+            }}>
+              <div style={{
+                width: '16px',
+                height: '16px',
+                border: '2px solid #4a90e2',
+                borderTop: '2px solid transparent',
+                borderRadius: '50%',
+                animation: 'spin 1s linear infinite'
+              }}></div>
+              Extracting text from PDF...
+            </div>
+          )}
         </div>
 
         {/* Generate Button */}
@@ -428,6 +448,18 @@ const App: React.FC = () => {
             </button>
           </div>
         )}
+        
+        {/* Sidebar Banner Ad */}
+        <div style={{ marginTop: 'auto' }}>
+          <AdSenseBanner 
+            adSlot="5566778899" 
+            adFormat="rectangle"
+            style={{ 
+              margin: '16px 0 0 0',
+              maxWidth: '280px' 
+            }}
+          />
+        </div>
       </div>
 
       {/* Main Content */}
@@ -439,6 +471,13 @@ const App: React.FC = () => {
         flexDirection: 'column',
         height: '100vh'
       }}>
+        {/* Top Banner Ad */}
+        <AdSenseBanner 
+          adSlot="1234567890" 
+          adFormat="horizontal"
+          style={{ marginBottom: '16px' }}
+        />
+        
         {/* Audio Player */}
         {canScrub && (
           <div style={{
@@ -664,171 +703,140 @@ const App: React.FC = () => {
           display: 'flex',
           flexDirection: 'column'
         }}>
-          {inputMode === 'text' ? (
-            <>
-              <div style={{ 
-                display: 'flex', 
-                justifyContent: 'space-between', 
-                alignItems: 'center',
-                marginBottom: '16px'
-              }}>
-                <h2 style={{ 
-                  fontSize: '18px', 
-                  fontWeight: '600',
-                  margin: 0,
-                  color: '#e5e5e5'
-                }}>
-                  Text Input
-                </h2>
-                <div style={{ 
-                  fontSize: '14px', 
-                  color: '#a0a0a0'
-                }}>
-                  {inputText.length} characters
-                </div>
-              </div>
-              
-              {(() => {
-                // Debug the highlighting condition
-                console.log('🔍 Highlighting condition check:', { 
-                  canScrub, 
-                  wordTimingsLength: wordTimings.length, 
-                  currentWordIndex, 
-                  shouldShowHighlighting: canScrub && wordTimings.length > 0 
-                });
-                return null;
-              })()}
-              
-              {canScrub ? (
-                <HighlightedText 
-                  text={inputText}
-                  wordTimings={wordTimings}
-                  currentWordIndex={currentWordIndex}
-                  style={{ flex: 1 }}
-                />
-              ) : (
-                <textarea
-                  value={inputText}
-                  onChange={(e) => setInputText(e.target.value)}
-                  placeholder="Enter your text here to generate speech..."
-                  style={{
-                    flex: 1,
-                    width: '100%',
-                    padding: '16px',
-                    backgroundColor: '#0f1419',
-                    border: '1px solid #2d3748',
-                    borderRadius: '8px',
-                    color: '#e5e5e5',
-                    fontSize: '16px',
-                    fontFamily: 'inherit',
-                    resize: 'none',
-                    outline: 'none',
-                    lineHeight: '1.6'
-                  }}
-                />
-              )}
-              
-              {/* Sample Texts */}
-              <div style={{ marginTop: '16px' }}>
-                <div style={{ 
-                  fontSize: '14px', 
-                  fontWeight: '600', 
-                  marginBottom: '12px',
-                  color: '#e5e5e5'
-                }}>
-                  📚 Sample Texts
-                </div>
-                <div style={{
-                  display: 'flex',
-                  gap: '8px',
-                  flexWrap: 'wrap'
-                }}>
-                  {sampleTexts.map((sample, index) => (
-                    <button
-                      key={index}
-                      onClick={() => setInputText(sample.text)}
-                      style={{
-                        padding: '8px 12px',
-                        backgroundColor: '#2d3748',
-                        border: '1px solid #4a5568',
-                        borderRadius: '6px',
-                        color: '#e5e5e5',
-                        cursor: 'pointer',
-                        fontSize: '12px',
-                        transition: 'all 0.2s ease'
-                      }}
-                      onMouseOver={(e) => {
-                        e.currentTarget.style.backgroundColor = '#374151';
-                        e.currentTarget.style.borderColor = '#4a90e2';
-                      }}
-                      onMouseOut={(e) => {
-                        e.currentTarget.style.backgroundColor = '#2d3748';
-                        e.currentTarget.style.borderColor = '#4a5568';
-                      }}
-                    >
-                      {sample.title}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </>
-          ) : (
-            <div style={{ flex: 1 }}>
-              <h2 style={{ 
-                fontSize: '18px', 
-                fontWeight: '600',
-                marginBottom: '16px',
-                color: '#e5e5e5'
-              }}>
-                PDF Upload
-              </h2>
-                             {uploadedPDF ? (
-                 <PDFReader
-                   file={uploadedPDF}
-                   onTextExtracted={(text) => setInputText(text)}
-                   currentSentence={currentSentence}
-                   readingProgress={0}
-                   wordTimings={wordTimings}
-                   currentWordIndex={currentWordIndex}
-                 />
-               ) : (
-                 <div style={{
-                   flex: 1,
-                   display: 'flex',
-                   alignItems: 'center',
-                   justifyContent: 'center',
-                   flexDirection: 'column',
-                   gap: '16px',
-                   border: '2px dashed #4a5568',
-                   borderRadius: '8px',
-                   backgroundColor: '#0f1419'
-                 }}>
-                   <div style={{ fontSize: '48px' }}>📄</div>
-                   <div style={{ color: '#e5e5e5', marginBottom: '16px' }}>
-                     Upload a PDF file to extract text
-                   </div>
-                   <input
-                     type="file"
-                     accept=".pdf"
-                     onChange={handleFileUpload}
-                     style={{
-                       padding: '8px 16px',
-                       backgroundColor: '#4a90e2',
-                       color: 'white',
-                       border: 'none',
-                       borderRadius: '6px',
-                       cursor: 'pointer'
-                     }}
-                   />
-                   <div style={{ fontSize: '14px', color: '#888' }}>
-                     Supports text-based PDFs only
-                   </div>
-                 </div>
-               )}
+          <div style={{ 
+            display: 'flex', 
+            justifyContent: 'space-between', 
+            alignItems: 'center',
+            marginBottom: '16px'
+          }}>
+            <h2 style={{ 
+              fontSize: '18px', 
+              fontWeight: '600',
+              margin: 0,
+              color: '#e5e5e5'
+            }}>
+              Text Input
+            </h2>
+            <div style={{ 
+              fontSize: '14px', 
+              color: '#a0a0a0'
+            }}>
+              {inputText.length} characters
             </div>
+          </div>
+          
+          {(() => {
+            // Debug the highlighting condition
+            console.log('🔍 Highlighting condition check:', { 
+              canScrub, 
+              wordTimingsLength: wordTimings.length, 
+              currentWordIndex, 
+              shouldShowHighlighting: canScrub && wordTimings.length > 0 
+            });
+            return null;
+          })()}
+          
+          {canScrub ? (
+            <HighlightedText 
+              text={inputText}
+              wordTimings={wordTimings}
+              currentWordIndex={currentWordIndex}
+              style={{ flex: 1 }}
+            />
+          ) : (
+            <textarea
+              value={inputText}
+              onChange={(e) => setInputText(e.target.value)}
+              placeholder="Enter your text here to generate speech... or upload a PDF above to extract text"
+              style={{
+                flex: 1,
+                width: '100%',
+                padding: '16px',
+                backgroundColor: '#0f1419',
+                border: '1px solid #2d3748',
+                borderRadius: '8px',
+                color: '#e5e5e5',
+                fontSize: '16px',
+                fontFamily: 'inherit',
+                resize: 'none',
+                outline: 'none',
+                lineHeight: '1.6'
+              }}
+            />
           )}
+          
+          {/* Sample Texts */}
+          <div style={{ marginTop: '16px' }}>
+            <div style={{ 
+              fontSize: '14px', 
+              fontWeight: '600', 
+              marginBottom: '12px',
+              color: '#e5e5e5'
+            }}>
+              📚 Sample Texts
+            </div>
+            <div style={{
+              display: 'flex',
+              gap: '8px',
+              flexWrap: 'wrap'
+            }}>
+              {sampleTexts.map((sample, index) => (
+                <button
+                  key={index}
+                  onClick={() => setInputText(sample.text)}
+                  style={{
+                    padding: '8px 12px',
+                    backgroundColor: '#2d3748',
+                    border: '1px solid #4a5568',
+                    borderRadius: '6px',
+                    color: '#e5e5e5',
+                    cursor: 'pointer',
+                    fontSize: '12px',
+                    transition: 'all 0.2s ease'
+                  }}
+                  onMouseOver={(e) => {
+                    e.currentTarget.style.backgroundColor = '#374151';
+                    e.currentTarget.style.borderColor = '#4a90e2';
+                  }}
+                  onMouseOut={(e) => {
+                    e.currentTarget.style.backgroundColor = '#2d3748';
+                    e.currentTarget.style.borderColor = '#4a5568';
+                  }}
+                >
+                  {sample.title}
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
+
+        {/* Bottom Banner Ad */}
+        <AdSenseBanner 
+          adSlot="0987654321" 
+          adFormat="horizontal"
+          style={{ marginTop: '16px' }}
+        />
+
+        {/* Hidden PDF Reader for extraction */}
+        {uploadedPDF && (
+          <div style={{ display: 'none' }}>
+            <PDFReader
+              file={uploadedPDF}
+              onTextExtracted={handlePDFTextExtracted}
+              currentSentence={currentSentence}
+              readingProgress={0}
+              wordTimings={[]}
+              currentWordIndex={-1}
+            />
+          </div>
+        )}
       </div>
+      
+      {/* Popup Ad */}
+      <AdSensePopup 
+        adSlot="1122334455"
+        showInterval={10} // Show every 10 minutes
+      />
     </div>
   );
 };

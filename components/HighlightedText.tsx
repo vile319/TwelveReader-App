@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 
 interface HighlightedTextProps {
   text: string;
@@ -7,7 +7,7 @@ interface HighlightedTextProps {
   style?: React.CSSProperties;
 }
 
-const HighlightedText: React.FC<HighlightedTextProps> = ({ 
+const HighlightedText: React.FC<HighlightedTextProps> = React.memo(({ 
   text, 
   wordTimings, 
   currentWordIndex, 
@@ -20,6 +20,11 @@ const HighlightedText: React.FC<HighlightedTextProps> = ({
     currentWordIndex,
     firstFewWords: text.split(/\s+/).slice(0, 3)
   });
+
+  // Memoize the words splitting to avoid recalculating on every render
+  const words = useMemo(() => {
+    return text.split(/\s+/).filter(word => word.length > 0);
+  }, [text]);
 
   // If no word timings, just display the text normally
   if (wordTimings.length === 0) {
@@ -42,8 +47,6 @@ const HighlightedText: React.FC<HighlightedTextProps> = ({
     );
   }
 
-  // Split text into words and render with highlighting
-  const words = text.split(/\s+/).filter(word => word.length > 0);
   console.log('📝 Rendering highlighted text with', words.length, 'words, current index:', currentWordIndex);
   
   // Debug: Check if word counts match
@@ -52,6 +55,32 @@ const HighlightedText: React.FC<HighlightedTextProps> = ({
     console.log('📝 Text words:', words.slice(0, 10));
     console.log('📝 Timing words:', wordTimings.slice(0, 10).map(t => t.word));
   }
+
+  // Memoize the highlighted words to prevent unnecessary re-renders
+  const highlightedWords = useMemo(() => {
+    return words.map((word, index) => {
+      const isCurrentWord = index === currentWordIndex;
+      const isPastWord = index < currentWordIndex;
+      
+      return (
+        <span
+          key={index}
+          style={{
+            backgroundColor: isCurrentWord ? '#4a90e2' : isPastWord ? '#2d4a22' : 'transparent',
+            color: isCurrentWord ? 'white' : isPastWord ? '#90ee90' : '#e5e5e5',
+            padding: '2px 4px',
+            borderRadius: '4px',
+            margin: '0 2px',
+            transition: 'background-color 0.1s ease, color 0.1s ease', // Faster transitions
+            fontWeight: isCurrentWord ? '600' : 'normal',
+            // Remove animation to reduce lag
+          }}
+        >
+          {word}
+        </span>
+      );
+    });
+  }, [words, currentWordIndex]);
   
   return (
     <div style={{
@@ -65,38 +94,12 @@ const HighlightedText: React.FC<HighlightedTextProps> = ({
       lineHeight: '1.6',
       ...style
     }}>
-      {words.map((word, index) => {
-        const isCurrentWord = index === currentWordIndex;
-        const isPastWord = index < currentWordIndex;
-        
-        return (
-          <span
-            key={index}
-            style={{
-              backgroundColor: isCurrentWord ? '#4a90e2' : isPastWord ? '#2d4a22' : 'transparent',
-              color: isCurrentWord ? 'white' : isPastWord ? '#90ee90' : '#e5e5e5',
-              padding: '2px 4px',
-              borderRadius: '4px',
-              margin: '0 2px',
-              transition: 'all 0.2s ease',
-              fontWeight: isCurrentWord ? '600' : 'normal',
-              animation: isCurrentWord ? 'pulse 0.3s ease-in-out' : 'none'
-            }}
-          >
-            {word}
-          </span>
-        );
-      })}
-      
-      <style>{`
-        @keyframes pulse {
-          0% { transform: scale(1); }
-          50% { transform: scale(1.05); }
-          100% { transform: scale(1); }
-        }
-      `}</style>
+      {highlightedWords}
     </div>
   );
-};
+});
+
+// Add display name for debugging
+HighlightedText.displayName = 'HighlightedText';
 
 export default HighlightedText; 

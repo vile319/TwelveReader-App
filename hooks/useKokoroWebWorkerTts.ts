@@ -838,30 +838,42 @@ const useKokoroWebWorkerTts = ({ onError }: UseKokoroWebWorkerTtsProps) => {
       const chunks = chunkText(text, 500);
       console.log(`📝 Split into ${chunks.length} chunks for processing`);
       
+      // Process all chunks but in smaller batches to prevent stack overflow
+      console.log(`📦 Will process ${chunks.length} chunks (${text.length} characters total)`);
+      setStatus(`📦 Processing ${chunks.length} chunks...`);
+      
       const allAudioChunks: Float32Array[] = [];
       let totalSamples = 0;
       let sampleRate = 24000;
       const startTime = performance.now();
 
-      for (let i = 0; i < chunks.length; i++) {
-        const chunk = chunks[i];
-        const chunkProgress = (i / chunks.length) * 90; // Save 10% for combining
+      // Process chunks in batches to prevent stack overflow  
+      const BATCH_SIZE = 10; // Process 10 chunks at a time
+      
+      for (let batchStart = 0; batchStart < chunks.length; batchStart += BATCH_SIZE) {
+        const batchEnd = Math.min(batchStart + BATCH_SIZE, chunks.length);
+        console.log(`📦 Processing batch ${Math.floor(batchStart/BATCH_SIZE) + 1}/${Math.ceil(chunks.length/BATCH_SIZE)} (chunks ${batchStart + 1}-${batchEnd})`);
         
-        setStatus(`🎯 Synthesizing chunk ${i + 1}/${chunks.length} (${chunkProgress.toFixed(0)}%)...`);
-        onProgress?.(chunkProgress);
+        // Process this batch of chunks
+        for (let i = batchStart; i < batchEnd; i++) {
+          const chunk = chunks[i];
+          const chunkProgress = (i / chunks.length) * 90; // Save 10% for combining
+          
+          setStatus(`🎯 Synthesizing chunk ${i + 1}/${chunks.length} (${chunkProgress.toFixed(0)}%)...`);
+          onProgress?.(chunkProgress);
 
-        if (currentSynthesisRef.current !== text) {
-          console.log(`🛑 Synthesis stopped (user stopped)`);
-          return;
-        }
+          if (currentSynthesisRef.current !== text) {
+            console.log(`🛑 Synthesis stopped (user stopped)`);
+            return;
+          }
 
-        console.log(`🔄 Processing chunk ${i + 1}: ${chunk.length} characters`);
+          console.log(`🔄 Processing chunk ${i + 1}: ${chunk.length} characters`);
 
-        if (!ttsRef.current) {
-          throw new Error('TTS model not initialized');
-        }
+          if (!ttsRef.current) {
+            throw new Error('TTS model not initialized');
+          }
 
-        const audioObject = await ttsRef.current.generate(chunk, { voice: voice });
+          const audioObject = await ttsRef.current.generate(chunk, { voice: voice });
 
         // Extract audio data
         let audioData: Float32Array | null = null;
@@ -890,13 +902,22 @@ const useKokoroWebWorkerTts = ({ onError }: UseKokoroWebWorkerTtsProps) => {
           continue; // Skip this chunk and continue
         }
 
-                // Debug audio sample rate and scaling
+                // Debug audio sample rate and scaling - avoid stack overflow with large arrays
+        let peak = 0;
+        let rmsSum = 0;
+        for (let j = 0; j < audioData.length; j++) {
+          const abs = Math.abs(audioData[j]);
+          if (abs > peak) peak = abs;
+          rmsSum += audioData[j] * audioData[j];
+        }
+        const rms = Math.sqrt(rmsSum / audioData.length);
+        
         console.log(`🎵 Chunk ${i + 1} audio info:`, {
           samples: audioData.length,
           sampleRate: sampleRate,
           duration: (audioData.length / sampleRate).toFixed(3) + 's',
-          peak: Math.max(...audioData.map(Math.abs)).toFixed(4),
-          rms: Math.sqrt(audioData.reduce((sum, val) => sum + val * val, 0) / audioData.length).toFixed(4)
+          peak: peak.toFixed(4),
+          rms: rms.toFixed(4)
         });
 
         // Apply normalization if enabled
@@ -922,6 +943,12 @@ const useKokoroWebWorkerTts = ({ onError }: UseKokoroWebWorkerTtsProps) => {
         }
         
         console.log(`✅ Chunk ${i + 1} processed: ${audioData.length} samples (${currentStreamDuration.toFixed(1)}s total)`);
+        }
+        
+        // Allow event loop to breathe between batches
+        if (batchEnd < chunks.length) {
+          await new Promise(resolve => setTimeout(resolve, 10));
+        }
       }
 
       // Combine all audio chunks
