@@ -1204,6 +1204,148 @@ const useKokoroWebWorkerTts = ({ onError }: UseKokoroWebWorkerTtsProps) => {
     seekToTime(newTime);
   }, [canScrub, currentTime, seekToTime]);
 
+  // Debug audio quality function
+  const debugAudioQuality = useCallback(async () => {
+    console.log('🔍 === AUDIO QUALITY DEBUG INFO ===');
+    
+    // Browser info
+    console.log('🌐 Browser:', navigator.userAgent);
+    console.log('🖥️ Platform:', navigator.platform);
+    
+    // Audio context info
+    if (audioContextRef.current) {
+      const ctx = audioContextRef.current;
+      console.log('🎵 Audio Context Sample Rate:', ctx.sampleRate);
+      console.log('🎵 Audio Context State:', ctx.state);
+      console.log('🎵 Audio Context Base Latency:', ctx.baseLatency);
+      console.log('🎵 Audio Context Output Latency:', ctx.outputLatency);
+    }
+    
+    // TTS model info
+    if (ttsRef.current) {
+      console.log('🤖 TTS Model Device:', currentDevice);
+      console.log('🤖 TTS Model Ready:', isReady);
+      
+      // Try to get model info
+      try {
+        const voices = ttsRef.current.list_voices?.() || [];
+        console.log('🎭 Available Voices:', voices.length);
+      } catch (error) {
+        console.log('⚠️ Could not list voices:', error);
+      }
+    }
+    
+    // Hardware info (if available)
+    if ('navigator' in window) {
+      try {
+        const memInfo = (performance as any).memory;
+        if (memInfo) {
+          console.log('💾 Memory - Used:', Math.round(memInfo.usedJSHeapSize / 1024 / 1024) + 'MB');
+          console.log('💾 Memory - Limit:', Math.round(memInfo.jsHeapSizeLimit / 1024 / 1024) + 'MB');
+        }
+      } catch (error) {
+        console.log('⚠️ Memory info not available');
+      }
+      
+      try {
+        const connection = (navigator as any).connection || (navigator as any).mozConnection || (navigator as any).webkitConnection;
+        if (connection) {
+          console.log('🌐 Network - Effective Type:', connection.effectiveType);
+          console.log('🌐 Network - Downlink:', connection.downlink, 'Mbps');
+        }
+      } catch (error) {
+        console.log('⚠️ Network info not available');
+      }
+    }
+    
+    // WebGPU info
+    if ('gpu' in navigator) {
+      try {
+        const adapter = await (navigator as any).gpu.requestAdapter();
+        if (adapter) {
+          console.log('⚡ WebGPU Available');
+          const info = await adapter.requestAdapterInfo?.();
+          if (info) {
+            console.log('⚡ GPU Vendor:', info.vendor);
+            console.log('⚡ GPU Device:', info.device);
+          }
+        }
+              } catch (error) {
+          console.log('❌ WebGPU Not Available:', error instanceof Error ? error.message : String(error));
+        }
+    } else {
+      console.log('❌ WebGPU Not Supported');
+    }
+    
+    console.log('🔍 === END DEBUG INFO ===');
+    
+    // Return summary for display
+    return {
+      browser: navigator.userAgent.split(' ').pop() || 'Unknown',
+      platform: navigator.platform,
+      device: currentDevice,
+      sampleRate: audioContextRef.current?.sampleRate || 'Unknown',
+      webgpuSupported: 'gpu' in navigator
+    };
+  }, [currentDevice, isReady]);
+
+  // Enhanced model loading with quality checks
+  const checkAudioQuality = useCallback(async (testText: string = "Hello, this is a test.") => {
+    if (!ttsRef.current || !isReady) {
+      console.warn('⚠️ TTS not ready for quality check');
+      return null;
+    }
+    
+    console.log('🧪 Testing audio quality...');
+    const startTime = performance.now();
+    
+    try {
+      const testAudio = await ttsRef.current.generate(testText, { voice: 'af_bella' });
+      const endTime = performance.now();
+      
+      let audioData: Float32Array | null = null;
+      let sampleRate = 24000;
+      
+      // Extract audio data
+      if (testAudio && typeof testAudio === 'object') {
+        if (testAudio.audio instanceof Float32Array) {
+          audioData = testAudio.audio;
+          sampleRate = testAudio.sample_rate || 24000;
+        } else if (testAudio.data instanceof Float32Array) {
+          audioData = testAudio.data;
+          sampleRate = testAudio.sample_rate || 24000;
+        }
+      }
+      
+      if (audioData) {
+        // Analyze audio quality
+        const duration = audioData.length / sampleRate;
+        const rms = Math.sqrt(audioData.reduce((sum, val) => sum + val * val, 0) / audioData.length);
+        const peak = Math.max(...audioData.map(Math.abs));
+        
+        const qualityInfo = {
+          generationTime: Math.round(endTime - startTime),
+          duration: duration.toFixed(2),
+          sampleRate,
+          samples: audioData.length,
+          rms: rms.toFixed(4),
+          peak: peak.toFixed(4),
+          device: currentDevice,
+          quality: peak > 0.1 && rms > 0.01 ? 'Good' : 'Poor'
+        };
+        
+        console.log('📊 Audio Quality Report:', qualityInfo);
+        return qualityInfo;
+      } else {
+        console.error('❌ No audio data generated for quality test');
+        return null;
+      }
+    } catch (error) {
+      console.error('❌ Audio quality test failed:', error);
+      return null;
+    }
+  }, [isReady, currentDevice]);
+
   return {
     speak,
     stop,
@@ -1220,6 +1362,8 @@ const useKokoroWebWorkerTts = ({ onError }: UseKokoroWebWorkerTtsProps) => {
     clearChunks,
     clearModel,
     checkCacheStatus,
+    debugAudioQuality,
+    checkAudioQuality,
     // Scrubbing functionality
     canScrub,
     currentTime,

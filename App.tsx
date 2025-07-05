@@ -30,7 +30,9 @@ const App: React.FC = () => {
     wordTimings,
     currentWordIndex,
     clearModel,
-    checkCacheStatus
+    checkCacheStatus,
+    debugAudioQuality,
+    checkAudioQuality
   } = useKokoroWebWorkerTts({
     onError: setError
   });
@@ -317,7 +319,7 @@ const App: React.FC = () => {
             cursor: 'pointer',
             fontSize: '12px',
             fontWeight: '500',
-            marginBottom: '24px',
+            marginBottom: '8px',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -326,6 +328,49 @@ const App: React.FC = () => {
           title="Check if the AI model is cached in your browser"
         >
           📊 Check Cache
+        </button>
+        
+        {/* Debug Audio Quality Button */}
+        <button
+          onClick={async () => {
+            const debugInfo = await debugAudioQuality();
+            const qualityTest = await checkAudioQuality();
+            
+            let message = `Audio Debug Info:\n\n`;
+            message += `🖥️ Platform: ${debugInfo.platform}\n`;
+            message += `🤖 Device: ${debugInfo.device}\n`;
+            message += `🎵 Sample Rate: ${debugInfo.sampleRate}Hz\n`;
+            message += `⚡ WebGPU: ${debugInfo.webgpuSupported ? 'Yes' : 'No'}\n\n`;
+            
+            if (qualityTest) {
+              message += `Test Audio Quality: ${qualityTest.quality}\n`;
+              message += `Generation Time: ${qualityTest.generationTime}ms\n`;
+              message += `Peak Level: ${qualityTest.peak}\n`;
+              message += `RMS Level: ${qualityTest.rms}\n\n`;
+            }
+            
+            message += `Check console (F12) for detailed logs.`;
+            alert(message);
+          }}
+          style={{
+            width: '100%',
+            padding: '8px',
+            borderRadius: '8px',
+            border: '1px solid #f59e0b',
+            backgroundColor: 'transparent',
+            color: '#f59e0b',
+            cursor: 'pointer',
+            fontSize: '12px',
+            fontWeight: '500',
+            marginBottom: '24px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '4px'
+          }}
+          title="Debug audio quality issues - compare results between computers"
+        >
+          🔍 Debug Audio
         </button>
 
         {/* Error Display */}
