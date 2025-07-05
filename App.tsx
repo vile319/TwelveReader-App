@@ -28,7 +28,9 @@ const App: React.FC = () => {
     skipForward,
     skipBackward,
     wordTimings,
-    currentWordIndex
+    currentWordIndex,
+    clearModel,
+    checkCacheStatus
   } = useKokoroWebWorkerTts({
     onError: setError
   });
@@ -262,13 +264,68 @@ const App: React.FC = () => {
             fontSize: '16px',
             fontWeight: '600',
             opacity: (!inputText.trim() || ttsLoading) ? 0.5 : 1,
-            marginBottom: '24px'
+            marginBottom: '16px'
           }}
         >
           {ttsLoading ? '⏳ Generating...' : 
            isReading ? '⏹️ Stop Generation' : 
            canScrub ? '🔄 Regenerate' :
            '▶️ Generate Audio'}
+        </button>
+
+        {/* Reset Model Button */}
+        <button
+          onClick={async () => {
+            await clearModel();
+            setInputText('');
+            setUploadedPDF(null);
+          }}
+          style={{
+            width: '100%',
+            padding: '12px',
+            borderRadius: '8px',
+            border: '1px solid #dc2626',
+            backgroundColor: 'transparent',
+            color: '#dc2626',
+            cursor: 'pointer',
+            fontSize: '14px',
+            fontWeight: '600',
+            marginBottom: '8px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '8px'
+          }}
+          title="Clear and reload the AI model (fixes stuck states)"
+        >
+          🔄 Reset Model
+        </button>
+        
+        {/* Cache Status Button */}
+        <button
+          onClick={async () => {
+            const status = await checkCacheStatus();
+            alert(`Cache Status:\n${status.cached ? '✅ Model is cached' : '❌ No cache found'}\nFiles: ${status.fileCount}\nSize: ${status.sizeFormatted || 'Unknown'}\n\nCheck console for detailed cache info.`);
+          }}
+          style={{
+            width: '100%',
+            padding: '8px',
+            borderRadius: '8px',
+            border: '1px solid #6b7280',
+            backgroundColor: 'transparent',
+            color: '#6b7280',
+            cursor: 'pointer',
+            fontSize: '12px',
+            fontWeight: '500',
+            marginBottom: '24px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '4px'
+          }}
+          title="Check if the AI model is cached in your browser"
+        >
+          📊 Check Cache
         </button>
 
         {/* Error Display */}
@@ -660,6 +717,8 @@ const App: React.FC = () => {
                    onTextExtracted={(text) => setInputText(text)}
                    currentSentence={currentSentence}
                    readingProgress={0}
+                   wordTimings={wordTimings}
+                   currentWordIndex={currentWordIndex}
                  />
                ) : (
                  <div style={{

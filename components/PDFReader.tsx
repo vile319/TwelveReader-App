@@ -1,17 +1,22 @@
 import React, { useEffect, useRef, useState } from 'react';
+import HighlightedText from './HighlightedText';
 
 interface PDFReaderProps {
   file: File;
   onTextExtracted: (text: string, chapters: Array<{id: string, title: string, page: number}>) => void;
   currentSentence: string;
   readingProgress: number;
+  wordTimings?: Array<{word: string, start: number, end: number}>;
+  currentWordIndex?: number;
 }
 
 const PDFReader: React.FC<PDFReaderProps> = ({ 
   file, 
   onTextExtracted, 
   currentSentence,
-  readingProgress 
+  readingProgress,
+  wordTimings = [],
+  currentWordIndex = -1
 }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [extractedText, setExtractedText] = useState<string>('');
@@ -262,11 +267,21 @@ const PDFReader: React.FC<PDFReaderProps> = ({
               whiteSpace: 'pre-wrap',
               wordBreak: 'break-word'
             }}>
-              {extractedText.substring(0, 2000)}
-              {extractedText.length > 2000 && (
-                <span style={{ color: '#888' }}>
-                  ... ({(extractedText.length - 2000).toLocaleString()} more characters)
-                </span>
+              {wordTimings.length > 0 ? (
+                <HighlightedText 
+                  text={extractedText.substring(0, 2000)}
+                  wordTimings={wordTimings}
+                  currentWordIndex={currentWordIndex}
+                />
+              ) : (
+                <>
+                  {extractedText.substring(0, 2000)}
+                  {extractedText.length > 2000 && (
+                    <span style={{ color: '#888' }}>
+                      ... ({(extractedText.length - 2000).toLocaleString()} more characters)
+                    </span>
+                  )}
+                </>
               )}
             </div>
           </div>

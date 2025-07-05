@@ -2,6 +2,32 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import { KokoroTTS } from 'kokoro-js';
 import { AppError } from '../types';
 
+// Force enable caching for transformers.js
+if (typeof window !== 'undefined') {
+  // Enable caching explicitly
+  const enableCaching = async () => {
+    try {
+      // Check if we can access the transformers.js env
+      const { env } = await import('@huggingface/transformers');
+      console.log('🔧 Configuring transformers.js caching...');
+      
+      // Force enable browser cache
+      env.useBrowserCache = true;
+      
+      // Optional: Also enable file system cache if available
+      if (env.backends && env.backends.onnx) {
+        env.backends.onnx.useBrowserCache = true;
+      }
+      
+      console.log('✅ Browser cache enabled for transformers.js');
+    } catch (error) {
+      console.warn('⚠️ Could not configure transformers.js caching:', error);
+    }
+  };
+  
+  enableCaching();
+}
+
 interface UseKokoroWebWorkerTtsProps {
   onError: (error: AppError) => void;
 }
@@ -622,6 +648,28 @@ const useKokoroWebWorkerTts = ({ onError }: UseKokoroWebWorkerTtsProps) => {
 
       console.log(`🎯 TTS Device: ${device} (${dtype})`);
 
+      // Check if cache is available
+      if (typeof window !== 'undefined' && 'caches' in window) {
+        try {
+          const cacheNames = await caches.keys();
+          console.log('📦 Available caches:', cacheNames);
+          
+          // Check specifically for model cache
+          const modelCache = await caches.open('models');
+          const cachedRequests = await modelCache.keys();
+          console.log('📁 Cached model files:', cachedRequests.length);
+          
+          if (cachedRequests.length > 0) {
+            console.log('🎯 Model appears to be cached - should load faster');
+          } else {
+            console.log('📥 No cached model files found - will download');
+          }
+        } catch (error) {
+          console.warn('⚠️ Could not check cache:', error);
+        }
+      }
+
+      const modelLoadStart = performance.now();
       const tts = await KokoroTTS.from_pretrained('onnx-community/Kokoro-82M-v1.0-ONNX', {
         dtype: dtype,
         device: device,
@@ -630,6 +678,9 @@ const useKokoroWebWorkerTts = ({ onError }: UseKokoroWebWorkerTtsProps) => {
             const percent = Math.round(progress.progress * 100);
             const deviceLabel = device === 'webgpu' ? 'GPU' : 'CPU';
             setStatus(`Downloading model (${deviceLabel}): ${percent}%`);
+          } else if (progress.status === 'ready') {
+            const loadTime = ((performance.now() - modelLoadStart) / 1000).toFixed(1);
+            console.log(`⏱️ Model loaded in ${loadTime}s`);
           }
         }
       });
@@ -1028,6 +1079,117 @@ const useKokoroWebWorkerTts = ({ onError }: UseKokoroWebWorkerTtsProps) => {
     console.log('🧹 Cleared stored audio');
   }, []);
 
+  // Clear model from memory AND cache
+  const clearModel = useCallback(async () => {
+    console.log('🧹 Clearing model and cache...');
+    
+    // Stop any current operations
+    stop();
+    
+    // Clear model instance
+    if (ttsRef.current) {
+      ttsRef.current = null;
+    }
+    
+    // Clear cache
+    if (typeof window !== 'undefined' && 'caches' in window) {
+      try {
+        console.log('🗑️ Clearing browser cache...');
+        const cacheNames = await caches.keys();
+        console.log('📦 Found caches:', cacheNames);
+        
+        // Clear all caches (this will force redownload)
+        await Promise.all(cacheNames.map(cacheName => caches.delete(cacheName)));
+        console.log('✅ All caches cleared');
+      } catch (error) {
+        console.warn('⚠️ Could not clear cache:', error);
+      }
+    }
+    
+    // Clear IndexedDB cache if it exists
+    if (typeof window !== 'undefined' && 'indexedDB' in window) {
+      try {
+        console.log('🗑️ Checking IndexedDB...');
+        // Clear transformers.js cache in IndexedDB
+        const dbDeleteRequest = indexedDB.deleteDatabase('transformers-cache');
+        await new Promise((resolve, reject) => {
+          dbDeleteRequest.onsuccess = () => resolve(true);
+          dbDeleteRequest.onerror = () => reject(dbDeleteRequest.error);
+        });
+        console.log('✅ IndexedDB cache cleared');
+      } catch (error) {
+        console.warn('⚠️ Could not clear IndexedDB:', error);
+      }
+    }
+    
+    // Reset state
+    setIsReady(false);
+    setCurrentDevice(null);
+    setStatus('🔄 Model and cache cleared - ready to reload');
+    
+    // Optionally reinitialize after clearing
+    setTimeout(() => {
+      initializeTts();
+    }, 1000);
+  }, [stop, initializeTts]);
+
+  // Check cache status
+  const checkCacheStatus = useCallback(async () => {
+    const defaultResult = { 
+      cached: false, 
+      fileCount: 0, 
+      size: 0, 
+      sizeFormatted: '0KB' 
+    };
+    
+    if (typeof window === 'undefined') return defaultResult;
+    
+    try {
+      let totalSize = 0;
+      let fileCount = 0;
+      
+      // Check Cache API
+      if ('caches' in window) {
+        const cacheNames = await caches.keys();
+        console.log('📦 Cache names:', cacheNames);
+        
+        for (const cacheName of cacheNames) {
+          const cache = await caches.open(cacheName);
+          const requests = await cache.keys();
+          fileCount += requests.length;
+          
+          // Try to estimate size
+          for (const request of requests) {
+            try {
+              const response = await cache.match(request);
+              if (response) {
+                const blob = await response.blob();
+                totalSize += blob.size;
+              }
+            } catch (error) {
+              console.warn('Could not get cache entry size:', error);
+            }
+          }
+        }
+      }
+      
+      const result = {
+        cached: fileCount > 0,
+        fileCount,
+        size: totalSize,
+        sizeFormatted: totalSize > 1024 * 1024 
+          ? `${(totalSize / 1024 / 1024).toFixed(1)}MB`
+          : `${(totalSize / 1024).toFixed(1)}KB`
+      };
+      
+      console.log('📊 Cache status:', result);
+      return result;
+    } catch (error) {
+      console.warn('⚠️ Could not check cache status:', error);
+      return defaultResult;
+    }
+  }, []);
+
   // Skip forward/backward functions
   const skipForward = useCallback(() => {
     if (!canScrub) return;
@@ -1056,6 +1218,8 @@ const useKokoroWebWorkerTts = ({ onError }: UseKokoroWebWorkerTtsProps) => {
     enableDebugMode,
     disableDebugMode,
     clearChunks,
+    clearModel,
+    checkCacheStatus,
     // Scrubbing functionality
     canScrub,
     currentTime,
