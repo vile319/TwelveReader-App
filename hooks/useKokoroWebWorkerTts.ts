@@ -1041,10 +1041,6 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true }: UseKokoroWebWorkerTt
       if (wasPlaying) {
         console.log('🔄 Switching from streaming to complete audio playback');
         playCompleteAudio(currentTime);
-      } else if (allAudioChunks.length === 1) {
-        // For single-chunk (short) texts, auto-play from the start
-        console.log('🎵 Auto-playing single-chunk synthesis');
-        playCompleteAudio(0);
       }
 
       onProgress?.(100);
