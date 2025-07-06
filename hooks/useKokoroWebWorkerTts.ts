@@ -706,7 +706,7 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true }: UseKokoroWebWorkerTt
         device: device,
         progress_callback: (progress) => {
           if (progress.status === 'progress') {
-            const percent = Math.round(progress.progress * 100);
+            const percent = Math.round(Math.min(progress.progress * 100, 100));
             const deviceLabel = device === 'webgpu' ? 'GPU' : 'CPU';
             setStatus(`Downloading model (${deviceLabel}): ${percent}%`);
           } else if (progress.status === 'ready') {
@@ -737,7 +737,7 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true }: UseKokoroWebWorkerTt
             device: 'wasm',
             progress_callback: (progress) => {
               if (progress.status === 'progress') {
-                const percent = Math.round(progress.progress * 100);
+                const percent = Math.round(Math.min(progress.progress * 100, 100));
                 setStatus(`CPU fallback - Downloading: ${percent}%`);
               }
             }
@@ -937,14 +937,10 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true }: UseKokoroWebWorkerTt
         const currentStreamDuration = (totalSamples / sampleRate);
         setSynthesizedDuration(currentStreamDuration);
         
-        // Enable streaming controls after first chunk
         if (i === 0) {
           setCanScrub(true);
           setIsStreaming(true);
-          
-          // Start streaming playback immediately with proper state management
           console.log('🎵 Starting streaming playback with first chunk');
-          setIsPlaying(true);
           startStreamingFromPosition(0);
         }
         
@@ -1002,12 +998,16 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true }: UseKokoroWebWorkerTt
       
       setIsStreaming(false); // Switch from streaming to complete mode
       
-      // If audio was playing, seamlessly switch to complete audio playback
+      // Seamlessly switch to complete audio playback
       if (wasPlaying) {
         console.log('🔄 Switching from streaming to complete audio playback');
         setTimeout(() => {
           playCompleteAudio(currentTime);
         }, 100);
+      } else {
+        // For single-chunk synthesis start playback automatically
+        playCompleteAudio(0);
+        setIsPlaying(true);
       }
 
       onProgress?.(100);

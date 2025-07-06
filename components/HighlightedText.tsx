@@ -26,42 +26,11 @@ const HighlightedText: React.FC<HighlightedTextProps> = React.memo(({
     return text.split(/\s+/).filter(word => word.length > 0);
   }, [text]);
 
-  // If no word timings, just display the text normally
-  if (wordTimings.length === 0) {
-    console.log('📝 No word timings, displaying plain text');
-    return (
-      <div style={{
-        padding: '16px',
-        backgroundColor: '#0f1419',
-        border: '1px solid #2d3748',
-        borderRadius: '8px',
-        color: '#e5e5e5',
-        fontSize: '16px',
-        fontFamily: 'inherit',
-        lineHeight: '1.6',
-        whiteSpace: 'pre-wrap',
-        ...style
-      }}>
-        {text}
-      </div>
-    );
-  }
-
-  console.log('📝 Rendering highlighted text with', words.length, 'words, current index:', currentWordIndex);
-  
-  // Debug: Check if word counts match
-  if (words.length !== wordTimings.length) {
-    console.warn(`📝 Word count mismatch! Text has ${words.length} words, timings have ${wordTimings.length}`);
-    console.log('📝 Text words:', words.slice(0, 10));
-    console.log('📝 Timing words:', wordTimings.slice(0, 10).map(t => t.word));
-  }
-
-  // Memoize the highlighted words to prevent unnecessary re-renders
+  // Memoize the highlighted words (even if no timings) to keep hooks consistent
   const highlightedWords = useMemo(() => {
     return words.map((word, index) => {
-      const isCurrentWord = index === currentWordIndex;
-      const isPastWord = index < currentWordIndex;
-      
+      const isCurrentWord = wordTimings.length > 0 && index === currentWordIndex;
+      const isPastWord = wordTimings.length > 0 && index < currentWordIndex;
       return (
         <span
           key={index}
@@ -71,17 +40,19 @@ const HighlightedText: React.FC<HighlightedTextProps> = React.memo(({
             padding: '2px 4px',
             borderRadius: '4px',
             margin: '0 2px',
-            transition: 'background-color 0.1s ease, color 0.1s ease', // Faster transitions
-            fontWeight: isCurrentWord ? '600' : 'normal',
-            // Remove animation to reduce lag
+            transition: 'background-color 0.1s ease, color 0.1s ease',
+            fontWeight: isCurrentWord ? '600' : 'normal'
           }}
         >
           {word}
         </span>
       );
     });
-  }, [words, currentWordIndex]);
-  
+  }, [words, currentWordIndex, wordTimings.length]);
+
+  // Decide output
+  const content = wordTimings.length === 0 ? text : highlightedWords;
+
   return (
     <div style={{
       padding: '16px',
@@ -92,9 +63,10 @@ const HighlightedText: React.FC<HighlightedTextProps> = React.memo(({
       fontSize: '16px',
       fontFamily: 'inherit',
       lineHeight: '1.6',
+      whiteSpace: wordTimings.length === 0 ? 'pre-wrap' : undefined,
       ...style
     }}>
-      {highlightedWords}
+      {content}
     </div>
   );
 });
