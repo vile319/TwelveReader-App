@@ -57,6 +57,9 @@ const App: React.FC = () => {
       return;
     }
     
+    // Stop any previous audio before starting anew
+    stop();
+
     // If model not accepted yet, show warning and remember intention
     if (!modelAccepted) {
       setPendingRead({ text: inputText.trim(), voice: selectedVoice });

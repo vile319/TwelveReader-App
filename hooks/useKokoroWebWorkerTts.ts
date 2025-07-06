@@ -72,6 +72,8 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true }: UseKokoroWebWorkerTt
   // New synthesis complete flag
   const [synthesisComplete, setSynthesisComplete] = useState(false);
   
+  const lastWordUpdateRef = useRef(0);
+
   // Helper function to update current word index based on time
   const updateCurrentWordIndex = useCallback((currentTime: number) => {
     if (wordTimings.length === 0) {
@@ -340,8 +342,12 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true }: UseKokoroWebWorkerTt
            const currentPos = Math.max(0, Math.min(elapsed, maxStreamTime));
            setCurrentTime(currentPos);
            
-           // Update current word index for highlighting
-           updateCurrentWordIndex(currentPos);
+           // Update current word index for highlighting (throttled)
+           const now = performance.now();
+           if (now - lastWordUpdateRef.current > 100) {
+             updateCurrentWordIndex(currentPos);
+             lastWordUpdateRef.current = now;
+           }
            
            requestAnimationFrame(trackStreamingProgress);
          }
@@ -500,8 +506,14 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true }: UseKokoroWebWorkerTt
           }
         } else {
           setCurrentTime(currentPos);
-          // Update current word index for highlighting
-          updateCurrentWordIndex(currentPos);
+          
+          // Update current word index for highlighting (throttled)
+          const now = performance.now();
+          if (now - lastWordUpdateRef.current > 100) {
+            updateCurrentWordIndex(currentPos);
+            lastWordUpdateRef.current = now;
+          }
+          
           // Continue updating regardless of isPlaying state for smooth progress
           progressAnimationRef.current = requestAnimationFrame(updateProgress);
         }
@@ -1019,16 +1031,12 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true }: UseKokoroWebWorkerTt
       
       setIsStreaming(false); // Switch from streaming to complete mode
       
-      // Seamlessly switch to complete audio playback
+      // If audio was playing, seamlessly switch to complete audio playback
       if (wasPlaying) {
         console.log('🔄 Switching from streaming to complete audio playback');
-        setTimeout(() => {
-          isPlaybackActiveRef.current = true;
-          playCompleteAudio(currentTime);
-        }, 100);
+        playCompleteAudio(currentTime);
       } else {
         // For single-chunk synthesis start playback automatically
-        isPlaybackActiveRef.current = true;
         playCompleteAudio(0);
         setIsPlaying(true);
       }

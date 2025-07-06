@@ -64,6 +64,8 @@ const HighlightedText: React.FC<HighlightedTextProps> = React.memo(({
       fontFamily: 'inherit',
       lineHeight: '1.6',
       whiteSpace: wordTimings.length === 0 ? 'pre-wrap' : undefined,
+      overflowY: 'auto',
+      wordBreak: 'break-word',
       ...style
     }}>
       {content}
