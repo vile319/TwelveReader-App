@@ -801,6 +801,7 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true }: UseKokoroWebWorkerTt
     setIsFirstChunkReady(false);
     setWordTimings([]);
     setCurrentWordIndex(-1);
+    setSynthesisComplete(false);
     console.log('📝 Cleared word timings and reset current word index');
 
     try {
