@@ -129,8 +129,10 @@ const App: React.FC = () => {
   const handleAcceptModelDownload = () => {
     setModelAccepted(true);
     setShowModelWarning(false);
-    // Retry reading now that user accepted
-    handleStartReading();
+    // Retry reading after state updates
+    setTimeout(() => {
+      handleStartReading();
+    }, 0);
   };
 
   const handleCancelModelDownload = () => {
