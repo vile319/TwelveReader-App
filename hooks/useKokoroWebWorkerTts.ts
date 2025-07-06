@@ -1433,7 +1433,10 @@ const useKokoroWebWorkerTts = ({ onError }: UseKokoroWebWorkerTtsProps) => {
     setModelDownloadApproved(true);
     setShowDownloadWarning(false);
     setStatus('Starting model download...');
-  }, []);
+
+    // Immediately kick off the model download so the user doesn't have to click again
+    initializeTts();
+  }, [initializeTts]);
 
   const handleDownloadDecline = useCallback(() => {
     setShowDownloadWarning(false);
