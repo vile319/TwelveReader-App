@@ -845,7 +845,11 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true }: UseKokoroWebWorkerTt
             throw new Error('TTS model not initialized');
           }
 
-          const audioObject = await ttsRef.current.generate(chunk, { voice: voice });
+          // Request word alignments for precise timing
+          const audioObject = await ttsRef.current.generate(chunk, { 
+            voice: voice,
+            return_alignments: true // <-- Requesting alignments
+          });
 
         // Extract audio data
         let audioData: Float32Array | null = null;
@@ -903,8 +907,21 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true }: UseKokoroWebWorkerTt
         const currentStreamDuration = (totalSamples / sampleRate);
         setSynthesizedDuration(currentStreamDuration);
 
-        // --- New: provisional word timings for this chunk ---
-        {
+        // --- New: Use precise word timings if available ---
+        if (audioObject.alignments) {
+          const chunkOffset = currentStreamDuration - (audioData.length / sampleRate);
+          const alignedTimings = audioObject.alignments.map((alignment: any) => ({
+            word: alignment.word,
+            start: chunkOffset + alignment.start_time,
+            end: chunkOffset + alignment.end_time
+          }));
+          
+          if (alignedTimings.length > 0) {
+            console.log(`📊 Received ${alignedTimings.length} precise word timings for chunk ${i + 1}.`);
+            setWordTimings(prev => [...prev, ...alignedTimings]);
+          }
+        } else {
+          // Fallback to provisional timings if alignments are not available
           const chunkDuration = audioData.length / sampleRate;
           const chunkOffset = currentStreamDuration - chunkDuration;
           const wordsInChunk = chunk.split(/\s+/).filter(w => w.length > 0);
