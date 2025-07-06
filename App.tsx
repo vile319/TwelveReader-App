@@ -139,8 +139,7 @@ const App: React.FC = () => {
   const handleAcceptModelDownload = () => {
     setModelAccepted(true);
     setShowModelWarning(false);
-    // Retry reading now that user accepted
-    handleStartReading();
+    // pendingRead already stored; when model finishes downloading, useEffect will trigger speak()
   };
 
   const handleCancelModelDownload = () => {
