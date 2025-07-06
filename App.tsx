@@ -217,14 +217,44 @@ const App: React.FC = () => {
   };
 
   return (
-    <div style={{ 
-      minHeight: '100vh', 
+    <div className="app-container" style={{
+      minHeight: '100vh',
       backgroundColor: '#0f1419',
       color: '#e5e5e5',
       fontFamily: 'Inter, system-ui, -apple-system, sans-serif',
       display: 'flex'
     }}>
       <style>{`
+        .app-container {
+          flex-direction: row;
+        }
+        .sidebar {
+          width: 320px;
+          height: 100vh;
+          position: fixed;
+          left: 0;
+          top: 0;
+          overflow-y: auto;
+        }
+        .main-content {
+          margin-left: 320px;
+          flex: 1;
+        }
+        @media (max-width: 768px) {
+          .app-container {
+            flex-direction: column;
+          }
+          .sidebar {
+            position: relative;
+            width: 100%;
+            height: auto;
+            border-right: none;
+            border-bottom: 1px solid #2d3748;
+          }
+          .main-content {
+            margin-left: 0;
+          }
+        }
         @keyframes spin {
           0% { transform: rotate(0deg); }
           100% { transform: rotate(360deg); }
@@ -292,18 +322,12 @@ const App: React.FC = () => {
       )}
 
       {/* Sidebar */}
-      <div style={{
-        width: '320px',
+      <div className="sidebar" style={{
         backgroundColor: '#1a1e26',
         borderRight: '1px solid #2d3748',
         padding: '24px',
         display: 'flex',
         flexDirection: 'column',
-        height: '100vh',
-        position: 'fixed',
-        left: 0,
-        top: 0,
-        overflowY: 'auto'
       }}>
         {/* Logo */}
         <div style={{ marginBottom: '32px' }}>
@@ -610,10 +634,7 @@ const App: React.FC = () => {
       </div>
 
       {/* Main Content */}
-      <div style={{
-        flex: 1,
-        marginLeft: '320px',
-        padding: '24px',
+      <div className="main-content" style={{
         display: 'flex',
         flexDirection: 'column',
         height: '100vh'

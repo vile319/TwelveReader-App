@@ -188,58 +188,6 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true }: UseKokoroWebWorkerTt
     { name: 'bm_fable', label: '📚 Fable (British Male)', nationality: 'British', gender: 'Male' },
     { name: 'bm_george', label: '🇬🇧 George (British Male)', nationality: 'British', gender: 'Male' },
     { name: 'bm_lewis', label: '🇬🇧 Lewis (British Male)', nationality: 'British', gender: 'Male' },
-    
-    // European Female
-    { name: 'ef_dora', label: '🇪🇺 Dora (European Female)', nationality: 'European', gender: 'Female' },
-    
-    // European Male
-    { name: 'em_alex', label: '🇪🇺 Alex (European Male)', nationality: 'European', gender: 'Male' },
-    { name: 'em_santa', label: '🎅 Santa (European Male)', nationality: 'European', gender: 'Male' },
-    
-    // French Female
-    { name: 'ff_siwis', label: '🇫🇷 Siwis (French Female)', nationality: 'French', gender: 'Female' },
-    
-    // Hindi Female
-    { name: 'hf_alpha', label: '🇮🇳 Alpha (Hindi Female)', nationality: 'Hindi', gender: 'Female' },
-    { name: 'hf_beta', label: '🇮🇳 Beta (Hindi Female)', nationality: 'Hindi', gender: 'Female' },
-    
-    // Hindi Male
-    { name: 'hm_omega', label: '🇮🇳 Omega (Hindi Male)', nationality: 'Hindi', gender: 'Male' },
-    { name: 'hm_psi', label: '🇮🇳 Psi (Hindi Male)', nationality: 'Hindi', gender: 'Male' },
-    
-    // Italian Female
-    { name: 'if_sara', label: '🇮🇹 Sara (Italian Female)', nationality: 'Italian', gender: 'Female' },
-    
-    // Italian Male
-    { name: 'im_nicola', label: '🇮🇹 Nicola (Italian Male)', nationality: 'Italian', gender: 'Male' },
-    
-    // Japanese Female
-    { name: 'jf_alpha', label: '🇯🇵 Alpha (Japanese Female)', nationality: 'Japanese', gender: 'Female' },
-    { name: 'jf_gongitsune', label: '🦊 Gongitsune (Japanese Female)', nationality: 'Japanese', gender: 'Female' },
-    { name: 'jf_nezumi', label: '🐭 Nezumi (Japanese Female)', nationality: 'Japanese', gender: 'Female' },
-    { name: 'jf_tebukuro', label: '🧤 Tebukuro (Japanese Female)', nationality: 'Japanese', gender: 'Female' },
-    
-    // Japanese Male
-    { name: 'jm_kumo', label: '🕷️ Kumo (Japanese Male)', nationality: 'Japanese', gender: 'Male' },
-    
-    // Portuguese Female
-    { name: 'pf_dora', label: '🇵🇹 Dora (Portuguese Female)', nationality: 'Portuguese', gender: 'Female' },
-    
-    // Portuguese Male
-    { name: 'pm_alex', label: '🇵🇹 Alex (Portuguese Male)', nationality: 'Portuguese', gender: 'Male' },
-    { name: 'pm_santa', label: '🎅 Santa (Portuguese Male)', nationality: 'Portuguese', gender: 'Male' },
-    
-    // Chinese Female
-    { name: 'zf_xiaobei', label: '🇨🇳 Xiaobei (Chinese Female)', nationality: 'Chinese', gender: 'Female' },
-    { name: 'zf_xiaoni', label: '🇨🇳 Xiaoni (Chinese Female)', nationality: 'Chinese', gender: 'Female' },
-    { name: 'zf_xiaoxiao', label: '🇨🇳 Xiaoxiao (Chinese Female)', nationality: 'Chinese', gender: 'Female' },
-    { name: 'zf_xiaoyi', label: '🇨🇳 Xiaoyi (Chinese Female)', nationality: 'Chinese', gender: 'Female' },
-    
-    // Chinese Male
-    { name: 'zm_yunjian', label: '🇨🇳 Yunjian (Chinese Male)', nationality: 'Chinese', gender: 'Male' },
-    { name: 'zm_yunxi', label: '🇨🇳 Yunxi (Chinese Male)', nationality: 'Chinese', gender: 'Male' },
-    { name: 'zm_yunxia', label: '🇨🇳 Yunxia (Chinese Male)', nationality: 'Chinese', gender: 'Male' },
-    { name: 'zm_yunyang', label: '🇨🇳 Yunyang (Chinese Male)', nationality: 'Chinese', gender: 'Male' },
   ];
 
   // Add audio to buffer (no longer used but keeping for compatibility)
