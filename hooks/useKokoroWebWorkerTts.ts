@@ -328,6 +328,8 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true }: UseKokoroWebWorkerTt
              // Start playback from the appropriate chunk
        streamingStartTimeRef.current = audioContextRef.current.currentTime - startTime;
        
+       if (!isPlaying) setIsPlaying(true);
+       
        // Start progress tracking for streaming
        const trackStreamingProgress = () => {
          if (isPlaybackActiveRef.current && audioContextRef.current) {
@@ -601,8 +603,10 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true }: UseKokoroWebWorkerTt
         // For streaming mode, restart streaming playback
         startStreamingFromPosition(currentTime);
       } else if (completeAudioBuffer) {
-        // For complete audio mode
-        playCompleteAudio(currentTime);
+        // For single-chunk synthesis start playback automatically
+        isPlaybackActiveRef.current = true;
+        playCompleteAudio(0);
+        setIsPlaying(true);
       }
     }
   }, [canScrub, isPlaying, currentTime, isStreaming, synthesizedDuration, completeAudioBuffer, startStreamingFromPosition, playCompleteAudio]);
@@ -936,15 +940,32 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true }: UseKokoroWebWorkerTt
         streamingAudioRef.current.push(audioData);
         const currentStreamDuration = (totalSamples / sampleRate);
         setSynthesizedDuration(currentStreamDuration);
+
+        // --- New: provisional word timings for this chunk ---
+        {
+          const chunkDuration = audioData.length / sampleRate;
+          const chunkOffset = currentStreamDuration - chunkDuration;
+          const wordsInChunk = chunk.split(/\s+/).filter(w => w.length > 0);
+          const avgWordDur = wordsInChunk.length > 0 ? chunkDuration / wordsInChunk.length : chunkDuration;
+          const provisionalTimings = wordsInChunk.map((w, idx) => ({
+            word: w,
+            start: chunkOffset + idx * avgWordDur,
+            end: chunkOffset + (idx + 1) * avgWordDur
+          }));
+          if (provisionalTimings.length) {
+            setWordTimings(prev => [...prev, ...provisionalTimings]);
+          }
+        }
         
+        console.log(`✅ Chunk ${i + 1} processed: ${audioData.length} samples (${currentStreamDuration.toFixed(1)}s total)`);
+
+        // Start streaming playback after first chunk
         if (i === 0) {
           setCanScrub(true);
           setIsStreaming(true);
           console.log('🎵 Starting streaming playback with first chunk');
           startStreamingFromPosition(0);
         }
-        
-        console.log(`✅ Chunk ${i + 1} processed: ${audioData.length} samples (${currentStreamDuration.toFixed(1)}s total)`);
         }
         
         // Allow event loop to breathe between batches
@@ -1002,10 +1023,12 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true }: UseKokoroWebWorkerTt
       if (wasPlaying) {
         console.log('🔄 Switching from streaming to complete audio playback');
         setTimeout(() => {
+          isPlaybackActiveRef.current = true;
           playCompleteAudio(currentTime);
         }, 100);
       } else {
         // For single-chunk synthesis start playback automatically
+        isPlaybackActiveRef.current = true;
         playCompleteAudio(0);
         setIsPlaying(true);
       }
