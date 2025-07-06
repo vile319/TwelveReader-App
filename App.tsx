@@ -4,6 +4,8 @@ import PDFReader from './components/PDFReader';
 import HighlightedText from './components/HighlightedText';
 import AdSenseBanner from './components/AdSenseBanner';
 import AdSensePopup from './components/AdSensePopup';
+import ModelDownloadWarning from './components/ModelDownloadWarning';
+import AudioDownloadButton from './components/AudioDownloadButton';
 import { AppError } from './types';
 
 const App: React.FC = () => {
@@ -35,7 +37,12 @@ const App: React.FC = () => {
     debugAudioQuality,
     checkAudioQuality,
     normalizeAudio,
-    toggleNormalizeAudio
+    toggleNormalizeAudio,
+    showDownloadWarning,
+    handleDownloadApproval,
+    handleDownloadDecline,
+    completeAudioBuffer,
+    completeAudioSampleRate
   } = useKokoroWebWorkerTts({
     onError: setError
   });
@@ -557,6 +564,14 @@ const App: React.FC = () => {
                 +15s
               </button>
               
+              {/* Download Audio Button */}
+              <AudioDownloadButton 
+                audioBuffer={completeAudioBuffer}
+                sampleRate={completeAudioSampleRate}
+                filename={`twelvereader-audio-${Date.now()}.wav`}
+                style={{ marginLeft: '16px' }}
+              />
+              
               {/* Time Display */}
                              <div style={{ flex: 1, textAlign: 'center' }}>
                  <div style={{ 
@@ -836,6 +851,13 @@ const App: React.FC = () => {
       <AdSensePopup 
         adSlot="1122334455"
         showInterval={10} // Show every 10 minutes
+      />
+      
+      {/* Model Download Warning */}
+      <ModelDownloadWarning 
+        isVisible={showDownloadWarning}
+        onAccept={handleDownloadApproval}
+        onDecline={handleDownloadDecline}
       />
     </div>
   );
