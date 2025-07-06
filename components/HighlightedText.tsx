@@ -7,51 +7,60 @@ interface HighlightedTextProps {
   style?: React.CSSProperties;
 }
 
-const HighlightedText: React.FC<HighlightedTextProps> = React.memo(({ 
-  text, 
-  wordTimings, 
-  currentWordIndex, 
-  style 
+const HighlightedText: React.FC<HighlightedTextProps> = React.memo(({
+  text,
+  wordTimings,
+  currentWordIndex,
+  style
 }) => {
   // Debug logging
   console.log('📝 HighlightedText render:', {
     textLength: text.length,
     wordTimingsLength: wordTimings.length,
-    currentWordIndex,
-    firstFewWords: text.split(/\s+/).slice(0, 3)
+    currentWordIndex
   });
 
-  // Memoize the words splitting to avoid recalculating on every render
-  const words = useMemo(() => {
-    return text.split(/\s+/).filter(word => word.length > 0);
+  // Memoize the splitting to preserve formatting. This regex splits the text by whitespace,
+  // but keeps the whitespace delimiters in the resulting array.
+  const parts = useMemo(() => {
+    return text.split(/(\s+)/);
   }, [text]);
 
-  // Memoize the highlighted words (even if no timings) to keep hooks consistent
-  const highlightedWords = useMemo(() => {
-    return words.map((word, index) => {
-      const isCurrentWord = wordTimings.length > 0 && index === currentWordIndex;
-      const isPastWord = wordTimings.length > 0 && index < currentWordIndex;
-      return (
+  const highlightedContent = useMemo(() => {
+    let wordIndex = 0;
+    return parts.map((part, i) => {
+      // Whitespace parts are returned as-is to preserve formatting.
+      if (part.trim() === '') {
+        return <React.Fragment key={i}>{part}</React.Fragment>;
+      }
+
+      // It's a word, so apply highlighting logic.
+      const isCurrentWord = wordTimings.length > 0 && wordIndex === currentWordIndex;
+      const isPastWord = wordTimings.length > 0 && wordIndex < currentWordIndex;
+
+      const span = (
         <span
-          key={index}
+          key={i}
           style={{
-            backgroundColor: isCurrentWord ? '#4a90e2' : isPastWord ? '#2d4a22' : 'transparent',
+            backgroundColor: isCurrentWord ? 'rgba(74, 144, 226, 0.5)' : isPastWord ? 'rgba(144, 238, 144, 0.15)' : 'transparent',
             color: isCurrentWord ? 'white' : isPastWord ? '#90ee90' : '#e5e5e5',
-            padding: '2px 4px',
+            padding: '2px 1px',
             borderRadius: '4px',
-            margin: '0 2px',
             transition: 'background-color 0.1s ease, color 0.1s ease',
             fontWeight: isCurrentWord ? '600' : 'normal'
           }}
         >
-          {word}
+          {part}
         </span>
       );
-    });
-  }, [words, currentWordIndex, wordTimings.length]);
 
-  // Decide output
-  const content = wordTimings.length === 0 ? text : highlightedWords;
+      wordIndex++;
+      return span;
+    });
+  }, [parts, currentWordIndex, wordTimings.length]);
+
+  // Use highlighted content if timings are available, otherwise plain text.
+  const content = wordTimings.length > 0 ? highlightedContent : text;
 
   return (
     <div style={{
@@ -63,7 +72,7 @@ const HighlightedText: React.FC<HighlightedTextProps> = React.memo(({
       fontSize: '16px',
       fontFamily: 'inherit',
       lineHeight: '1.6',
-      whiteSpace: wordTimings.length === 0 ? 'pre-wrap' : undefined,
+      whiteSpace: 'pre-wrap', // Always preserve whitespace to maintain original formatting.
       overflowY: 'auto',
       wordBreak: 'break-word',
       ...style
