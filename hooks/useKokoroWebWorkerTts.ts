@@ -72,19 +72,25 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true }: UseKokoroWebWorkerTt
   // New synthesis complete flag
   const [synthesisComplete, setSynthesisComplete] = useState(false);
   
+  // New state for playback trigger
+  const [isFirstChunkReady, setIsFirstChunkReady] = useState(false);
+  
   const lastWordUpdateRef = useRef(0);
-
+  const wordTimingsRef = useRef(wordTimings);
+  wordTimingsRef.current = wordTimings;
+  
   // Helper function to update current word index based on time
   const updateCurrentWordIndex = useCallback((currentTime: number) => {
-    if (wordTimings.length === 0) {
+    const timings = wordTimingsRef.current;
+    if (timings.length === 0) {
       console.log('📝 No word timings available');
       return;
     }
     
     // Find the current word index based on time
     let newIndex = -1;
-    for (let i = 0; i < wordTimings.length; i++) {
-      const timing = wordTimings[i];
+    for (let i = 0; i < timings.length; i++) {
+      const timing = timings[i];
       if (currentTime >= timing.start && currentTime < timing.end) {
         newIndex = i;
         break;
@@ -92,18 +98,18 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true }: UseKokoroWebWorkerTt
     }
     
     // If we're past the last word, set to -1
-    if (newIndex === -1 && currentTime > (wordTimings[wordTimings.length - 1]?.end || 0)) {
+    if (newIndex === -1 && currentTime > (timings[timings.length - 1]?.end || 0)) {
       newIndex = -1;
     }
     
     // If we didn't find a word but we're in the middle of the text, find the closest word
-    if (newIndex === -1 && currentTime > 0 && currentTime < (wordTimings[wordTimings.length - 1]?.end || 0)) {
+    if (newIndex === -1 && currentTime > 0 && currentTime < (timings[timings.length - 1]?.end || 0)) {
       // Find the word we're closest to
       let closestIndex = 0;
-      let closestDistance = Math.abs(currentTime - wordTimings[0].start);
+      let closestDistance = Math.abs(currentTime - timings[0].start);
       
-      for (let i = 1; i < wordTimings.length; i++) {
-        const distance = Math.abs(currentTime - wordTimings[i].start);
+      for (let i = 1; i < timings.length; i++) {
+        const distance = Math.abs(currentTime - timings[i].start);
         if (distance < closestDistance) {
           closestDistance = distance;
           closestIndex = i;
@@ -116,14 +122,14 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true }: UseKokoroWebWorkerTt
     setCurrentWordIndex(prevIndex => {
       if (newIndex !== prevIndex) {
         console.log(`📝 Word highlight: ${prevIndex} → ${newIndex} (time: ${currentTime.toFixed(2)}s)`);
-        if (newIndex >= 0 && newIndex < wordTimings.length) {
-          console.log(`📝 Current word: "${wordTimings[newIndex].word}" (${wordTimings[newIndex].start.toFixed(2)}s - ${wordTimings[newIndex].end.toFixed(2)}s)`);
+        if (newIndex >= 0 && newIndex < timings.length) {
+          console.log(`📝 Current word: "${timings[newIndex].word}" (${timings[newIndex].start.toFixed(2)}s - ${timings[newIndex].end.toFixed(2)}s)`);
         }
         return newIndex;
       }
       return prevIndex;
     });
-  }, [wordTimings]);
+  }, [setCurrentWordIndex]);
 
   const ttsRef = useRef<any>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -843,7 +849,8 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true }: UseKokoroWebWorkerTt
     setCanScrub(false);
     setIsStreaming(false);
     
-    // Clear word timing data
+    // Reset state before new synthesis
+    setIsFirstChunkReady(false);
     setWordTimings([]);
     setCurrentWordIndex(-1);
     console.log('📝 Cleared word timings and reset current word index');
@@ -981,11 +988,8 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true }: UseKokoroWebWorkerTt
         if (i === 0) {
           setCanScrub(true);
           setIsStreaming(true);
-          console.log('🎵 Starting streaming playback with first chunk, delaying for UI sync');
-          // Delay playback slightly to allow the UI to update first
-          setTimeout(() => {
-            startStreamingFromPosition(0);
-          }, 50);
+          console.log('🎵 First chunk is ready. Setting trigger for playback.');
+          setIsFirstChunkReady(true);
         }
         }
         
@@ -1070,6 +1074,14 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true }: UseKokoroWebWorkerTt
       });
     }
   }, [isReady, onError, chunkText]);
+
+  // This effect will trigger playback once the UI is ready after the first chunk
+  useEffect(() => {
+    if (isFirstChunkReady) {
+      console.log('▶️ UI is ready, starting playback.');
+      startStreamingFromPosition(0);
+    }
+  }, [isFirstChunkReady, startStreamingFromPosition]);
 
   // Stop current synthesis/playback
   const stop = useCallback(() => {
