@@ -1471,6 +1471,17 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true }: UseKokoroWebWorkerTt
     return new Blob([view], { type: 'audio/wav' });
   }, [completeAudioBuffer, completeAudioSampleRate]);
 
+  const seek = useCallback((time: number) => {
+    console.log(`🎤 Seeking to ${time.toFixed(2)}s`);
+    if (synthesisComplete) {
+      playCompleteAudio(time);
+    } else if (isStreaming) {
+      startStreamingFromPosition(time);
+    } else {
+      console.warn('⚠️ Cannot seek: audio not ready.');
+    }
+  }, [synthesisComplete, isStreaming, playCompleteAudio, startStreamingFromPosition]);
+
   return {
     speak,
     stop,
@@ -1508,7 +1519,8 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true }: UseKokoroWebWorkerTt
     // New synthesis complete flag
     synthesisComplete,
     // Utility: get combined audio buffer as WAV Blob
-    getAudioBlob
+    getAudioBlob,
+    seek
   };
 };
 

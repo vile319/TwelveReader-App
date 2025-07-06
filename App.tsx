@@ -45,7 +45,8 @@ const App: React.FC = () => {
     toggleNormalizeAudio,
     synthesisComplete,
     getAudioBlob,
-    isReady
+    isReady,
+    seek,
   } = useKokoroWebWorkerTts({
     onError: setError,
     enabled: modelAccepted
@@ -194,6 +195,26 @@ const App: React.FC = () => {
       text: 'Once upon a time, in a small village nestled between rolling hills and a sparkling river, there lived a young girl named Luna who could speak to the stars.'
     }
   ];
+
+  const handleWordClick = (time: number) => {
+    if (!canScrub) return;
+    console.log(`🖱️ Word clicked, seeking to: ${time.toFixed(2)}s`);
+    seek(time);
+  };
+
+  const renderContent = () => {
+    // ... existing code ...
+    return (
+      <div className="flex-1 flex flex-col bg-gray-800 text-white overflow-hidden">
+        <HighlightedText 
+          text={inputText} 
+          wordTimings={wordTimings}
+          currentWordIndex={currentWordIndex}
+          onWordClick={handleWordClick}
+        />
+      </div>
+    );
+  };
 
   return (
     <div style={{ 
@@ -881,34 +902,7 @@ const App: React.FC = () => {
             return null;
           })()}
           
-          {canScrub ? (
-            <HighlightedText 
-              text={inputText}
-              wordTimings={wordTimings}
-              currentWordIndex={currentWordIndex}
-              style={{ flex: 1 }}
-            />
-          ) : (
-            <textarea
-              value={inputText}
-              onChange={(e) => setInputText(e.target.value)}
-              placeholder="Enter your text here to generate speech... or upload a PDF above to extract text"
-              style={{
-                flex: 1,
-                width: '100%',
-                padding: '16px',
-                backgroundColor: '#0f1419',
-                border: '1px solid #2d3748',
-                borderRadius: '8px',
-                color: '#e5e5e5',
-                fontSize: '16px',
-                fontFamily: 'inherit',
-                resize: 'none',
-                outline: 'none',
-                lineHeight: '1.6'
-              }}
-            />
-          )}
+          {renderContent()}
           
           {/* Sample Texts */}
           <div style={{ marginTop: '16px' }}>
