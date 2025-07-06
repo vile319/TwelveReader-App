@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import useKokoroWebWorkerTts from './hooks/useKokoroWebWorkerTts';
 import PDFReader from './components/PDFReader';
 import HighlightedText from './components/HighlightedText';
@@ -17,6 +17,9 @@ const App: React.FC = () => {
   // Model download consent
   const [showModelWarning, setShowModelWarning] = useState(false);
   const [modelAccepted, setModelAccepted] = useState(false);
+
+  // Store pending read request during model download
+  const [pendingRead, setPendingRead] = useState<{ text: string; voice: string } | null>(null);
 
   const {
     speak,
@@ -54,9 +57,16 @@ const App: React.FC = () => {
       return;
     }
     
-    // Show warning if model not ready and user hasn't accepted yet
-    if (!isReady && !modelAccepted) {
+    // If model not accepted yet, show warning and remember intention
+    if (!modelAccepted) {
+      setPendingRead({ text: inputText.trim(), voice: selectedVoice });
       setShowModelWarning(true);
+      return;
+    }
+
+    // If accepted but model still loading, store pending read and wait
+    if (!isReady) {
+      setPendingRead({ text: inputText.trim(), voice: selectedVoice });
       return;
     }
     
@@ -129,10 +139,8 @@ const App: React.FC = () => {
   const handleAcceptModelDownload = () => {
     setModelAccepted(true);
     setShowModelWarning(false);
-    // Retry reading after state updates
-    setTimeout(() => {
-      handleStartReading();
-    }, 0);
+    // Retry reading now that user accepted
+    handleStartReading();
   };
 
   const handleCancelModelDownload = () => {
@@ -153,6 +161,18 @@ const App: React.FC = () => {
     a.click();
     URL.revokeObjectURL(url);
   };
+
+  // Auto-start reading once model finishes downloading
+  useEffect(() => {
+    if (isReady && pendingRead) {
+      (async () => {
+        try {
+          await speak(pendingRead.text, pendingRead.voice);
+        } catch {}
+        setPendingRead(null);
+      })();
+    }
+  }, [isReady, pendingRead, speak]);
 
   const sampleTexts = [
     {
