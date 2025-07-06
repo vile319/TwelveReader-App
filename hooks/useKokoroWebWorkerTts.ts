@@ -302,6 +302,7 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true }: UseKokoroWebWorkerTt
     
     console.log(`🎵 Starting streaming playback from ${startTime.toFixed(2)}s`);
     isPlaybackActiveRef.current = true;
+    setIsPlaying(true);
     
     try {
       if (!audioContextRef.current) {
@@ -446,21 +447,15 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true }: UseKokoroWebWorkerTt
     }
   }, []);
 
+  // Play complete audio buffer from a specific time
   const playCompleteAudio = useCallback(async (startTime: number = 0) => {
     if (!completeAudioBuffer || !audioContextRef.current) return;
-    
+
+    console.log(`🎵 Playing complete audio from ${startTime.toFixed(2)}s`);
+    isPlaybackActiveRef.current = true;
+    setIsPlaying(true);
+
     try {
-      // Stop any existing playback first
-      if (completeAudioSourceRef.current) {
-        try {
-          completeAudioSourceRef.current.stop();
-        } catch (e) {
-          // Already stopped
-        }
-        completeAudioSourceRef.current = null;
-      }
-      
-      // Resume audio context if suspended
       if (audioContextRef.current.state === 'suspended') {
         await audioContextRef.current.resume();
       }
@@ -958,12 +953,23 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true }: UseKokoroWebWorkerTt
           const chunkDuration = audioData.length / sampleRate;
           const chunkOffset = currentStreamDuration - chunkDuration;
           const wordsInChunk = chunk.split(/\s+/).filter(w => w.length > 0);
-          const avgWordDur = wordsInChunk.length > 0 ? chunkDuration / wordsInChunk.length : chunkDuration;
-          const provisionalTimings = wordsInChunk.map((w, idx) => ({
-            word: w,
-            start: chunkOffset + idx * avgWordDur,
-            end: chunkOffset + (idx + 1) * avgWordDur
-          }));
+          
+          // Improved timing estimation based on word length
+          const totalChars = wordsInChunk.reduce((sum, word) => sum + word.length, 0);
+          const timePerChar = totalChars > 0 ? chunkDuration / totalChars : 0;
+
+          let wordStart = chunkOffset;
+          const provisionalTimings = wordsInChunk.map((w) => {
+            const wordDur = w.length * timePerChar + 0.05; // Base time + per-char time
+            const timing = {
+              word: w,
+              start: wordStart,
+              end: wordStart + wordDur,
+            };
+            wordStart += wordDur;
+            return timing;
+          });
+
           if (provisionalTimings.length) {
             setWordTimings(prev => [...prev, ...provisionalTimings]);
           }
@@ -1035,59 +1041,17 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true }: UseKokoroWebWorkerTt
       if (wasPlaying) {
         console.log('🔄 Switching from streaming to complete audio playback');
         playCompleteAudio(currentTime);
-      } else {
-        // For single-chunk synthesis start playback automatically
+      } else if (allAudioChunks.length === 1) {
+        // For single-chunk (short) texts, auto-play from the start
+        console.log('🎵 Auto-playing single-chunk synthesis');
         playCompleteAudio(0);
-        setIsPlaying(true);
       }
 
       onProgress?.(100);
       setStatus(`🎵 Audio complete! ${(combinedAudio.length / sampleRate).toFixed(1)}s of audio ready`);
       
-      // Calculate and set word timings now that we have the final audio duration
-      const actualDuration = combinedAudio.length / sampleRate;
-      
-      // Calculate word timings - split text into words and estimate timing
-      const words = text.split(/\s+/).filter(word => word.length > 0);
-      const initialWordTimings: Array<{word: string, start: number, end: number}> = [];
-      
-      // Estimate timing based on average speaking rate
-      let currentWordStart = 0;
-      
-      words.forEach((word, index) => {
-        // More realistic word duration: ~0.4s per word on average
-        const wordDuration = Math.max(0.3, word.length * 0.05); // 0.05s per character, min 0.3s
-        const wordEnd = currentWordStart + wordDuration;
-        
-        initialWordTimings.push({
-          word: word,
-          start: currentWordStart,
-          end: wordEnd
-        });
-        
-        currentWordStart = wordEnd; // No gap between words for more accurate timing
-      });
-      
-      // Scale timings to match actual audio duration
-      const estimatedDuration = initialWordTimings[initialWordTimings.length - 1]?.end || 1;
-      const scaleFactor = actualDuration / estimatedDuration;
-      
-      const correctedWordTimings = initialWordTimings.map(timing => ({
-        word: timing.word,
-        start: timing.start * scaleFactor,
-        end: timing.end * scaleFactor
-      }));
-      
-      setWordTimings(correctedWordTimings);
-      console.log(`📝 ✅ WORD TIMINGS SET! ${words.length} words, ${correctedWordTimings.length} timings`);
-      console.log(`📝 Estimated: ${estimatedDuration.toFixed(2)}s → Actual: ${actualDuration.toFixed(2)}s (scale: ${scaleFactor.toFixed(3)})`);
-      console.log(`📝 Final word timings:`, correctedWordTimings.slice(0, 3), '...', correctedWordTimings.slice(-3));
-      
-      // Immediately verify the word timings are set
-      setTimeout(() => {
-        console.log(`📝 Word timings verification - should not be empty:`, correctedWordTimings.length);
-      }, 100);
-      
+      // Word timings are now generated provisionally, no final calculation needed.
+
       console.log(`📊 Synthesis Performance:
         • Total characters: ${text.length.toLocaleString()}
         • Total chunks: ${allAudioChunks.length}
