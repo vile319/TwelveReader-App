@@ -44,7 +44,8 @@ const App: React.FC = () => {
     getAudioBlob,
     isReady
   } = useKokoroWebWorkerTts({
-    onError: setError
+    onError: setError,
+    enabled: modelAccepted
   });
 
   const handleStartReading = async () => {

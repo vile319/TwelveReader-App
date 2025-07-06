@@ -30,6 +30,7 @@ if (typeof window !== 'undefined') {
 
 interface UseKokoroWebWorkerTtsProps {
   onError: (error: AppError) => void;
+  enabled?: boolean; // if false, delay model initialization
 }
 
 export interface AudioChunk {
@@ -40,7 +41,7 @@ export interface AudioChunk {
   duration: number;
 }
 
-const useKokoroWebWorkerTts = ({ onError }: UseKokoroWebWorkerTtsProps) => {
+const useKokoroWebWorkerTts = ({ onError, enabled = true }: UseKokoroWebWorkerTtsProps) => {
   const [isReady, setIsReady] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -767,10 +768,12 @@ const useKokoroWebWorkerTts = ({ onError }: UseKokoroWebWorkerTtsProps) => {
     }
   }, [onError, detectWebGPU]);
 
-  // Initialize on mount
+  // Initialize when enabled flips true
   useEffect(() => {
-    initializeTts();
-  }, [initializeTts]);
+    if (enabled) {
+      initializeTts();
+    }
+  }, [enabled, initializeTts]);
 
   // Chunk text for better TTS processing
   const chunkText = useCallback((text: string, maxChunkSize: number = 2000): string[] => {
