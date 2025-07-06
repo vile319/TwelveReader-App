@@ -1,9 +1,50 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import HighlightedText from './HighlightedText';
-import * as pdfjsLib from 'pdfjs-dist';
 
-// Configure the worker to use the local version included in the project
-pdfjsLib.GlobalWorkerOptions.workerSrc = `/pdfjs-dist/build/pdf.worker.min.mjs`;
+// --- New Robust PDF.js Loader ---
+// This promise ensures we only try to load the script once.
+let pdfjsLibPromise: Promise<any> | null = null;
+
+const loadPdfJs = () => {
+  if (!pdfjsLibPromise) {
+    pdfjsLibPromise = new Promise((resolve, reject) => {
+      const scriptId = 'pdfjs-script';
+      
+      // If the script is already in the DOM, assume it's loaded or loading.
+      if (document.getElementById(scriptId)) {
+        // A simple polling mechanism to wait for the library to be available.
+        const interval = setInterval(() => {
+          if ((window as any).pdfjsLib) {
+            clearInterval(interval);
+            resolve((window as any).pdfjsLib);
+          }
+        }, 100);
+        return;
+      }
+
+      const script = document.createElement('script');
+      script.id = scriptId;
+      script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.269/pdf.min.mjs';
+      script.type = 'module';
+      script.onload = () => {
+        console.log('✅ pdf.js script loaded.');
+        // Poll to ensure the library is attached to the window object.
+        const interval = setInterval(() => {
+          if ((window as any).pdfjsLib) {
+            clearInterval(interval);
+            resolve((window as any).pdfjsLib);
+          }
+        }, 100);
+      };
+      script.onerror = () => {
+        console.error('❌ Failed to load pdf.js script.');
+        reject(new Error('Could not load the PDF processing library. Please check your internet connection and try again.'));
+      };
+      document.body.appendChild(script);
+    });
+  }
+  return pdfjsLibPromise;
+};
 
 interface PDFReaderProps {
   file: File;
@@ -27,7 +68,6 @@ const PDFReader: React.FC<PDFReaderProps> = ({
   const [error, setError] = useState<string>('');
 
   useEffect(() => {
-    // No need to load script dynamically, just call extraction
     if (file) {
       extractPDFText();
     }
@@ -39,6 +79,11 @@ const PDFReader: React.FC<PDFReaderProps> = ({
     
     try {
       console.log('📄 Starting PDF text extraction...');
+      
+      const pdfjsLib = await loadPdfJs();
+      
+      // Configure worker to use CDN version that matches the library version
+      pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.269/pdf.worker.min.mjs`;
       
       const arrayBuffer = await file.arrayBuffer();
       const pdf = await pdfjsLib.getDocument({ 
