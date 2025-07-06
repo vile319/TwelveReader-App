@@ -21,10 +21,36 @@ const PDFReader: React.FC<PDFReaderProps> = ({
   const [isLoading, setIsLoading] = useState(true);
   const [extractedText, setExtractedText] = useState<string>('');
   const [error, setError] = useState<string>('');
+  const [isScriptLoaded, setIsScriptLoaded] = useState(false);
 
   useEffect(() => {
-    extractPDFText();
-  }, [file]);
+    const scriptId = 'pdfjs-script';
+    if (document.getElementById(scriptId)) {
+      setIsScriptLoaded(true);
+      return;
+    }
+
+    const script = document.createElement('script');
+    script.id = scriptId;
+    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.269/pdf.min.mjs';
+    script.type = 'module';
+    script.onload = () => {
+      console.log('✅ pdf.js script loaded.');
+      setIsScriptLoaded(true);
+    };
+    script.onerror = () => {
+      console.error('❌ Failed to load pdf.js script.');
+      setError('Could not load the PDF processing library. Please check your internet connection and try again.');
+      setIsLoading(false);
+    };
+    document.body.appendChild(script);
+  }, []);
+
+  useEffect(() => {
+    if (isScriptLoaded && file) {
+      extractPDFText();
+    }
+  }, [file, isScriptLoaded]);
 
   const extractPDFText = async () => {
     setIsLoading(true);
@@ -33,13 +59,13 @@ const PDFReader: React.FC<PDFReaderProps> = ({
     try {
       console.log('📄 Starting PDF text extraction...');
       
-      // Use PDF.js for proper PDF text extraction
-      const pdfjsLib = await import('pdfjs-dist');
+      const pdfjsLib = (window as any).pdfjsLib;
+      if (!pdfjsLib) {
+        throw new Error('pdf.js library is not available.');
+      }
       
       // Configure worker to use CDN version that matches the installed pdfjs-dist version
-      if (typeof window !== 'undefined') {
-        pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.269/pdf.worker.min.mjs`;
-      }
+      pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.269/pdf.worker.min.mjs`;
       
       const arrayBuffer = await file.arrayBuffer();
       const pdf = await pdfjsLib.getDocument({ 
