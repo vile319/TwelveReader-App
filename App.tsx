@@ -4,8 +4,6 @@ import PDFReader from './components/PDFReader';
 import HighlightedText from './components/HighlightedText';
 import AdSenseBanner from './components/AdSenseBanner';
 import AdSensePopup from './components/AdSensePopup';
-import ModelDownloadWarning from './components/ModelDownloadWarning';
-import AudioDownloadButton from './components/AudioDownloadButton';
 import { AppError } from './types';
 
 const App: React.FC = () => {
@@ -15,6 +13,10 @@ const App: React.FC = () => {
   const [isReading, setIsReading] = useState(false);
   const [currentSentence, setCurrentSentence] = useState('');
   const [uploadedPDF, setUploadedPDF] = useState<File | null>(null);
+
+  // Model download consent
+  const [showModelWarning, setShowModelWarning] = useState(false);
+  const [modelAccepted, setModelAccepted] = useState(false);
 
   const {
     speak,
@@ -38,11 +40,9 @@ const App: React.FC = () => {
     checkAudioQuality,
     normalizeAudio,
     toggleNormalizeAudio,
-    showDownloadWarning,
-    handleDownloadApproval,
-    handleDownloadDecline,
-    completeAudioBuffer,
-    completeAudioSampleRate
+    synthesisComplete,
+    getAudioBlob,
+    isReady
   } = useKokoroWebWorkerTts({
     onError: setError
   });
@@ -50,6 +50,12 @@ const App: React.FC = () => {
   const handleStartReading = async () => {
     if (!inputText.trim()) {
       setError({ title: 'No Text', message: 'Please enter some text or upload a PDF to read.' });
+      return;
+    }
+    
+    // Show warning if model not ready and user hasn't accepted yet
+    if (!isReady && !modelAccepted) {
+      setShowModelWarning(true);
       return;
     }
     
@@ -118,6 +124,33 @@ const App: React.FC = () => {
     setUploadedPDF(null);
   };
 
+  // Model download modal handlers
+  const handleAcceptModelDownload = () => {
+    setModelAccepted(true);
+    setShowModelWarning(false);
+    // Retry reading now that user accepted
+    handleStartReading();
+  };
+
+  const handleCancelModelDownload = () => {
+    setShowModelWarning(false);
+  };
+
+  // Download synthesized audio as WAV
+  const handleDownloadAudio = () => {
+    const blob = getAudioBlob();
+    if (!blob) {
+      alert('Audio is not ready yet.');
+      return;
+    }
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'twelve_reader_audio.wav';
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   const sampleTexts = [
     {
       title: 'Quick Test',
@@ -151,6 +184,67 @@ const App: React.FC = () => {
           100% { transform: rotate(360deg); }
         }
       `}</style>
+
+      {/* Model Download Warning Modal */}
+      {showModelWarning && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0,0,0,0.6)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 10000
+        }}>
+          <div style={{
+            backgroundColor: '#1a1e26',
+            padding: '24px',
+            borderRadius: '12px',
+            border: '1px solid #4a5568',
+            maxWidth: '420px',
+            textAlign: 'center'
+          }}>
+            <h2 style={{ marginBottom: '12px' }}>Download Speech Model</h2>
+            <p style={{ fontSize: '14px', marginBottom: '24px' }}>
+              The speech model (~100&nbsp;MB) needs to be downloaded the first time. Continue?
+            </p>
+            <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
+              <button
+                onClick={handleAcceptModelDownload}
+                style={{
+                  padding: '8px 16px',
+                  backgroundColor: '#4a90e2',
+                  border: 'none',
+                  borderRadius: '6px',
+                  color: 'white',
+                  cursor: 'pointer',
+                  fontSize: '14px'
+                }}
+              >
+                Download & Continue
+              </button>
+              <button
+                onClick={handleCancelModelDownload}
+                style={{
+                  padding: '8px 16px',
+                  backgroundColor: 'transparent',
+                  border: '1px solid #4a5568',
+                  borderRadius: '6px',
+                  color: '#e5e5e5',
+                  cursor: 'pointer',
+                  fontSize: '14px'
+                }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Sidebar */}
       <div style={{
         width: '320px',
@@ -564,14 +658,6 @@ const App: React.FC = () => {
                 +15s
               </button>
               
-              {/* Download Audio Button */}
-              <AudioDownloadButton 
-                audioBuffer={completeAudioBuffer}
-                sampleRate={completeAudioSampleRate}
-                filename={`twelvereader-audio-${Date.now()}.wav`}
-                style={{ marginLeft: '16px' }}
-              />
-              
               {/* Time Display */}
                              <div style={{ flex: 1, textAlign: 'center' }}>
                  <div style={{ 
@@ -706,6 +792,25 @@ const App: React.FC = () => {
               )}
             </div>
           </div>
+        )}
+
+        {synthesisComplete && (
+          <button
+            onClick={handleDownloadAudio}
+            style={{
+              margin: '16px 0',
+              padding: '8px 16px',
+              backgroundColor: '#10b981',
+              border: 'none',
+              borderRadius: '6px',
+              color: 'white',
+              cursor: 'pointer',
+              fontSize: '14px',
+              alignSelf: 'flex-start'
+            }}
+          >
+            ⬇️ Download Audio
+          </button>
         )}
 
         {/* Text Input Area */}
@@ -851,13 +956,6 @@ const App: React.FC = () => {
       <AdSensePopup 
         adSlot="1122334455"
         showInterval={10} // Show every 10 minutes
-      />
-      
-      {/* Model Download Warning */}
-      <ModelDownloadWarning 
-        isVisible={showDownloadWarning}
-        onAccept={handleDownloadApproval}
-        onDecline={handleDownloadDecline}
       />
     </div>
   );

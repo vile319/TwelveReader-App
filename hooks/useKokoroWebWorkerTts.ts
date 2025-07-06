@@ -44,12 +44,10 @@ const useKokoroWebWorkerTts = ({ onError }: UseKokoroWebWorkerTtsProps) => {
   const [isReady, setIsReady] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [status, setStatus] = useState('Ready to download AI model...');
+  const [status, setStatus] = useState('Initializing Kokoro AI...');
   const [currentDevice, setCurrentDevice] = useState<'webgpu' | 'wasm' | null>(null);
   const [debugMode, setDebugMode] = useState(false);
   const [storedChunks, setStoredChunks] = useState<AudioChunk[]>([]);
-  const [showDownloadWarning, setShowDownloadWarning] = useState(false);
-  const [modelDownloadApproved, setModelDownloadApproved] = useState(false);
   
   // New scrubbing state
   const [completeAudioBuffer, setCompleteAudioBuffer] = useState<Float32Array | null>(null);
@@ -69,6 +67,9 @@ const useKokoroWebWorkerTts = ({ onError }: UseKokoroWebWorkerTtsProps) => {
    
    // Audio normalization flag to fix scaling issues
    const [normalizeAudio, setNormalizeAudio] = useState(false);
+  
+  // New synthesis complete flag
+  const [synthesisComplete, setSynthesisComplete] = useState(false);
   
   // Helper function to update current word index based on time
   const updateCurrentWordIndex = useCallback((currentTime: number) => {
@@ -669,12 +670,6 @@ const useKokoroWebWorkerTts = ({ onError }: UseKokoroWebWorkerTtsProps) => {
   const initializeTts = useCallback(async () => {
     if (ttsRef.current) return ttsRef.current;
 
-    // Check if user has approved model download
-    if (!modelDownloadApproved) {
-      setShowDownloadWarning(true);
-      return null;
-    }
-
     setIsLoading(true);
     setStatus('Detecting best device for AI model...');
 
@@ -772,12 +767,10 @@ const useKokoroWebWorkerTts = ({ onError }: UseKokoroWebWorkerTtsProps) => {
     }
   }, [onError, detectWebGPU]);
 
-  // Initialize on mount only if approved
+  // Initialize on mount
   useEffect(() => {
-    if (modelDownloadApproved) {
-      initializeTts();
-    }
-  }, [initializeTts, modelDownloadApproved]);
+    initializeTts();
+  }, [initializeTts]);
 
   // Chunk text for better TTS processing
   const chunkText = useCallback((text: string, maxChunkSize: number = 2000): string[] => {
@@ -812,12 +805,6 @@ const useKokoroWebWorkerTts = ({ onError }: UseKokoroWebWorkerTtsProps) => {
 
   // Generate speech
   const speak = useCallback(async (text: string, voice: string = 'af_bella', onProgress?: (progress: number) => void) => {
-    // Check if model download is approved first
-    if (!modelDownloadApproved) {
-      setShowDownloadWarning(true);
-      return;
-    }
-    
     if (!isReady || !ttsRef.current) {
       console.warn('TTS not ready');
       onError({
@@ -1073,6 +1060,9 @@ const useKokoroWebWorkerTts = ({ onError }: UseKokoroWebWorkerTtsProps) => {
         • Synthesis time: ${(synthTime / 1000).toFixed(1)}s
         • Characters per second: ${(text.length / (synthTime / 1000)).toFixed(0)}`);
 
+      // After synthesis finishes (where you set canScrub true), also set synthesisComplete true
+      setSynthesisComplete(true);
+
     } catch (error: any) {
       console.error('Synthesis error:', error);
       setIsPlaying(false);
@@ -1082,7 +1072,7 @@ const useKokoroWebWorkerTts = ({ onError }: UseKokoroWebWorkerTtsProps) => {
         message: `Failed to synthesize text: ${error.message}`
       });
     }
-  }, [isReady, onError, chunkText, modelDownloadApproved]);
+  }, [isReady, onError, chunkText]);
 
   // Stop current synthesis/playback
   const stop = useCallback(() => {
@@ -1428,20 +1418,49 @@ const useKokoroWebWorkerTts = ({ onError }: UseKokoroWebWorkerTtsProps) => {
     }
   }, [isReady, currentDevice]);
 
-  // Handle model download approval
-  const handleDownloadApproval = useCallback(() => {
-    setModelDownloadApproved(true);
-    setShowDownloadWarning(false);
-    setStatus('Starting model download...');
+  // Utility: get combined audio buffer as WAV Blob
+  const getAudioBlob = useCallback((): Blob | null => {
+    if (!completeAudioBuffer) return null;
 
-    // Immediately kick off the model download so the user doesn't have to click again
-    initializeTts();
-  }, [initializeTts]);
+    const numChannels = 1;
+    const sampleRate = completeAudioSampleRate;
+    const numSamples = completeAudioBuffer.length;
 
-  const handleDownloadDecline = useCallback(() => {
-    setShowDownloadWarning(false);
-    setStatus('Model download declined. Click "Start Reading" to try again.');
-  }, []);
+    const buffer = new ArrayBuffer(44 + numSamples * 2);
+    const view = new DataView(buffer);
+
+    const writeString = (dv: DataView, offset: number, str: string) => {
+      for (let i = 0; i < str.length; i++) {
+        dv.setUint8(offset + i, str.charCodeAt(i));
+      }
+    };
+
+    let offset = 0;
+    writeString(view, offset, 'RIFF'); offset += 4;
+    view.setUint32(offset, 36 + numSamples * 2, true); offset += 4;
+    writeString(view, offset, 'WAVE'); offset += 4;
+    writeString(view, offset, 'fmt '); offset += 4;
+    view.setUint32(offset, 16, true); offset += 4; // PCM format chunk size
+    view.setUint16(offset, 1, true); offset += 2; // Audio format (1 = PCM)
+    view.setUint16(offset, numChannels, true); offset += 2;
+    view.setUint32(offset, sampleRate, true); offset += 4;
+    view.setUint32(offset, sampleRate * numChannels * 2, true); offset += 4; // Byte rate
+    view.setUint16(offset, numChannels * 2, true); offset += 2; // Block align
+    view.setUint16(offset, 16, true); offset += 2; // Bits per sample
+    writeString(view, offset, 'data'); offset += 4;
+    view.setUint32(offset, numSamples * 2, true); offset += 4;
+
+    // Write PCM samples
+    let pos = 44;
+    for (let i = 0; i < numSamples; i++) {
+      let sample = Math.max(-1, Math.min(1, completeAudioBuffer[i]));
+      sample = sample < 0 ? sample * 0x8000 : sample * 0x7FFF;
+      view.setInt16(pos, sample, true);
+      pos += 2;
+    }
+
+    return new Blob([view], { type: 'audio/wav' });
+  }, [completeAudioBuffer, completeAudioSampleRate]);
 
   return {
     speak,
@@ -1472,18 +1491,15 @@ const useKokoroWebWorkerTts = ({ onError }: UseKokoroWebWorkerTtsProps) => {
     // Word highlighting
     wordTimings,
     currentWordIndex,
-    // Debug mode controls
-    forceWasmMode,
-    toggleForceWasm,
-    normalizeAudio,
-    toggleNormalizeAudio,
-    // Model download warning
-    showDownloadWarning,
-    handleDownloadApproval,
-    handleDownloadDecline,
-    // Audio data for download
-    completeAudioBuffer,
-    completeAudioSampleRate
+         // Debug mode controls
+     forceWasmMode,
+     toggleForceWasm,
+     normalizeAudio,
+     toggleNormalizeAudio,
+    // New synthesis complete flag
+    synthesisComplete,
+    // Utility: get combined audio buffer as WAV Blob
+    getAudioBlob
   };
 };
 
