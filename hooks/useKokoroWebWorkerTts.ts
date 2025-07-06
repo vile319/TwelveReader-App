@@ -981,8 +981,11 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true }: UseKokoroWebWorkerTt
         if (i === 0) {
           setCanScrub(true);
           setIsStreaming(true);
-          console.log('🎵 Starting streaming playback with first chunk');
-          startStreamingFromPosition(0);
+          console.log('🎵 Starting streaming playback with first chunk, delaying for UI sync');
+          // Delay playback slightly to allow the UI to update first
+          setTimeout(() => {
+            startStreamingFromPosition(0);
+          }, 50);
         }
         }
         
