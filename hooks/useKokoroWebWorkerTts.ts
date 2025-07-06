@@ -297,12 +297,8 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true }: UseKokoroWebWorkerTt
            const currentPos = Math.max(0, Math.min(elapsed, maxStreamTime));
            setCurrentTime(currentPos);
            
-           // Update current word index for highlighting (throttled)
-           const now = performance.now();
-           if (now - lastWordUpdateRef.current > 100) {
-             updateCurrentWordIndex(currentPos);
-             lastWordUpdateRef.current = now;
-           }
+           // Update current word index for highlighting (un-throttled for accuracy)
+           updateCurrentWordIndex(currentPos);
            
            requestAnimationFrame(trackStreamingProgress);
          }
@@ -456,12 +452,8 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true }: UseKokoroWebWorkerTt
         } else {
           setCurrentTime(currentPos);
           
-          // Update current word index for highlighting (throttled)
-          const now = performance.now();
-          if (now - lastWordUpdateRef.current > 100) {
-            updateCurrentWordIndex(currentPos);
-            lastWordUpdateRef.current = now;
-          }
+          // Update current word index for highlighting (un-throttled for accuracy)
+          updateCurrentWordIndex(currentPos);
           
           // Continue updating regardless of isPlaying state for smooth progress
           progressAnimationRef.current = requestAnimationFrame(updateProgress);
@@ -1439,14 +1431,9 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true }: UseKokoroWebWorkerTt
 
   const seek = useCallback((time: number) => {
     console.log(`🎤 Seeking to ${time.toFixed(2)}s`);
-    if (synthesisComplete) {
-      playCompleteAudio(time);
-    } else if (isStreaming) {
-      startStreamingFromPosition(time);
-    } else {
-      console.warn('⚠️ Cannot seek: audio not ready.');
-    }
-  }, [synthesisComplete, isStreaming, playCompleteAudio, startStreamingFromPosition]);
+    // Use the robust seekToTime function which handles all states
+    seekToTime(time);
+  }, [seekToTime]);
 
   return {
     speak,
