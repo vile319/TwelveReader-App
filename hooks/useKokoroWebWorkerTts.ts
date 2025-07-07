@@ -41,6 +41,13 @@ export interface AudioChunk {
   duration: number;
 }
 
+// Alignment object returned by Kokoro when `return_alignments` is true
+type Alignment = {
+  word: string;
+  start_time: number; // seconds
+  end_time: number;   // seconds
+};
+
 const useKokoroWebWorkerTts = ({ onError, enabled = true }: UseKokoroWebWorkerTtsProps) => {
   const [isReady, setIsReady] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -906,7 +913,7 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true }: UseKokoroWebWorkerTt
         // --- New: Use precise word timings if available ---
         if (audioObject.alignments) {
           const chunkOffset = currentStreamDuration - (audioData.length / sampleRate);
-          const alignedTimings = audioObject.alignments.map((alignment: any) => ({
+          const alignedTimings = (audioObject.alignments as Alignment[]).map((alignment) => ({
             word: alignment.word,
             start: chunkOffset + alignment.start_time,
             end: chunkOffset + alignment.end_time
