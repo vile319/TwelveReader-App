@@ -219,7 +219,6 @@ const TextInputPanel: React.FC = () => {
           file={state.uploadedPDF}
           onTextExtracted={actions.handlePDFTextExtracted}
           currentSentence={state.currentSentence}
-          readingProgress={0}
           wordTimings={state.audio.wordTimings}
           currentWordIndex={state.audio.currentWordIndex}
         />

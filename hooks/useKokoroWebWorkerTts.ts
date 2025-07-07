@@ -75,7 +75,7 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true }: UseKokoroWebWorkerTt
   // New state for playback trigger
   const [isFirstChunkReady, setIsFirstChunkReady] = useState(false);
   
-  const lastWordUpdateRef = useRef(0);
+  // Ref for last word update time (reserved for future use)
   const wordTimingsRef = useRef(wordTimings);
   wordTimingsRef.current = wordTimings;
   
@@ -190,12 +190,10 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true }: UseKokoroWebWorkerTt
     { name: 'bm_lewis', label: '🇬🇧 Lewis (British Male)', nationality: 'British', gender: 'Male' },
   ];
 
-  // Add audio to buffer (no longer used but keeping for compatibility)
-  const addAudioChunk = useCallback((audioData: Float32Array, sampleRate: number) => {
-    // This function is no longer used in the new chunking system
-    // Audio is now processed and combined in the speak function
-    console.log('⚠️ addAudioChunk called but chunking system is in use');
-  }, []);
+  // Deprecated: kept as a placeholder for backwards-compatibility with older saves
+  // const addAudioChunk = useCallback((audioData: Float32Array, sampleRate: number) => {
+  //   console.log('⚠️ addAudioChunk called but chunking system is in use');
+  // }, []);
 
   // Old continuous playback system removed - now using streaming system
 
@@ -868,7 +866,7 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true }: UseKokoroWebWorkerTt
           } else if (audioObject instanceof Float32Array) {
             audioData = audioObject;
           } else {
-            for (const [key, value] of Object.entries(audioObject)) {
+            for (const value of Object.values(audioObject)) {
               if (value instanceof Float32Array) {
                 audioData = value;
                 break;
