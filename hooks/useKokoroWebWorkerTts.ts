@@ -126,7 +126,7 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true }: UseKokoroWebWorkerTt
     }
     
     // Update the index using a setter function to avoid stale closure
-    setCurrentWordIndex(prevIndex => {
+    setCurrentWordIndex((prevIndex: number) => {
       if (newIndex !== prevIndex) {
         console.log(`📝 Word highlight: ${prevIndex} → ${newIndex} (time: ${currentTime.toFixed(2)}s)`);
         if (newIndex >= 0 && newIndex < timings.length) {
@@ -297,7 +297,7 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true }: UseKokoroWebWorkerTt
          if (isPlaybackActiveRef.current && audioContextRef.current) {
            const elapsed = audioContextRef.current.currentTime - streamingStartTimeRef.current;
            // Calculate max time from streaming audio length
-           const totalStreamingSamples = streamingAudioRef.current.reduce((sum, chunk) => sum + chunk.length, 0);
+           const totalStreamingSamples = streamingAudioRef.current.reduce((sum: number, chunk: Float32Array) => sum + chunk.length, 0);
            const maxStreamTime = totalStreamingSamples / sampleRateRef.current;
            const currentPos = Math.max(0, Math.min(elapsed, maxStreamTime));
            setCurrentTime(currentPos);
