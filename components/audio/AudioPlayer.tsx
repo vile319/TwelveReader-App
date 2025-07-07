@@ -1,53 +1,25 @@
 import React from 'react';
 import { useAppContext } from '../../contexts/AppContext';
+import { cn } from '../../utils/cn';
 
 const AudioPlayer: React.FC = () => {
   const { state, actions } = useAppContext();
 
+  const disabled = !state.audio.canScrub;
+
   return (
-    <div style={{
-      backgroundColor: '#1a1e26',
-      border: '1px solid #2d3748',
-      borderRadius: '16px',
-      padding: '24px',
-      marginBottom: '24px',
-      transition: 'opacity 0.3s',
-      opacity: state.audio.canScrub ? 1 : 0.5,
-      pointerEvents: state.audio.canScrub ? 'auto' : 'none',
-    }}>
+    <div
+      className={cn(
+        'bg-slate-900 border border-slate-800 rounded-2xl p-6 mb-6 transition-opacity',
+        disabled && 'opacity-50 pointer-events-none'
+      )}
+    >
       {/* Main Controls */}
-      <div style={{ 
-        display: 'flex', 
-        alignItems: 'center', 
-        gap: '16px',
-        marginBottom: '20px'
-      }}>
+      <div className="flex items-center gap-4 mb-5">
         {/* Skip Back */}
         <button
           onClick={actions.skipBackward}
-          style={{
-            width: '48px',
-            height: '48px',
-            borderRadius: '50%',
-            border: 'none',
-            backgroundColor: '#2d3748',
-            color: '#e5e5e5',
-            cursor: 'pointer',
-            fontSize: '14px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontWeight: '600',
-            transition: 'all 0.2s'
-          }}
-          onMouseOver={(e) => {
-            e.currentTarget.style.backgroundColor = '#4a5568';
-            e.currentTarget.style.transform = 'scale(1.05)';
-          }}
-          onMouseOut={(e) => {
-            e.currentTarget.style.backgroundColor = '#2d3748';
-            e.currentTarget.style.transform = 'scale(1)';
-          }}
+          className="w-12 h-12 rounded-full bg-slate-700 text-slate-200 text-sm font-semibold flex items-center justify-center hover:bg-slate-600 hover:scale-105 transition-transform"
         >
           -15s
         </button>
@@ -55,31 +27,7 @@ const AudioPlayer: React.FC = () => {
         {/* Play/Pause */}
         <button
           onClick={actions.togglePlayPause}
-          style={{
-            width: '64px',
-            height: '64px',
-            borderRadius: '50%',
-            border: 'none',
-            backgroundColor: '#4a90e2',
-            color: 'white',
-            cursor: 'pointer',
-            fontSize: '24px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            boxShadow: '0 4px 12px rgba(74, 144, 226, 0.3)',
-            transition: 'all 0.2s'
-          }}
-          onMouseOver={(e) => {
-            e.currentTarget.style.backgroundColor = '#357abd';
-            e.currentTarget.style.transform = 'scale(1.05)';
-            e.currentTarget.style.boxShadow = '0 6px 16px rgba(74, 144, 226, 0.4)';
-          }}
-          onMouseOut={(e) => {
-            e.currentTarget.style.backgroundColor = '#4a90e2';
-            e.currentTarget.style.transform = 'scale(1)';
-            e.currentTarget.style.boxShadow = '0 4px 12px rgba(74, 144, 226, 0.3)';
-          }}
+          className="w-16 h-16 rounded-full bg-blue-500 text-white text-2xl flex items-center justify-center shadow-lg hover:bg-blue-600 hover:scale-105 transition-transform"
         >
           {state.audio.isPlaying ? '⏸️' : '▶️'}
         </button>
@@ -87,45 +35,18 @@ const AudioPlayer: React.FC = () => {
         {/* Skip Forward */}
         <button
           onClick={actions.skipForward}
-          style={{
-            width: '48px',
-            height: '48px',
-            borderRadius: '50%',
-            border: 'none',
-            backgroundColor: '#2d3748',
-            color: '#e5e5e5',
-            cursor: 'pointer',
-            fontSize: '14px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontWeight: '600',
-            transition: 'all 0.2s'
-          }}
-          onMouseOver={(e) => {
-            e.currentTarget.style.backgroundColor = '#4a5568';
-            e.currentTarget.style.transform = 'scale(1.05)';
-          }}
-          onMouseOut={(e) => {
-            e.currentTarget.style.backgroundColor = '#2d3748';
-            e.currentTarget.style.transform = 'scale(1)';
-          }}
+          className="w-12 h-12 rounded-full bg-slate-700 text-slate-200 text-sm font-semibold flex items-center justify-center hover:bg-slate-600 hover:scale-105 transition-transform"
         >
           +15s
         </button>
         
         {/* Time Display */}
-        <div style={{ flex: 1, textAlign: 'center' }}>
-          <div style={{ 
-            fontSize: '18px', 
-            fontWeight: '600',
-            color: '#e5e5e5',
-            marginBottom: '4px'
-          }}>
+        <div className="flex-1 text-center">
+          <div className="text-lg font-semibold text-slate-200 mb-1">
             {actions.formatTime(state.audio.currentTime)} / {actions.formatTime(state.audio.duration || state.audio.currentTime)}
           </div>
           {state.isReading && (
-            <div style={{ fontSize: '12px', color: '#4a90e2' }}>
+            <div className="text-xs text-blue-400">
               Generating audio...
             </div>
           )}
@@ -133,16 +54,11 @@ const AudioPlayer: React.FC = () => {
       </div>
       
       {/* Progress Bar */}
-      <div 
-        style={{
-          width: '100%',
-          height: '12px',
-          backgroundColor: '#2d3748',
-          borderRadius: '6px',
-          cursor: state.audio.canScrub ? 'pointer' : 'not-allowed',
-          position: 'relative',
-          overflow: 'hidden'
-        }}
+      <div
+        className={cn(
+          'w-full h-3 bg-slate-700 rounded-md relative overflow-hidden',
+          state.audio.canScrub ? 'cursor-pointer' : 'cursor-not-allowed'
+        )}
         onMouseMove={(e) => {
           if (!state.audio.canScrub) return;
           const rect = e.currentTarget.getBoundingClientRect();
@@ -168,31 +84,21 @@ const AudioPlayer: React.FC = () => {
         }}
       >
         {/* Progress Fill */}
-        <div style={{
-          width: `${((state.audio.duration || 0) > 0 ? (state.audio.currentTime / (state.audio.duration || 1)) * 100 : 0)}%`,
-          height: '100%',
-          backgroundColor: '#4a90e2',
-          borderRadius: '6px',
-          transition: 'width 0.1s ease-out'
-        }}></div>
+        <div
+          className="h-full bg-blue-500 rounded-md transition-[width] duration-100 ease-out"
+          style={{
+            width: `${((state.audio.duration || 0) > 0 ? (state.audio.currentTime / (state.audio.duration || 1)) * 100 : 0)}%`,
+          }}
+        />
         
         {/* Hover Time Tooltip */}
         {state.isSeekingHover && (
-          <div style={{
-            position: 'absolute',
-            left: `${(state.hoverTime / (state.audio.duration || 1)) * 100}%`,
-            top: '-35px',
-            transform: 'translateX(-50%)',
-            padding: '4px 8px',
-            backgroundColor: '#0f1419',
-            color: 'white',
-            borderRadius: '4px',
-            fontSize: '12px',
-            fontWeight: '500',
-            border: '1px solid #4a5568',
-            boxShadow: '0 2px 8px rgba(0, 0, 0, 0.3)',
-            zIndex: 10
-          }}>
+          <div
+            className="absolute -top-9 -translate-x-1/2 px-2 py-1 bg-slate-950 text-white text-xs font-medium rounded border border-slate-600 shadow-lg z-10"
+            style={{
+              left: `${(state.hoverTime / (state.audio.duration || 1)) * 100}%`,
+            }}
+          >
             {actions.formatTime(state.hoverTime)}
           </div>
         )}
@@ -200,35 +106,10 @@ const AudioPlayer: React.FC = () => {
       
       {/* Download Button */}
       {state.audio.synthesisComplete && (
-        <div style={{
-          marginTop: '16px',
-          textAlign: 'center'
-        }}>
+        <div className="mt-4 text-center">
           <button
             onClick={actions.handleDownloadAudio}
-            style={{
-              padding: '10px 20px',
-              backgroundColor: '#10b981',
-              border: 'none',
-              borderRadius: '8px',
-              color: 'white',
-              cursor: 'pointer',
-              fontSize: '14px',
-              fontWeight: '600',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              margin: '0 auto',
-              transition: 'all 0.2s'
-            }}
-            onMouseOver={(e) => {
-              e.currentTarget.style.backgroundColor = '#059669';
-              e.currentTarget.style.transform = 'translateY(-1px)';
-            }}
-            onMouseOut={(e) => {
-              e.currentTarget.style.backgroundColor = '#10b981';
-              e.currentTarget.style.transform = 'translateY(0)';
-            }}
+            className="inline-flex items-center gap-2 px-5 py-2 rounded-lg bg-emerald-500 text-white text-sm font-semibold hover:bg-emerald-600 hover:-translate-y-0.5 transition-transform"
           >
             💾 Download Audio (WAV)
           </button>
@@ -237,17 +118,12 @@ const AudioPlayer: React.FC = () => {
 
       {/* Audio Stats */}
       {state.audio.canScrub && (
-        <div style={{
-          marginTop: '12px',
-          textAlign: 'center',
-          fontSize: '12px',
-          color: '#718096'
-        }}>
+        <div className="mt-3 text-center text-xs text-slate-400">
           {state.audio.wordTimings.length > 0 && (
             <span>
               {state.audio.wordTimings.length} words tracked • 
               {state.audio.currentWordIndex >= 0 && state.audio.currentWordIndex < state.audio.wordTimings.length && (
-                <span style={{ color: '#4a90e2', fontWeight: '500' }}>
+                <span className="text-blue-400 font-medium">
                   {' '}highlighting "{state.audio.wordTimings[state.audio.currentWordIndex]?.word}"
                 </span>
               )}
