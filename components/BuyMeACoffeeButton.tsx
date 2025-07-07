@@ -40,7 +40,7 @@ const BuyMeACoffeeButton: FC<BuyMeACoffeeButtonProps> = ({ linkOrUsername, label
 
   if (!derivedLink) {
     // If no link available, don't render anything (dev reminder in console)
-    if (import.meta.env.DEV) {
+    if ((import.meta as any).env?.DEV) {
       console.warn('BuyMeACoffeeButton: No link or username provided. Set VITE_BMC_USERNAME or pass linkOrUsername prop.');
     }
     return null;
