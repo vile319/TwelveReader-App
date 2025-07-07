@@ -120,17 +120,6 @@ const TextInputPanel: React.FC = () => {
         }}
       />
       
-      {/* Debug highlighting condition */}
-      {(() => {
-        console.log('🔍 Highlighting condition check:', { 
-          canScrub: state.audio.canScrub, 
-          wordTimingsLength: state.audio.wordTimings.length, 
-          currentWordIndex: state.audio.currentWordIndex, 
-          shouldShowHighlighting: state.audio.canScrub && state.audio.wordTimings.length > 0 
-        });
-        return null;
-      })()}
-      
       {/* Content Display */}
       {renderContent()}
       
