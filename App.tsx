@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { type FC } from 'react';
 import { AppProvider } from './contexts/AppContext';
 import Sidebar from './components/layout/Sidebar';
 import MainContent from './components/layout/MainContent';
@@ -8,66 +8,24 @@ import HelpModal from './components/modals/HelpModal';
 import AdSensePopup from './components/AdSensePopup';
 import { useAppContext } from './contexts/AppContext';
 
-const AppContent: React.FC = () => {
+void React;
+
+const AppContent: FC = () => {
   const { state, actions } = useAppContext();
 
   return (
-    <div className="app-container" style={{
-      minHeight: '100vh',
-      backgroundColor: '#0f1419',
-      color: '#e5e5e5',
-      fontFamily: 'Inter, system-ui, -apple-system, sans-serif',
-      display: 'flex'
-    }}>
-        {/* Global Styles */}
-        <style>{`
-          .app-container {
-            flex-direction: row;
-          }
-          .sidebar {
-            width: 320px;
-            height: 100vh;
-            position: fixed;
-            left: 0;
-            top: 0;
-            overflow-y: auto;
-          }
-          .main-content {
-            margin-left: 320px;
-            flex: 1;
-          }
-          @media (max-width: 768px) {
-            .app-container {
-              flex-direction: column;
-            }
-            .sidebar {
-              position: relative;
-              width: 100%;
-              height: auto;
-              border-right: none;
-              border-bottom: 1px solid #2d3748;
-            }
-            .main-content {
-              margin-left: 0;
-            }
-          }
-          @media (max-width: 480px) {
-            .sidebar {
-              padding: 16px;
-            }
-            .main-content {
-              padding: 16px;
-            }
-          }
-          @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-          }
-          @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.5; }
-          }
-        `}</style>
+    <div className="app-container flex flex-col md:flex-row min-h-screen bg-slate-950 text-slate-200 font-inter">
+      {/* Global keyframes (other layout handled by Tailwind classes) */}
+      <style>{`
+        @keyframes spin {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+        @keyframes pulse {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.5; }
+        }
+      `}</style>
 
       {/* Model Download Warning Modal */}
       <ModelWarningModal />
@@ -100,7 +58,7 @@ const AppContent: React.FC = () => {
   );
 };
 
-const App: React.FC = () => {
+const App: FC = () => {
   return (
     <AppProvider>
       <AppContent />

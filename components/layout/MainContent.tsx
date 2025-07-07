@@ -1,16 +1,13 @@
-import React from 'react';
+import React, { type FC } from 'react';
 import AdSenseBanner from '../AdSenseBanner';
 import AudioPlayer from '../audio/AudioPlayer';
 import TextInputPanel from '../text/TextInputPanel';
 
-const MainContent: React.FC = () => {
+void React;
+
+const MainContent: FC = () => {
   return (
-    <div className="main-content" style={{
-      // margin-left and height are handled responsively via the .main-content rules in App.tsx
-      display: 'flex',
-      flexDirection: 'column',
-      padding: '24px'
-    }}>
+    <div className="main-content flex flex-col p-6 md:ml-80">
       {/* Top Banner Ad */}
       <AdSenseBanner 
         adSlot="1234567890" 

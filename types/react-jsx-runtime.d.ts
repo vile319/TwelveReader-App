@@ -8,3 +8,9 @@ declare module 'react/jsx-runtime' {
   export function jsxs(type: JSXElementConstructor<any> | string, props: any, key?: Key): ReactElement;
   export const Fragment: ({ children }: { children?: ReactNode }) => ReactElement;
 }
+
+declare module 'react/jsx-dev-runtime' {
+  import { ReactElement, JSXElementConstructor, ReactNode, Key } from 'react';
+  export function jsxDEV(type: JSXElementConstructor<any> | string, props: any, key?: Key, isStaticChildren?: boolean, source?: any, self?: any): ReactElement;
+  export const Fragment: ({ children }: { children?: ReactNode }) => ReactElement;
+}

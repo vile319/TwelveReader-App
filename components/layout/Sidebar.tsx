@@ -1,79 +1,49 @@
-import React from 'react';
+import React, { type FC } from 'react';
 import { useAppContext } from '../../contexts/AppContext';
 import AdSenseBanner from '../AdSenseBanner';
+void React;
 
-const Sidebar: React.FC = () => {
+// Small helper – joins classes conditionally
+const cn = (...classes: (string | false | null | undefined)[]) => classes.filter(Boolean).join(' ');
+
+// Voice object coming from Kokoro hook
+interface Voice {
+  name: string;
+  label: string;
+}
+
+const Sidebar: FC = () => {
   const { state, actions, tts } = useAppContext();
 
+  const isGenerateDisabled = !state.inputText.trim() || state.audio.isLoading;
+  const voices: Voice[] = tts.voices as Voice[];
+
   return (
-    <div className="sidebar" style={{
-      overflow: 'auto',
-      backgroundColor: '#1a1e26',
-      borderRight: '1px solid #2d3748',
-      padding: '24px',
-      display: 'flex',
-      flexDirection: 'column',
-    }}>
+    <div className="sidebar overflow-auto bg-slate-900 border-r border-slate-800 p-6 flex flex-col w-full md:w-80 md:fixed md:left-0 md:top-0 md:h-screen">
       {/* Logo */}
-      <div style={{ marginBottom: '32px' }}>
-        <h1 style={{ 
-          fontSize: '24px', 
-          fontWeight: '700', 
-          marginBottom: '4px',
-          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-          WebkitBackgroundClip: 'text',
-          WebkitTextFillColor: 'transparent',
-          backgroundClip: 'text'
-        }}>
+      <div className="mb-8">
+        <h1 className="text-2xl font-bold mb-1 bg-gradient-to-r from-indigo-400 to-purple-500 bg-clip-text text-transparent">
           TwelveReader
         </h1>
-        <p style={{ 
-          fontSize: '14px', 
-          color: '#a0a0a0',
-          margin: 0
-        }}>
-          AI-powered reading
-        </p>
+        <p className="text-sm text-gray-400 m-0">AI-powered reading</p>
       </div>
 
       {/* Status */}
-      <div style={{
-        backgroundColor: '#2d3748',
-        padding: '12px',
-        borderRadius: '8px',
-        marginBottom: '24px',
-        fontSize: '13px',
-        color: '#e5e5e5'
-      }}>
+      <div className="bg-slate-700 text-slate-200 text-sm rounded-lg p-3 mb-6">
         {state.model.status}
       </div>
 
       {/* Voice Selection */}
-      <div style={{ marginBottom: '24px' }}>
-        <label style={{
-          display: 'block',
-          marginBottom: '12px',
-          fontSize: '14px',
-          fontWeight: '600',
-          color: '#e5e5e5'
-        }}>
+      <div className="mb-6">
+        <label className="block mb-3 text-sm font-semibold text-slate-200">
           🎭 Voice ({tts.voices.length} available)
         </label>
         <select
           value={state.selectedVoice}
           onChange={(e) => actions.setSelectedVoice(e.target.value)}
-          style={{
-            width: '100%',
-            padding: '12px',
-            backgroundColor: '#2d3748',
-            border: '1px solid #4a5568',
-            borderRadius: '8px',
-            color: '#e5e5e5',
-            fontSize: '14px',
-            cursor: 'pointer'
-          }}
+          className="w-full p-3 rounded-lg bg-slate-700 border border-slate-600 text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
         >
-          {tts.voices.map(voice => (
+          {voices.map((voice) => (
             <option key={voice.name} value={voice.name}>
               {voice.label}
             </option>
@@ -82,48 +52,19 @@ const Sidebar: React.FC = () => {
       </div>
 
       {/* PDF Upload */}
-      <div style={{ marginBottom: '24px' }}>
-        <label style={{
-          display: 'block',
-          marginBottom: '12px',
-          fontSize: '14px',
-          fontWeight: '600',
-          color: '#e5e5e5'
-        }}>
+      <div className="mb-6">
+        <label className="block mb-3 text-sm font-semibold text-slate-200">
           📄 PDF Upload
         </label>
         <input
           type="file"
           accept=".pdf"
           onChange={actions.handleFileUpload}
-          style={{
-            width: '100%',
-            padding: '12px',
-            backgroundColor: '#2d3748',
-            border: '1px solid #4a5568',
-            borderRadius: '8px',
-            color: '#e5e5e5',
-            fontSize: '14px',
-            cursor: 'pointer'
-          }}
+          className="w-full p-3 rounded-lg bg-slate-700 border border-slate-600 text-sm text-slate-200 cursor-pointer file:cursor-pointer"
         />
         {state.isExtractingPDF && (
-          <div style={{
-            fontSize: '12px',
-            color: '#4a90e2',
-            marginTop: '8px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px'
-          }}>
-            <div style={{
-              width: '16px',
-              height: '16px',
-              border: '2px solid #4a90e2',
-              borderTop: '2px solid transparent',
-              borderRadius: '50%',
-              animation: 'spin 1s linear infinite'
-            }}></div>
+          <div className="flex items-center gap-2 text-xs text-blue-400 mt-2">
+            <div className="w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
             Extracting text from PDF...
           </div>
         )}
@@ -132,21 +73,12 @@ const Sidebar: React.FC = () => {
       {/* Generate Button */}
       <button
         onClick={state.isReading ? actions.handleStopReading : actions.handleStartReading}
-        disabled={!state.inputText.trim() || state.audio.isLoading}
-        style={{
-          width: '100%',
-          padding: '16px',
-          borderRadius: '8px',
-          border: 'none',
-          backgroundColor: state.isReading ? '#e53e3e' : '#4a90e2',
-          color: 'white',
-          cursor: (!state.inputText.trim() || state.audio.isLoading) ? 'not-allowed' : 'pointer',
-          fontSize: '16px',
-          fontWeight: '600',
-          opacity: (!state.inputText.trim() || state.audio.isLoading) ? 0.5 : 1,
-          marginBottom: '16px',
-          transition: 'all 0.2s'
-        }}
+        disabled={isGenerateDisabled}
+        className={cn(
+          'w-full py-4 rounded-lg font-semibold text-white mb-4 transition-colors',
+          state.isReading ? 'bg-red-600 hover:bg-red-700' : 'bg-blue-500 hover:bg-blue-600',
+          isGenerateDisabled && 'opacity-50 cursor-not-allowed'
+        )}
       >
         {state.audio.isLoading ? '⏳ Generating...' : 
          state.isReading ? '⏹️ Stop Generation' : 
@@ -161,30 +93,8 @@ const Sidebar: React.FC = () => {
           actions.setInputText('');
           actions.setUploadedPDF(null);
         }}
-        style={{
-          width: '100%',
-          padding: '12px',
-          borderRadius: '8px',
-          border: '1px solid #dc2626',
-          backgroundColor: 'transparent',
-          color: '#dc2626',
-          cursor: 'pointer',
-          fontSize: '14px',
-          fontWeight: '600',
-          marginBottom: '8px',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          gap: '8px',
-          transition: 'all 0.2s'
-        }}
+        className="w-full py-3 rounded-lg border border-red-600 text-red-600 font-semibold flex items-center justify-center gap-2 mb-2 hover:bg-red-600/10 transition-colors"
         title="Clear and reload the AI model (fixes stuck states)"
-        onMouseOver={(e) => {
-          e.currentTarget.style.backgroundColor = 'rgba(220, 38, 38, 0.1)';
-        }}
-        onMouseOut={(e) => {
-          e.currentTarget.style.backgroundColor = 'transparent';
-        }}
       >
         🔄 Reset Model
       </button>
@@ -195,30 +105,8 @@ const Sidebar: React.FC = () => {
           const status = await actions.checkCacheStatus();
           alert(`Cache Status:\n${status.cached ? '✅ Model is cached' : '❌ No cache found'}\nFiles: ${status.fileCount}\nSize: ${status.sizeFormatted || 'Unknown'}\n\nCheck console for detailed cache info.`);
         }}
-        style={{
-          width: '100%',
-          padding: '8px',
-          borderRadius: '8px',
-          border: '1px solid #6b7280',
-          backgroundColor: 'transparent',
-          color: '#6b7280',
-          cursor: 'pointer',
-          fontSize: '12px',
-          fontWeight: '500',
-          marginBottom: '8px',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          gap: '4px',
-          transition: 'all 0.2s'
-        }}
+        className="w-full py-2 rounded-lg border border-slate-500 text-slate-500 text-xs font-medium flex items-center justify-center gap-1 mb-2 hover:bg-slate-500/10 transition-colors"
         title="Check if the AI model is cached in your browser"
-        onMouseOver={(e) => {
-          e.currentTarget.style.backgroundColor = 'rgba(107, 114, 128, 0.1)';
-        }}
-        onMouseOut={(e) => {
-          e.currentTarget.style.backgroundColor = 'transparent';
-        }}
       >
         📊 Check Cache
       </button>
@@ -245,30 +133,8 @@ const Sidebar: React.FC = () => {
           message += `Check console (F12) for detailed logs.`;
           alert(message);
         }}
-        style={{
-          width: '100%',
-          padding: '8px',
-          borderRadius: '8px',
-          border: '1px solid #f59e0b',
-          backgroundColor: 'transparent',
-          color: '#f59e0b',
-          cursor: 'pointer',
-          fontSize: '12px',
-          fontWeight: '500',
-          marginBottom: '8px',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          gap: '4px',
-          transition: 'all 0.2s'
-        }}
+        className="w-full py-2 rounded-lg border border-amber-500 text-amber-500 text-xs font-medium flex items-center justify-center gap-1 mb-2 hover:bg-amber-500/10 transition-colors"
         title="Debug audio quality issues - compare results between computers"
-        onMouseOver={(e) => {
-          e.currentTarget.style.backgroundColor = 'rgba(245, 158, 11, 0.1)';
-        }}
-        onMouseOut={(e) => {
-          e.currentTarget.style.backgroundColor = 'transparent';
-        }}
       >
         🔍 Debug Audio
       </button>
@@ -276,34 +142,13 @@ const Sidebar: React.FC = () => {
       {/* Audio Normalization Toggle */}
       <button
         onClick={actions.toggleNormalizeAudio}
-        style={{
-          width: '100%',
-          padding: '8px',
-          borderRadius: '8px',
-          border: `1px solid ${state.model.normalizeAudio ? '#10b981' : '#6b7280'}`,
-          backgroundColor: state.model.normalizeAudio ? 'rgba(16, 185, 129, 0.1)' : 'transparent',
-          color: state.model.normalizeAudio ? '#10b981' : '#6b7280',
-          cursor: 'pointer',
-          fontSize: '12px',
-          fontWeight: '500',
-          marginBottom: '24px',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          gap: '4px',
-          transition: 'all 0.2s'
-        }}
+        className={cn(
+          'w-full py-2 rounded-lg text-xs font-medium flex items-center justify-center gap-1 mb-6 transition-colors',
+          state.model.normalizeAudio
+            ? 'border-emerald-500 text-emerald-500 bg-emerald-500/10'
+            : 'border-slate-500 text-slate-500 hover:bg-slate-500/10'
+        )}
         title="Fix audio clipping/scaling issues (enable if audio sounds distorted)"
-        onMouseOver={(e) => {
-          if (!state.model.normalizeAudio) {
-            e.currentTarget.style.backgroundColor = 'rgba(107, 114, 128, 0.1)';
-          }
-        }}
-        onMouseOut={(e) => {
-          if (!state.model.normalizeAudio) {
-            e.currentTarget.style.backgroundColor = 'transparent';
-          }
-        }}
       >
         {state.model.normalizeAudio ? '✅' : '📢'} Audio Fix: {state.model.normalizeAudio ? 'ON' : 'OFF'}
       </button>
@@ -311,68 +156,20 @@ const Sidebar: React.FC = () => {
       {/* Help Button */}
       <button
         onClick={actions.handleShowHelp}
-        style={{
-          width: '100%',
-          padding: '12px',
-          borderRadius: '8px',
-          border: '1px solid #4a90e2',
-          backgroundColor: 'rgba(74, 144, 226, 0.1)',
-          color: '#4a90e2',
-          cursor: 'pointer',
-          fontSize: '14px',
-          fontWeight: '600',
-          marginBottom: '24px',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          gap: '8px',
-          transition: 'all 0.2s'
-        }}
+        className="w-full py-3 rounded-lg border border-blue-500 bg-blue-500/10 text-blue-500 font-semibold flex items-center justify-center gap-2 mb-6 hover:bg-blue-500/20 transition-colors"
         title="Get help and view tutorial"
-        onMouseOver={(e) => {
-          e.currentTarget.style.backgroundColor = 'rgba(74, 144, 226, 0.2)';
-        }}
-        onMouseOut={(e) => {
-          e.currentTarget.style.backgroundColor = 'rgba(74, 144, 226, 0.1)';
-        }}
       >
         ❓ Help & FAQ
       </button>
 
       {/* Error Display */}
       {state.error && (
-        <div style={{
-          backgroundColor: '#fed7d7',
-          color: '#c53030',
-          padding: '12px',
-          borderRadius: '8px',
-          fontSize: '14px',
-          marginBottom: '24px',
-          border: '1px solid #fc8181'
-        }}>
-          <div style={{ fontWeight: '600', marginBottom: '4px' }}>{state.error.title}</div>
-          <div style={{ marginBottom: '8px', lineHeight: '1.4' }}>{state.error.message}</div>
-          <button 
+        <div className="bg-red-200 text-red-700 text-sm rounded-lg p-3 mb-6 border border-red-400">
+          <div className="font-semibold mb-1">{state.error.title}</div>
+          <div className="mb-2 leading-snug">{state.error.message}</div>
+          <button
             onClick={() => actions.setError(null)}
-            style={{
-              padding: '4px 8px',
-              backgroundColor: 'transparent',
-              border: '1px solid #c53030',
-              color: '#c53030',
-              borderRadius: '4px',
-              cursor: 'pointer',
-              fontSize: '12px',
-              fontWeight: '500',
-              transition: 'all 0.2s'
-            }}
-            onMouseOver={(e) => {
-              e.currentTarget.style.backgroundColor = '#c53030';
-              e.currentTarget.style.color = 'white';
-            }}
-            onMouseOut={(e) => {
-              e.currentTarget.style.backgroundColor = 'transparent';
-              e.currentTarget.style.color = '#c53030';
-            }}
+            className="px-2 py-1 rounded border border-red-700 text-red-700 text-xs font-medium hover:bg-red-700 hover:text-white transition-colors"
           >
             Dismiss
           </button>
@@ -380,15 +177,8 @@ const Sidebar: React.FC = () => {
       )}
       
       {/* Sidebar Banner Ad */}
-      <div style={{ marginTop: 'auto' }}>
-        <AdSenseBanner 
-          adSlot="5566778899" 
-          adFormat="rectangle"
-          style={{ 
-            margin: '16px 0 0 0',
-            maxWidth: '280px' 
-          }}
-        />
+      <div className="mt-auto">
+        <AdSenseBanner adSlot="5566778899" adFormat="rectangle" style={{ maxWidth: '280px', marginTop: '16px' }} />
       </div>
     </div>
   );
