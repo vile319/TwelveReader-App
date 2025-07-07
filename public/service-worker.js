@@ -3,7 +3,7 @@
 // need to be re-downloaded on subsequent visits. This works for both GPU (WebGPU)
 // and CPU (WASM) variants because we cache based on the full request URL.
 
-const CACHE_NAME = 'twelvereader-model-cache-v1';
+const CACHE_NAME = 'models';
 
 // Match large model files and tokenizer data from HuggingFace
 // Adjust extensions if additional files should be cached.

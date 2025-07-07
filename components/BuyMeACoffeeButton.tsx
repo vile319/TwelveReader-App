@@ -3,9 +3,14 @@ import React, { type FC } from 'react';
 
 interface BuyMeACoffeeButtonProps {
   /**
-   * The full URL to your Buy Me A Coffee page, e.g. "https://www.buymeacoffee.com/myusername".
+   * Either the full URL to your Buy Me A Coffee page OR just your username.
+   * If you pass only a username (e.g. "johnDoe"), the component will
+   * automatically create the link `https://www.buymeacoffee.com/johnDoe`.
+   * If omitted, it will try to use the environment variable
+   * `VITE_BMC_USERNAME` at build-time. This makes it easy to configure
+   * without touching the source code.
    */
-  link: string;
+  linkOrUsername?: string;
   /**
    * Optional custom label (defaults to "Buy me a coffee").
    */
@@ -21,10 +26,29 @@ interface BuyMeACoffeeButtonProps {
  *
  * Uses the official button image so it works even without JavaScript enabled.
  */
-const BuyMeACoffeeButton: FC<BuyMeACoffeeButtonProps> = ({ link, label = 'Buy me a coffee', style }: BuyMeACoffeeButtonProps) => {
+const BuyMeACoffeeButton: FC<BuyMeACoffeeButtonProps> = ({ linkOrUsername, label = 'Buy me a coffee', style }: BuyMeACoffeeButtonProps) => {
+  // Derive the link.
+  // Note: Vite adds `import.meta.env` at build-time. Cast to any to satisfy TypeScript without the vite/client types.
+  const envUsername = (import.meta as any).env?.VITE_BMC_USERNAME as string | undefined;
+  const derivedLink = linkOrUsername
+    ? linkOrUsername.startsWith('http')
+      ? linkOrUsername
+      : `https://www.buymeacoffee.com/${linkOrUsername}`
+    : envUsername
+      ? `https://www.buymeacoffee.com/${envUsername}`
+      : undefined;
+
+  if (!derivedLink) {
+    // If no link available, don't render anything (dev reminder in console)
+    if (import.meta.env.DEV) {
+      console.warn('BuyMeACoffeeButton: No link or username provided. Set VITE_BMC_USERNAME or pass linkOrUsername prop.');
+    }
+    return null;
+  }
+
   return (
     <a
-      href={link}
+      href={derivedLink}
       target="_blank"
       rel="noopener noreferrer"
       title={label}
