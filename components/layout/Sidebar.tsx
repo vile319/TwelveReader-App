@@ -1,4 +1,4 @@
-import React, { type FC, useState } from 'react';
+import React, { type FC } from 'react';
 import { useAppContext } from '../../contexts/AppContext';
 import AdSenseBanner from '../AdSenseBanner';
 void React;
@@ -15,7 +15,7 @@ interface Voice {
 const Sidebar: FC = () => {
   const { state, actions, tts } = useAppContext();
   // Local toggle to show/hide rarely-used technical controls
-  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [showAdvanced, setShowAdvanced] = React.useState(false);
 
   const isGenerateDisabled = !state.inputText.trim() || state.audio.isLoading;
   const voices: Voice[] = tts.voices as Voice[];
