@@ -670,9 +670,9 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true }: UseKokoroWebWorkerTt
       const tts = await KokoroTTS.from_pretrained('onnx-community/Kokoro-82M-v1.0-ONNX', {
         dtype: dtype,
         device: device,
-        progress_callback: (progress) => {
+        progress_callback: (progress: { status: string; progress?: number }) => {
           if (progress.status === 'progress') {
-            const percent = Math.round(Math.min(progress.progress * 100, 100));
+            const percent = Math.round(Math.min((progress.progress ?? 0) * 100, 100));
             const deviceLabel = device === 'webgpu' ? 'GPU' : 'CPU';
             setStatus(`Downloading model (${deviceLabel}): ${percent}%`);
           } else if (progress.status === 'ready') {
@@ -701,9 +701,9 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true }: UseKokoroWebWorkerTt
           const tts = await KokoroTTS.from_pretrained('onnx-community/Kokoro-82M-v1.0-ONNX', {
             dtype: 'q8',
             device: 'wasm',
-            progress_callback: (progress) => {
+            progress_callback: (progress: { status: string; progress?: number }) => {
               if (progress.status === 'progress') {
-                const percent = Math.round(Math.min(progress.progress * 100, 100));
+                const percent = Math.round(Math.min((progress.progress ?? 0) * 100, 100));
                 setStatus(`CPU fallback - Downloading: ${percent}%`);
               }
             }
