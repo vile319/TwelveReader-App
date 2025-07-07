@@ -14,6 +14,8 @@ interface Voice {
 
 const Sidebar: FC = () => {
   const { state, actions, tts } = useAppContext();
+  // Local toggle to show/hide rarely-used technical controls
+  const [showAdvanced, setShowAdvanced] = React.useState(false);
 
   const isGenerateDisabled = !state.inputText.trim() || state.audio.isLoading;
   const voices: Voice[] = tts.voices as Voice[];
@@ -86,72 +88,82 @@ const Sidebar: FC = () => {
          '▶️ Generate Audio'}
       </button>
 
-      {/* Reset Model Button */}
-      <button
-        onClick={async () => {
-          await actions.clearModel();
-          actions.setInputText('');
-          actions.setUploadedPDF(null);
-        }}
-        className="w-full py-3 rounded-lg border border-red-600 text-red-600 font-semibold flex items-center justify-center gap-2 mb-2 hover:bg-red-600/10 transition-colors"
-        title="Clear and reload the AI model (fixes stuck states)"
-      >
-        🔄 Reset Model
-      </button>
-      
-      {/* Cache Status Button */}
-      <button
-        onClick={async () => {
-          const status = await actions.checkCacheStatus();
-          alert(`Cache Status:\n${status.cached ? '✅ Model is cached' : '❌ No cache found'}\nFiles: ${status.fileCount}\nSize: ${status.sizeFormatted || 'Unknown'}\n\nCheck console for detailed cache info.`);
-        }}
-        className="w-full py-2 rounded-lg border border-slate-500 text-slate-500 text-xs font-medium flex items-center justify-center gap-1 mb-2 hover:bg-slate-500/10 transition-colors"
-        title="Check if the AI model is cached in your browser"
-      >
-        📊 Check Cache
-      </button>
-      
-      {/* Debug Audio Quality Button */}
-      <button
-        onClick={async () => {
-          const debugInfo = await actions.debugAudioQuality();
-          const qualityTest = await actions.checkAudioQuality();
-          
-          let message = `Audio Debug Info:\n\n`;
-          message += `🖥️ Platform: ${debugInfo.platform}\n`;
-          message += `🤖 Device: ${debugInfo.device}\n`;
-          message += `🎵 Sample Rate: ${debugInfo.sampleRate}Hz\n`;
-          message += `⚡ WebGPU: ${debugInfo.webgpuSupported ? 'Yes' : 'No'}\n\n`;
-          
-          if (qualityTest) {
-            message += `Test Audio Quality: ${qualityTest.quality}\n`;
-            message += `Generation Time: ${qualityTest.generationTime}ms\n`;
-            message += `Peak Level: ${qualityTest.peak}\n`;
-            message += `RMS Level: ${qualityTest.rms}\n\n`;
-          }
-          
-          message += `Check console (F12) for detailed logs.`;
-          alert(message);
-        }}
-        className="w-full py-2 rounded-lg border border-amber-500 text-amber-500 text-xs font-medium flex items-center justify-center gap-1 mb-2 hover:bg-amber-500/10 transition-colors"
-        title="Debug audio quality issues - compare results between computers"
-      >
-        🔍 Debug Audio
-      </button>
-      
-      {/* Audio Normalization Toggle */}
-      <button
-        onClick={actions.toggleNormalizeAudio}
-        className={cn(
-          'w-full py-2 rounded-lg text-xs font-medium flex items-center justify-center gap-1 mb-6 transition-colors',
-          state.model.normalizeAudio
-            ? 'border-emerald-500 text-emerald-500 bg-emerald-500/10'
-            : 'border-slate-500 text-slate-500 hover:bg-slate-500/10'
+      {/* Advanced Options (collapsed by default) */}
+      <div className="mb-6">
+        {/* Toggle */}
+        <button
+          onClick={() => setShowAdvanced((prev) => !prev)}
+          className="w-full py-3 rounded-lg border border-slate-600 text-slate-200 font-semibold flex items-center justify-center gap-2 hover:bg-slate-600/10 transition-colors"
+          title="Technical and troubleshooting controls"
+        >
+          ⚙️ {showAdvanced ? 'Hide' : 'Show'} Advanced Options
+        </button>
+
+        {/* Collapsible content */}
+        {showAdvanced && (
+          <div className="pt-4 space-y-2">
+            {/* Reset Model */}
+            <button
+              onClick={async () => {
+                await actions.clearModel();
+                actions.setInputText('');
+                actions.setUploadedPDF(null);
+              }}
+              className="w-full py-2 rounded-lg border border-red-600 text-red-600 text-xs font-semibold flex items-center justify-center gap-2 hover:bg-red-600/10 transition-colors"
+            >
+              🔄 Reset Model
+            </button>
+
+            {/* Check Cache */}
+            <button
+              onClick={async () => {
+                const status = await actions.checkCacheStatus();
+                alert(`Cache Status:\n${status.cached ? '✅ Model is cached' : '❌ No cache found'}\nFiles: ${status.fileCount}\nSize: ${status.sizeFormatted || 'Unknown'}\n\nCheck console for detailed cache info.`);
+              }}
+              className="w-full py-2 rounded-lg border border-slate-500 text-slate-500 text-xs font-medium flex items-center justify-center gap-1 hover:bg-slate-500/10 transition-colors"
+            >
+              📊 Check Cache
+            </button>
+
+            {/* Debug Audio */}
+            <button
+              onClick={async () => {
+                const debugInfo = await actions.debugAudioQuality();
+                const qualityTest = await actions.checkAudioQuality();
+                let message = `Audio Debug Info:\n\n`;
+                message += `🖥️ Platform: ${debugInfo.platform}\n`;
+                message += `🤖 Device: ${debugInfo.device}\n`;
+                message += `🎵 Sample Rate: ${debugInfo.sampleRate}Hz\n`;
+                message += `⚡ WebGPU: ${debugInfo.webgpuSupported ? 'Yes' : 'No'}\n\n`;
+                if (qualityTest) {
+                  message += `Test Audio Quality: ${qualityTest.quality}\n`;
+                  message += `Generation Time: ${qualityTest.generationTime}ms\n`;
+                  message += `Peak Level: ${qualityTest.peak}\n`;
+                  message += `RMS Level: ${qualityTest.rms}\n\n`;
+                }
+                message += `Check console (F12) for detailed logs.`;
+                alert(message);
+              }}
+              className="w-full py-2 rounded-lg border border-amber-500 text-amber-500 text-xs font-medium flex items-center justify-center gap-1 hover:bg-amber-500/10 transition-colors"
+            >
+              🔍 Debug Audio
+            </button>
+
+            {/* Audio Normalization */}
+            <button
+              onClick={actions.toggleNormalizeAudio}
+              className={cn(
+                'w-full py-2 rounded-lg text-xs font-medium flex items-center justify-center gap-1 transition-colors',
+                state.model.normalizeAudio
+                  ? 'border-emerald-500 text-emerald-500 bg-emerald-500/10'
+                  : 'border-slate-500 text-slate-500 hover:bg-slate-500/10'
+              )}
+            >
+              {state.model.normalizeAudio ? '✅' : '📢'} Audio Fix: {state.model.normalizeAudio ? 'ON' : 'OFF'}
+            </button>
+          </div>
         )}
-        title="Fix audio clipping/scaling issues (enable if audio sounds distorted)"
-      >
-        {state.model.normalizeAudio ? '✅' : '📢'} Audio Fix: {state.model.normalizeAudio ? 'ON' : 'OFF'}
-      </button>
+      </div>
 
       {/* Help Button */}
       <button
