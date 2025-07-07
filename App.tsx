@@ -5,6 +5,7 @@ import HighlightedText from './components/HighlightedText';
 import AdSenseBanner from './components/AdSenseBanner';
 import AdSensePopup from './components/AdSensePopup';
 import { AppError } from './types';
+import { addBook, getBooks, getBook, SavedBook, deleteBook } from './utils/bookLibrary';
 
 const App: React.FC = () => {
   const [selectedVoice, setSelectedVoice] = useState('af_heart');
@@ -20,6 +21,22 @@ const App: React.FC = () => {
 
   // Store pending read request during model download
   const [pendingRead, setPendingRead] = useState<{ text: string; voice: string } | null>(null);
+
+  // Persisted setting: keep model cached (default true)
+  const [keepModelCached, setKeepModelCached] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return true;
+    return localStorage.getItem('keepModelCached') !== 'false';
+  });
+
+  // Saved books state
+  const [savedBooks, setSavedBooks] = useState<SavedBook[]>([]);
+
+  const refreshSavedBooks = async () => {
+    const list = await getBooks();
+    setSavedBooks(list.sort((a,b)=>b.date-a.date));
+  };
+
+  useEffect(() => { refreshSavedBooks(); }, []);
 
   const {
     speak,
@@ -47,6 +64,10 @@ const App: React.FC = () => {
     getAudioBlob,
     isReady,
     seek,
+    // Playback speed
+    playbackSpeed,
+    setPlaybackSpeed,
+    loadAudioFromBlob,
   } = useKokoroWebWorkerTts({
     onError: setError,
     enabled: modelAccepted
@@ -176,6 +197,24 @@ const App: React.FC = () => {
       })();
     }
   }, [isReady, pendingRead, speak]);
+
+  // Auto-accept model download if it is already cached (and user keeps caching)
+  useEffect(() => {
+    if (modelAccepted) return; // already accepted
+    if (!keepModelCached) return; // user opted out
+
+    (async () => {
+      try {
+        const status = await checkCacheStatus();
+        if (status?.cached) {
+          console.log('✅ Model is cached – skipping download prompt');
+          setModelAccepted(true);
+        }
+      } catch (e) {
+        console.warn('Could not verify cache status:', e);
+      }
+    })();
+  }, [modelAccepted, keepModelCached, checkCacheStatus]);
 
   const sampleTexts = [
     {
@@ -396,6 +435,33 @@ const App: React.FC = () => {
           </select>
         </div>
 
+        {/* Keep Model Cached Toggle */}
+        <div style={{ marginBottom: '24px' }}>
+          <label style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '12px',
+            fontSize: '14px',
+            fontWeight: '600',
+            color: '#e5e5e5'
+          }}>
+            <input
+              type="checkbox"
+              checked={keepModelCached}
+              onChange={async (e) => {
+                const checked = e.target.checked;
+                setKeepModelCached(checked);
+                localStorage.setItem('keepModelCached', checked ? 'true' : 'false');
+                if (!checked) {
+                  // Clear caches so model is not persisted
+                  await clearModel();
+                }
+              }}
+            />
+            Keep Model Cached
+          </label>
+        </div>
+
         {/* PDF Upload */}
         <div style={{ marginBottom: '24px' }}>
           <label style={{
@@ -495,6 +561,34 @@ const App: React.FC = () => {
         >
           🔄 Reset Model
         </button>
+        
+        {/* Saved Books Library */}
+        {savedBooks.length > 0 && (
+          <div style={{ marginBottom: '24px' }}>
+            <div style={{
+              fontSize: '14px',
+              fontWeight: '600',
+              marginBottom: '8px',
+              color: '#e5e5e5'
+            }}>📚 Saved Books</div>
+            <div style={{ display:'flex', flexDirection:'column', gap:'6px' }}>
+              {savedBooks.map(book => (
+                <div key={book.id} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', background:'#2d3748', padding:'6px 8px', borderRadius:'6px', fontSize:'12px', color:'#e5e5e5' }}>
+                  <span style={{ overflow:'hidden', whiteSpace:'nowrap', textOverflow:'ellipsis', maxWidth:'160px' }}>{book.title}</span>
+                  <div style={{ display:'flex', gap:'4px' }}>
+                    <button onClick={async ()=>{
+                      const full = await getBook(book.id!);
+                      if(full?.blob){
+                        loadAudioFromBlob(full.blob);
+                      }
+                    }} style={{ padding:'4px 6px', background:'#4a90e2', border:'none', borderRadius:'4px', color:'#fff', cursor:'pointer' }}>Play</button>
+                    <button onClick={async ()=>{ if(confirm('Delete this book?')) { await deleteBook(book.id!); await refreshSavedBooks(); }}} style={{ padding:'4px 6px', background:'#dc2626', border:'none', borderRadius:'4px', color:'#fff', cursor:'pointer' }}>×</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
         
         {/* Cache Status Button */}
         <button
@@ -727,6 +821,43 @@ const App: React.FC = () => {
               +15s
             </button>
             
+            {/* Speed Stepper */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+              <button
+                onClick={() => {
+                  const speeds = [0.5,0.75,1,1.25,1.5,2,3,4];
+                  const idx = speeds.indexOf(playbackSpeed);
+                  if (idx > 0) setPlaybackSpeed(speeds[idx-1]);
+                }}
+                style={{
+                  padding: '6px 8px',
+                  backgroundColor: '#2d3748',
+                  border: '1px solid #4a5568',
+                  borderRadius: '4px',
+                  color: '#e5e5e5',
+                  fontSize: '12px',
+                  cursor: 'pointer'
+                }}
+              >−</button>
+              <div style={{ minWidth: '32px', textAlign: 'center', fontSize: '12px' }}>{playbackSpeed}x</div>
+              <button
+                onClick={() => {
+                  const speeds = [0.5,0.75,1,1.25,1.5,2,3,4];
+                  const idx = speeds.indexOf(playbackSpeed);
+                  if (idx < speeds.length-1) setPlaybackSpeed(speeds[idx+1]);
+                }}
+                style={{
+                  padding: '6px 8px',
+                  backgroundColor: '#2d3748',
+                  border: '1px solid #4a5568',
+                  borderRadius: '4px',
+                  color: '#e5e5e5',
+                  fontSize: '12px',
+                  cursor: 'pointer'
+                }}
+              >+</button>
+            </div>
+            
             {/* Time Display */}
              <div style={{ flex: 1, textAlign: 'center' }}>
                <div style={{ 
@@ -803,7 +934,7 @@ const App: React.FC = () => {
             )}
           </div>
           
-          {/* Hidden download button */}
+          {/* Save / Download buttons */}
           {synthesisComplete && (
             <div style={{
               marginTop: '16px',
@@ -818,10 +949,32 @@ const App: React.FC = () => {
                   borderRadius: '8px',
                   color: 'white',
                   cursor: 'pointer',
-                  fontSize: '14px'
+                  fontSize: '14px',
+                  marginRight: '8px'
                 }}
               >
                 Download Audio (WAV)
+              </button>
+              <button
+                onClick={async () => {
+                  const blob = getAudioBlob();
+                  if (!blob) { alert('Audio not ready'); return; }
+                  const title = prompt('Save book as:', inputText.slice(0,60) || 'Untitled') || 'Untitled';
+                  await addBook({title, date: Date.now(), blob, meta:{voice:selectedVoice}});
+                  await refreshSavedBooks();
+                  alert('Saved to library');
+                }}
+                style={{
+                  padding: '8px 16px',
+                  backgroundColor: '#4a90e2',
+                  border: 'none',
+                  borderRadius: '8px',
+                  color: 'white',
+                  cursor: 'pointer',
+                  fontSize: '14px'
+                }}
+              >
+                Save to Library
               </button>
             </div>
           )}

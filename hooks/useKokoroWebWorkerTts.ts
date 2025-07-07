@@ -11,12 +11,13 @@ if (typeof window !== 'undefined') {
       const { env } = await import('@huggingface/transformers');
       console.log('🔧 Configuring transformers.js caching...');
       
-      // Force enable browser cache
-      env.useBrowserCache = true;
+      // Respect user preference for model caching (defaults to ON)
+      const keepCached = localStorage.getItem('keepModelCached') !== 'false';
+      env.useBrowserCache = keepCached;
       
       // Optional: Also enable file system cache if available
       if (env.backends && env.backends.onnx) {
-        env.backends.onnx.useBrowserCache = true;
+        env.backends.onnx.useBrowserCache = keepCached;
       }
       
       console.log('✅ Browser cache enabled for transformers.js');
@@ -40,6 +41,10 @@ export interface AudioChunk {
   sampleRate: number;
   duration: number;
 }
+
+// Maximum characters per chunk when sending to Kokoro TTS.
+// Roughly corresponds to < 512 token limit (tokens ≈ bytes/characters for English).
+const MAX_CHARS_PER_CHUNK = 400;
 
 const useKokoroWebWorkerTts = ({ onError, enabled = true }: UseKokoroWebWorkerTtsProps) => {
   const [isReady, setIsReady] = useState(false);
@@ -75,9 +80,26 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true }: UseKokoroWebWorkerTt
   // New state for playback trigger
   const [isFirstChunkReady, setIsFirstChunkReady] = useState(false);
   
+  // ========================
+  // Playback speed handling
+  // ========================
+  const [playbackSpeed, setPlaybackSpeed] = useState<number>(1);
+  const playbackSpeedRef = useRef<number>(1);
+  useEffect(() => {
+    playbackSpeedRef.current = playbackSpeed;
+    // Update currently-playing source if one exists
+    if (completeAudioSourceRef.current) {
+      try {
+        completeAudioSourceRef.current.playbackRate.value = playbackSpeed;
+      } catch {}
+    }
+  }, [playbackSpeed]);
+  
   const lastWordUpdateRef = useRef(0);
   const wordTimingsRef = useRef(wordTimings);
   wordTimingsRef.current = wordTimings;
+  
+  const lastTimeUpdateRef = useRef(0);
   
   // Helper function to update current word index based on time
   const updateCurrentWordIndex = useCallback((currentTime: number) => {
@@ -283,19 +305,24 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true }: UseKokoroWebWorkerTt
       }
       
              // Start playback from the appropriate chunk
-       streamingStartTimeRef.current = audioContextRef.current.currentTime - startTime;
+       streamingStartTimeRef.current = audioContextRef.current.currentTime - startTime / playbackSpeedRef.current;
        
        if (!isPlaying) setIsPlaying(true);
        
        // Start progress tracking for streaming
        const trackStreamingProgress = () => {
          if (isPlaybackActiveRef.current && audioContextRef.current) {
-           const elapsed = audioContextRef.current.currentTime - streamingStartTimeRef.current;
+           const elapsed = (audioContextRef.current.currentTime - streamingStartTimeRef.current) * playbackSpeedRef.current;
            // Calculate max time from streaming audio length
            const totalStreamingSamples = streamingAudioRef.current.reduce((sum, chunk) => sum + chunk.length, 0);
            const maxStreamTime = totalStreamingSamples / sampleRateRef.current;
            const currentPos = Math.max(0, Math.min(elapsed, maxStreamTime));
-           setCurrentTime(currentPos);
+           const now = performance.now();
+           if (now - lastTimeUpdateRef.current > 100) {
+             lastTimeUpdateRef.current = now;
+             setCurrentTime(currentPos);
+             updateCurrentWordIndex(currentPos);
+           }
            
            // Update current word index for highlighting (un-throttled for accuracy)
            updateCurrentWordIndex(currentPos);
@@ -343,6 +370,8 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true }: UseKokoroWebWorkerTt
         
         const source = audioContextRef.current.createBufferSource();
         source.buffer = audioBuffer;
+        // Apply current playback speed
+        source.playbackRate.value = playbackSpeedRef.current;
         source.connect(audioContextRef.current.destination);
         
         // Store the source so we can stop it if needed
@@ -422,6 +451,8 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true }: UseKokoroWebWorkerTt
       // Create and configure source
       const source = audioContextRef.current.createBufferSource();
       source.buffer = audioBuffer;
+      // Apply current playback speed
+      source.playbackRate.value = playbackSpeedRef.current;
       source.connect(audioContextRef.current.destination);
       
       completeAudioSourceRef.current = source;
@@ -436,11 +467,12 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true }: UseKokoroWebWorkerTt
           return; // Audio stopped, stop updating
         }
         
-        const elapsed = audioContextRef.current!.currentTime - playbackStartTimeRef.current;
+        const elapsed = (audioContextRef.current!.currentTime - playbackStartTimeRef.current) * playbackSpeedRef.current;
         const currentPos = playbackOffsetRef.current + elapsed;
         
-        if (currentPos >= duration) {
-          // Playback completed
+        const now = performance.now();
+        if (currentPos >= duration && now - lastTimeUpdateRef.current > 100) {
+          lastTimeUpdateRef.current = now;
           setIsPlaying(false);
           setCurrentTime(duration);
           updateCurrentWordIndex(duration);
@@ -450,10 +482,12 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true }: UseKokoroWebWorkerTt
             progressIntervalRef.current = null;
           }
         } else {
-          setCurrentTime(currentPos);
-          
-          // Update current word index for highlighting (un-throttled for accuracy)
-          updateCurrentWordIndex(currentPos);
+          const nowInterval = performance.now();
+          if (currentPos < duration && nowInterval - lastTimeUpdateRef.current > 100) {
+            lastTimeUpdateRef.current = nowInterval;
+            setCurrentTime(currentPos);
+            updateCurrentWordIndex(currentPos);
+          }
           
           // Continue updating regardless of isPlaying state for smooth progress
           progressAnimationRef.current = requestAnimationFrame(updateProgress);
@@ -463,10 +497,12 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true }: UseKokoroWebWorkerTt
       // Also use an interval as backup for consistent updates
       progressIntervalRef.current = setInterval(() => {
         if (completeAudioSourceRef.current && audioContextRef.current) {
-          const elapsed = audioContextRef.current.currentTime - playbackStartTimeRef.current;
+          const elapsed = (audioContextRef.current.currentTime - playbackStartTimeRef.current) * playbackSpeedRef.current;
           const currentPos = playbackOffsetRef.current + elapsed;
           
-          if (currentPos < duration) {
+          const nowInt = performance.now();
+          if (currentPos < duration && nowInt - lastTimeUpdateRef.current > 100) {
+            lastTimeUpdateRef.current = nowInt;
             setCurrentTime(currentPos);
             updateCurrentWordIndex(currentPos);
           }
@@ -519,7 +555,7 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true }: UseKokoroWebWorkerTt
         playbackOffsetRef.current = pausedTime;
       } else if (completeAudioSourceRef.current && audioContextRef.current) {
         // For complete audio mode
-        const elapsed = audioContextRef.current.currentTime - playbackStartTimeRef.current;
+        const elapsed = (audioContextRef.current.currentTime - playbackStartTimeRef.current) * playbackSpeedRef.current;
         const currentPos = playbackOffsetRef.current + elapsed;
         const pausedTime = Math.max(0, Math.min(currentPos, duration));
         console.log(`⏸️ Pausing complete audio at ${pausedTime.toFixed(2)}s`);
@@ -755,18 +791,26 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true }: UseKokoroWebWorkerTt
     while (currentIndex < text.length) {
       let endIndex = Math.min(currentIndex + maxChunkSize, text.length);
       
-      // Try to break at sentence boundaries
       if (endIndex < text.length) {
+        // 1) Prefer breaking at sentence-ending punctuation inside the chunk
         const sentenceEnd = text.lastIndexOf('.', endIndex);
         const exclamationEnd = text.lastIndexOf('!', endIndex);
         const questionEnd = text.lastIndexOf('?', endIndex);
-        
         const bestEnd = Math.max(sentenceEnd, exclamationEnd, questionEnd);
+
         if (bestEnd > currentIndex + maxChunkSize * 0.5) {
-          endIndex = bestEnd + 1;
+          endIndex = bestEnd + 1; // include the punctuation
+        } else {
+          // 2) Otherwise, back up to the previous whitespace so we don't split a word
+          if (/\S/.test(text[endIndex])) {
+            const lastSpace = text.lastIndexOf(' ', endIndex);
+            if (lastSpace > currentIndex + 20) {
+              endIndex = lastSpace;
+            }
+          }
         }
       }
-      
+
       chunks.push(text.slice(currentIndex, endIndex).trim());
       currentIndex = endIndex;
     }
@@ -810,8 +854,8 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true }: UseKokoroWebWorkerTt
     try {
       console.log(`📚 Processing text (${text.length} characters)`);
       
-      // Chunk text for better processing - shorter chunks to avoid TTS cutoff
-      const chunks = chunkText(text, 500);
+      // Chunk text for better processing - below model limit (<512 tokens)
+      const chunks = chunkText(text, MAX_CHARS_PER_CHUNK);
       console.log(`📝 Split into ${chunks.length} chunks for processing`);
       
       // Process all chunks but in smaller batches to prevent stack overflow
@@ -1440,6 +1484,35 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true }: UseKokoroWebWorkerTt
     return new Blob([view], { type: 'audio/wav' });
   }, [completeAudioBuffer, completeAudioSampleRate]);
 
+  // Load audio WAV blob back into player (for saved books)
+  const loadAudioFromBlob = useCallback(async (blob: Blob) => {
+    if (!blob) return;
+    if (!audioContextRef.current) {
+      audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+    }
+    try {
+      const arrayBuffer = await blob.arrayBuffer();
+      const audioBuffer = await audioContextRef.current.decodeAudioData(arrayBuffer);
+
+      const channelData = audioBuffer.getChannelData(0);
+      const floatData = new Float32Array(channelData.length);
+      floatData.set(channelData);
+
+      setCompleteAudioBuffer(floatData);
+      setCompleteAudioSampleRate(audioBuffer.sampleRate);
+      setDuration(audioBuffer.duration);
+      setCurrentTime(0);
+      setCanScrub(true);
+      setIsStreaming(false);
+      setSynthesisComplete(true);
+      setWordTimings([]);
+      setCurrentWordIndex(-1);
+      console.log('📚 Loaded saved audio book');
+    } catch (err) {
+      console.error('Failed to decode saved audio', err);
+    }
+  }, []);
+
   const seek = useCallback((time: number) => {
     console.log(`🎤 Seeking to ${time.toFixed(2)}s`);
     // Use the robust seekToTime function which handles all states
@@ -1484,7 +1557,11 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true }: UseKokoroWebWorkerTt
     synthesisComplete,
     // Utility: get combined audio buffer as WAV Blob
     getAudioBlob,
-    seek
+    loadAudioFromBlob,
+    seek,
+    // Playback speed controls
+    playbackSpeed,
+    setPlaybackSpeed
   };
 };
 
