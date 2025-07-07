@@ -924,7 +924,7 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true }: UseKokoroWebWorkerTt
           
           if (alignedTimings.length > 0) {
             console.log(`📊 Received ${alignedTimings.length} precise word timings for chunk ${i + 1}.`);
-            setWordTimings((prev: Alignment[]) => [...prev, ...alignedTimings]);
+            setWordTimings((prev: { word: string; start: number; end: number }[]) => [...prev, ...alignedTimings]);
           }
         } else {
           // Fallback to provisional timings if alignments are not available
@@ -949,7 +949,7 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true }: UseKokoroWebWorkerTt
           });
 
           if (provisionalTimings.length) {
-            setWordTimings((prev: Alignment[]) => [...prev, ...provisionalTimings]);
+            setWordTimings((prev: { word: string; start: number; end: number }[]) => [...prev, ...provisionalTimings]);
           }
         }
         
