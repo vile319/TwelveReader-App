@@ -1,11 +1,11 @@
-import React from 'react';
+import type { FC } from 'react';
 import { useAppContext } from '../../contexts/AppContext';
 import AdSenseBanner from '../AdSenseBanner';
 
 // Small helper – joins classes conditionally
 const cn = (...classes: (string | false | null | undefined)[]) => classes.filter(Boolean).join(' ');
 
-const Sidebar: React.FC = () => {
+const Sidebar: FC = () => {
   const { state, actions, tts } = useAppContext();
 
   const isGenerateDisabled = !state.inputText.trim() || state.audio.isLoading;

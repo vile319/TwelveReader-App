@@ -1,9 +1,9 @@
-import React from 'react';
+import type { FC } from 'react';
 import AdSenseBanner from '../AdSenseBanner';
 import AudioPlayer from '../audio/AudioPlayer';
 import TextInputPanel from '../text/TextInputPanel';
 
-const MainContent: React.FC = () => {
+const MainContent: FC = () => {
   return (
     <div className="main-content flex flex-col p-6 md:ml-80">
       {/* Top Banner Ad */}
