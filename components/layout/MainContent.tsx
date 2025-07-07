@@ -6,10 +6,9 @@ import TextInputPanel from '../text/TextInputPanel';
 const MainContent: React.FC = () => {
   return (
     <div className="main-content" style={{
-      marginLeft: '320px',
+      // margin-left and height are handled responsively via the .main-content rules in App.tsx
       display: 'flex',
       flexDirection: 'column',
-      height: '100vh',
       padding: '24px'
     }}>
       {/* Top Banner Ad */}

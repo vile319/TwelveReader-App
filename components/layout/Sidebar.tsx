@@ -7,11 +7,6 @@ const Sidebar: React.FC = () => {
 
   return (
     <div className="sidebar" style={{
-      width: '320px',
-      height: '100vh',
-      position: 'fixed',
-      left: 0,
-      top: 0,
       overflow: 'auto',
       backgroundColor: '#1a1e26',
       borderRight: '1px solid #2d3748',

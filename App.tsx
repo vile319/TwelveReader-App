@@ -51,6 +51,14 @@ const AppContent: React.FC = () => {
               margin-left: 0;
             }
           }
+          @media (max-width: 480px) {
+            .sidebar {
+              padding: 16px;
+            }
+            .main-content {
+              padding: 16px;
+            }
+          }
           @keyframes spin {
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }

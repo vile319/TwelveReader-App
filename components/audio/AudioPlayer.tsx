@@ -2,7 +2,7 @@ import React from 'react';
 import { useAppContext } from '../../contexts/AppContext';
 
 const AudioPlayer: React.FC = () => {
-  const { state, actions, tts } = useAppContext();
+  const { state, actions } = useAppContext();
 
   return (
     <div style={{

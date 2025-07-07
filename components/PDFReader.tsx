@@ -50,7 +50,6 @@ interface PDFReaderProps {
   file: File;
   onTextExtracted: (text: string) => void;
   currentSentence: string;
-  readingProgress: number;
   wordTimings?: Array<{word: string, start: number, end: number}>;
   currentWordIndex?: number;
 }
@@ -59,7 +58,6 @@ const PDFReader: React.FC<PDFReaderProps> = ({
   file, 
   onTextExtracted, 
   currentSentence,
-  readingProgress,
   wordTimings = [],
   currentWordIndex = -1
 }) => {
@@ -129,8 +127,8 @@ const PDFReader: React.FC<PDFReaderProps> = ({
           
         setExtractedText(finalText);
         
-        // Create simple chapters based on length
-        const chapters = createChapters(finalText);
+        // Create chapters if you wish to use them by uncommenting below
+        // const chapters = createChapters(finalText);
         
         console.log(`🎯 Final text ready: ${finalText.length} characters`);
         onTextExtracted(finalText);
@@ -149,31 +147,31 @@ const PDFReader: React.FC<PDFReaderProps> = ({
     }
   };
 
-  const createChapters = (text: string): Array<{id: string, title: string, page: number}> => {
-    const chapters: Array<{id: string, title: string, page: number}> = [];
-    
-    // Split text into roughly equal chunks for chapters
-    const wordsPerChapter = Math.max(500, Math.floor(text.split(' ').length / 5));
-    const words = text.split(' ');
-    
-    for (let i = 0; i < words.length; i += wordsPerChapter) {
-      const chapterNumber = Math.floor(i / wordsPerChapter) + 1;
-      const startWords = words.slice(i, i + 10).join(' ');
-      const title = startWords.length > 50 
-        ? startWords.substring(0, 47) + '...'
-        : startWords;
-        
-      chapters.push({
-        id: `chapter-${chapterNumber}`,
-        title: `Chapter ${chapterNumber}: ${title}`,
-        page: chapterNumber
-      });
-    }
-    
-    return chapters.length > 0 ? chapters : [
-      { id: 'full-document', title: 'Full Document', page: 1 }
-    ];
-  };
+  // const createChapters = (text: string): Array<{id: string, title: string, page: number}> => {
+  //   const chapters: Array<{id: string, title: string, page: number}> = [];
+  //   
+  //   // Split text into roughly equal chunks for chapters
+  //   const wordsPerChapter = Math.max(500, Math.floor(text.split(' ').length / 5));
+  //   const words = text.split(' ');
+  //   
+  //   for (let i = 0; i < words.length; i += wordsPerChapter) {
+  //     const chapterNumber = Math.floor(i / wordsPerChapter) + 1;
+  //     const startWords = words.slice(i, i + 10).join(' ');
+  //     const title = startWords.length > 50 
+  //       ? startWords.substring(0, 47) + '...'
+  //       : startWords;
+  //       
+  //     chapters.push({
+  //       id: `chapter-${chapterNumber}`,
+  //       title: `Chapter ${chapterNumber}: ${title}`,
+  //       page: chapterNumber
+  //     });
+  //   }
+  //   
+  //   return chapters.length > 0 ? chapters : [
+  //     { id: 'full-document', title: 'Full Document', page: 1 }
+  //   ];
+  // };
 
   if (isLoading) {
     return (
