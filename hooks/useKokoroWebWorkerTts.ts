@@ -601,41 +601,52 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true }: UseKokoroWebWorkerTt
      return audioData;
    }, [normalizeAudio]);
 
-     // Modified detectWebGPU to respect force WASM setting
-   const detectWebGPU = useCallback(async (): Promise<{ device: 'webgpu' | 'wasm', dtype: 'fp32' | 'q8' }> => {
-     // Check if WASM mode is forced
-     if (forceWasmMode) {
-       console.log('🔧 Forcing WASM mode (WebGPU disabled by user)');
+     // Detect if WebGPU is available and choose the best configuration
+   const detectWebGPU = useCallback(async (): Promise<{ device: 'webgpu' | 'wasm'; dtype: 'fp32' | 'q8' | 'fp16' }> => {
+     const isMobile = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+
+     // For mobile devices, default to wasm with q8 for stability and memory reasons
+     if (isMobile) {
+       console.log('📱 Mobile device detected. Forcing CPU mode (wasm) with q8 model.');
        return { device: 'wasm', dtype: 'q8' };
      }
 
-     if (!(navigator as any).gpu) return { device: 'wasm', dtype: 'q8' };
-     
-     try {
-       const adapter = await (navigator as any).gpu.requestAdapter();
-       if (!adapter) return { device: 'wasm', dtype: 'q8' };
-       
-       const device = await adapter.requestDevice();
-       device.destroy();
-       return { device: 'webgpu', dtype: 'fp32' };
-     } catch (error) {
-       console.warn('WebGPU detection failed:', error);
+     // Respect the user's choice to force WASM mode
+     if (forceWasmMode) {
+       console.log('🔧 Forcing WASM mode as requested.');
        return { device: 'wasm', dtype: 'q8' };
      }
+     
+     // Try to use WebGPU on desktop
+     if (typeof navigator !== 'undefined' && (navigator as any).gpu) {
+       try {
+         const adapter = await (navigator as any).gpu.requestAdapter();
+         if (adapter) {
+           console.log('✅ WebGPU available on desktop. Using stable fp32 model.');
+           // For WebGPU, only fp32 is consistently stable across devices.
+           return { device: 'webgpu', dtype: 'fp32' };
+         }
+       } catch (e) {
+         console.warn('⚠️ WebGPU detection failed:', e);
+       }
+     }
+
+     // Default fallback for desktop without WebGPU
+     console.log('➡️ WebGPU not available or failed, using CPU (wasm) with q8 model.');
+     return { device: 'wasm', dtype: 'q8' };
    }, [forceWasmMode]);
 
   // Initialize TTS model
   const initializeTts = useCallback(async () => {
-    if (ttsRef.current) return ttsRef.current;
-
     setIsLoading(true);
-    setStatus('Detecting best device for AI model...');
+    setStatus('Initializing Kokoro AI...');
+
+    // All device and dtype decision logic is now consolidated in detectWebGPU.
+    const { device, dtype } = await detectWebGPU();
+
+    console.log(`🚀 Initializing Kokoro TTS with ${device} and ${dtype}...`);
 
     try {
-      // Try WebGPU first, fallback to WASM
-      const { device, dtype } = await detectWebGPU();
-      setStatus(`🎯 TTS Device: ${device} (${dtype})`);
-
       // Check if cache is available
       if (typeof window !== 'undefined' && 'caches' in window) {
         try {

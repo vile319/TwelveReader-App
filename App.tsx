@@ -653,9 +653,9 @@ const App: React.FC = () => {
           borderRadius: '16px',
           padding: '24px',
           marginBottom: '24px',
-          transition: 'opacity 0.3s ease',
+          transition: 'opacity 0.3s',
           opacity: canScrub ? 1 : 0.5,
-          pointerEvents: canScrub ? 'auto' : 'none'
+          pointerEvents: canScrub ? 'auto' : 'none',
         }}>
           {/* Main Controls */}
           <div style={{ 
@@ -728,21 +728,21 @@ const App: React.FC = () => {
             </button>
             
             {/* Time Display */}
-            <div style={{ flex: 1, textAlign: 'center' }}>
-              <div style={{ 
-                fontSize: '18px', 
-                fontWeight: '600',
-                color: '#e5e5e5',
-                marginBottom: '4px'
-              }}>
-                {formatTime(currentTime)} / {formatTime(duration)}
-              </div>
-              {isReading && (
-                <div style={{ fontSize: '12px', color: '#4a90e2' }}>
-                  Generating audio...
-                </div>
-              )}
-            </div>
+             <div style={{ flex: 1, textAlign: 'center' }}>
+               <div style={{ 
+                 fontSize: '18px', 
+                 fontWeight: '600',
+                 color: '#e5e5e5',
+                 marginBottom: '4px'
+               }}>
+                 {formatTime(currentTime)} / {formatTime(duration || currentTime)}
+               </div>
+               {isReading && (
+                 <div style={{ fontSize: '12px', color: '#4a90e2' }}>
+                   Generating audio...
+                 </div>
+               )}
+             </div>
           </div>
           
           {/* Progress Bar */}
@@ -752,144 +752,90 @@ const App: React.FC = () => {
               height: '12px',
               backgroundColor: '#2d3748',
               borderRadius: '6px',
-              cursor: 'pointer',
-              position: 'relative',
-              padding: '2px 0'
-            }}
-            onClick={(e) => {
-              const rect = e.currentTarget.getBoundingClientRect();
-              const clickX = e.clientX - rect.left;
-              const percentage = clickX / rect.width;
-              const maxTime = duration || currentTime;
-              const seekTime = percentage * maxTime;
-              seekToTime(seekTime);
+              cursor: canScrub ? 'pointer' : 'not-allowed',
+              position: 'relative'
             }}
             onMouseMove={(e) => {
+              if (!canScrub) return;
               const rect = e.currentTarget.getBoundingClientRect();
-              const hoverX = e.clientX - rect.left;
-              const percentage = Math.max(0, Math.min(1, hoverX / rect.width));
-              const maxTime = duration || currentTime;
-              const hoverSeconds = percentage * maxTime;
-              setHoverTime(hoverSeconds);
+              const hoverPosition = (e.clientX - rect.left) / rect.width;
+              setHoverTime(hoverPosition * (duration || 0));
               setIsSeekingHover(true);
             }}
             onMouseLeave={() => {
+              if (!canScrub) return;
               setIsSeekingHover(false);
+            }}
+            onMouseDown={(e) => {
+              if (!canScrub) return;
+              setIsDragging(true);
+              const rect = e.currentTarget.getBoundingClientRect();
+              const clickPosition = (e.clientX - rect.left) / rect.width;
+              const newTime = clickPosition * (duration || 0);
+              seekToTime(newTime);
+            }}
+            onMouseUp={() => {
+              if (!canScrub) return;
               setIsDragging(false);
             }}
-            onMouseDown={() => setIsDragging(true)}
-            onMouseUp={() => setIsDragging(false)}
           >
-            {/* Background track */}
             <div style={{
-              position: 'absolute',
-              top: '4px',
-              left: '0',
-              right: '0',
-              height: '4px',
-              backgroundColor: '#2d3748',
-              borderRadius: '2px'
-            }} />
+              width: `${((duration || 0) > 0 ? (currentTime / (duration || 1)) * 100 : 0)}%`,
+              height: '100%',
+              backgroundColor: '#4a90e2',
+              borderRadius: '6px'
+            }}></div>
             
-            {/* Progress fill */}
-            <div 
-              style={{
-                position: 'absolute',
-                top: '4px',
-                left: '0',
-                width: `${((currentTime / (duration || currentTime || 1)) * 100)}%`,
-                height: '4px',
-                backgroundColor: '#4a90e2',
-                borderRadius: '2px',
-                transition: isDragging ? 'none' : 'width 0.1s ease'
-              }}
-            />
-            
-            {/* Hover position indicator */}
             {isSeekingHover && (
               <div style={{
                 position: 'absolute',
-                top: '2px',
-                left: `${(hoverTime / (duration || currentTime || 1)) * 100}%`,
-                width: '2px',
-                height: '8px',
-                backgroundColor: '#e2e8f0',
-                borderRadius: '1px',
+                left: `${(hoverTime / (duration || 1)) * 100}%`,
+                top: '-30px',
                 transform: 'translateX(-50%)',
-                opacity: 0.7
-              }} />
-            )}
-            
-            {/* Scrub handle */}
-            <div 
-              style={{
-                position: 'absolute',
-                top: '50%',
-                left: `${(currentTime / (duration || currentTime || 1)) * 100}%`,
-                width: '20px',
-                height: '20px',
-                backgroundColor: '#4a90e2',
-                borderRadius: '50%',
-                transform: 'translate(-50%, -50%)',
-                cursor: isDragging ? 'grabbing' : 'grab',
-                border: '3px solid white',
-                boxShadow: '0 2px 6px rgba(0,0,0,0.3)',
-                transition: isDragging ? 'none' : 'all 0.1s ease',
-                scale: isDragging ? '1.1' : '1'
-              }}
-            />
-            
-            {/* Time tooltip on hover */}
-            {isSeekingHover && (
-              <div style={{
-                position: 'absolute',
-                top: '-35px',
-                left: `${(hoverTime / (duration || currentTime || 1)) * 100}%`,
-                transform: 'translateX(-50%)',
-                backgroundColor: '#1a1e26',
-                color: 'white',
                 padding: '4px 8px',
+                backgroundColor: '#0f1419',
+                color: 'white',
                 borderRadius: '4px',
-                fontSize: '12px',
-                fontWeight: '500',
-                boxShadow: '0 2px 8px rgba(0,0,0,0.4)',
-                pointerEvents: 'none',
-                zIndex: 10
+                fontSize: '12px'
               }}>
                 {formatTime(hoverTime)}
               </div>
             )}
           </div>
+          
+          {/* Hidden download button */}
+          {synthesisComplete && (
+            <div style={{
+              marginTop: '16px',
+              textAlign: 'center'
+            }}>
+              <button
+                onClick={handleDownloadAudio}
+                style={{
+                  padding: '8px 16px',
+                  backgroundColor: '#10b981',
+                  border: 'none',
+                  borderRadius: '8px',
+                  color: 'white',
+                  cursor: 'pointer',
+                  fontSize: '14px'
+                }}
+              >
+                Download Audio (WAV)
+              </button>
+            </div>
+          )}
         </div>
-
-        {synthesisComplete && (
-          <button
-            onClick={handleDownloadAudio}
-            style={{
-              margin: '16px 0',
-              padding: '8px 16px',
-              backgroundColor: '#10b981',
-              border: 'none',
-              borderRadius: '6px',
-              color: 'white',
-              cursor: 'pointer',
-              fontSize: '14px',
-              alignSelf: 'flex-start'
-            }}
-          >
-            ⬇️ Download Audio
-          </button>
-        )}
-
-        {/* Text Input Area */}
-        <div style={{ 
+        
+        {/* Main content area for text display */}
+        <div style={{
           flex: 1,
+          display: 'flex',
+          flexDirection: 'column',
           backgroundColor: '#1a1e26',
           border: '1px solid #2d3748',
           borderRadius: '16px',
           padding: '24px',
-          display: 'flex',
-          flexDirection: 'column'
         }}>
           <div style={{ 
             display: 'flex', 
