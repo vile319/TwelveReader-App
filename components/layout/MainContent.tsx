@@ -1,7 +1,9 @@
-import type { FC } from 'react';
+import React, { type FC } from 'react';
 import AdSenseBanner from '../AdSenseBanner';
 import AudioPlayer from '../audio/AudioPlayer';
 import TextInputPanel from '../text/TextInputPanel';
+
+void React;
 
 const MainContent: FC = () => {
   return (

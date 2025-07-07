@@ -1,14 +1,22 @@
-import type { FC } from 'react';
+import React, { type FC } from 'react';
 import { useAppContext } from '../../contexts/AppContext';
 import AdSenseBanner from '../AdSenseBanner';
+void React;
 
 // Small helper – joins classes conditionally
 const cn = (...classes: (string | false | null | undefined)[]) => classes.filter(Boolean).join(' ');
+
+// Voice object coming from Kokoro hook
+interface Voice {
+  name: string;
+  label: string;
+}
 
 const Sidebar: FC = () => {
   const { state, actions, tts } = useAppContext();
 
   const isGenerateDisabled = !state.inputText.trim() || state.audio.isLoading;
+  const voices: Voice[] = tts.voices as Voice[];
 
   return (
     <div className="sidebar overflow-auto bg-slate-900 border-r border-slate-800 p-6 flex flex-col w-full md:w-80 md:fixed md:left-0 md:top-0 md:h-screen">
@@ -35,7 +43,7 @@ const Sidebar: FC = () => {
           onChange={(e) => actions.setSelectedVoice(e.target.value)}
           className="w-full p-3 rounded-lg bg-slate-700 border border-slate-600 text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
         >
-          {tts.voices.map((voice) => (
+          {voices.map((voice) => (
             <option key={voice.name} value={voice.name}>
               {voice.label}
             </option>

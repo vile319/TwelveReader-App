@@ -1,4 +1,4 @@
-import type { FC } from 'react';
+import React, { type FC } from 'react';
 import { AppProvider } from './contexts/AppContext';
 import Sidebar from './components/layout/Sidebar';
 import MainContent from './components/layout/MainContent';
@@ -7,6 +7,8 @@ import OnboardingModal from './components/modals/OnboardingModal';
 import HelpModal from './components/modals/HelpModal';
 import AdSensePopup from './components/AdSensePopup';
 import { useAppContext } from './contexts/AppContext';
+
+void React;
 
 const AppContent: FC = () => {
   const { state, actions } = useAppContext();
