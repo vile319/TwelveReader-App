@@ -147,8 +147,8 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true }: UseKokoroWebWorkerTt
   const completeAudioSourceRef = useRef<AudioBufferSourceNode | null>(null);
   const playbackStartTimeRef = useRef<number>(0);
   const playbackOffsetRef = useRef<number>(0);
-  const seekTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const progressIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const seekTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const progressIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   
   // New continuous audio buffer system
   const audioBufferRef = useRef<Float32Array[]>([]);
@@ -887,17 +887,17 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true }: UseKokoroWebWorkerTt
                 // Debug audio sample rate and scaling - avoid stack overflow with large arrays
         let peak = 0;
         let rmsSum = 0;
-        for (let j = 0; j < audioData.length; j++) {
-          const abs = Math.abs(audioData[j]);
+        for (let j = 0; j < audioData!.length; j++) {
+          const abs = Math.abs(audioData![j]);
           if (abs > peak) peak = abs;
-          rmsSum += audioData[j] * audioData[j];
+          rmsSum += audioData![j] * audioData![j];
         }
-        const rms = Math.sqrt(rmsSum / audioData.length);
+        const rms = Math.sqrt(rmsSum / audioData!.length);
         
         console.log(`🎵 Chunk ${i + 1} audio info:`, {
-          samples: audioData.length,
+          samples: audioData!.length,
           sampleRate: sampleRate,
-          duration: (audioData.length / sampleRate).toFixed(3) + 's',
+          duration: (audioData!.length / sampleRate).toFixed(3) + 's',
           peak: peak.toFixed(4),
           rms: rms.toFixed(4)
         });
@@ -905,17 +905,17 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true }: UseKokoroWebWorkerTt
         // Apply normalization if enabled
         audioData = normalizeAudioData(audioData!);
 
-        allAudioChunks.push(audioData);
-        totalSamples += audioData.length;
+        allAudioChunks.push(audioData!);
+        totalSamples += audioData!.length;
         
         // Add to streaming buffer for immediate playback
-        streamingAudioRef.current.push(audioData);
+        streamingAudioRef.current.push(audioData!);
         const currentStreamDuration = (totalSamples / sampleRate);
         setSynthesizedDuration(currentStreamDuration);
 
         // --- New: Use precise word timings if available ---
         if (audioObject.alignments) {
-          const chunkOffset = currentStreamDuration - (audioData.length / sampleRate);
+          const chunkOffset = currentStreamDuration - (audioData!.length / sampleRate);
           const alignedTimings = (audioObject.alignments as Alignment[]).map((alignment) => ({
             word: alignment.word,
             start: chunkOffset + alignment.start_time,
@@ -924,20 +924,20 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true }: UseKokoroWebWorkerTt
           
           if (alignedTimings.length > 0) {
             console.log(`📊 Received ${alignedTimings.length} precise word timings for chunk ${i + 1}.`);
-            setWordTimings(prev => [...prev, ...alignedTimings]);
+            setWordTimings((prev: Alignment[]) => [...prev, ...alignedTimings]);
           }
         } else {
           // Fallback to provisional timings if alignments are not available
-          const chunkDuration = audioData.length / sampleRate;
+          const chunkDuration = audioData!.length / sampleRate;
           const chunkOffset = currentStreamDuration - chunkDuration;
           const wordsInChunk = chunk.split(/\s+/).filter(w => w.length > 0);
           
           // Improved timing estimation based on word length
-          const totalChars = wordsInChunk.reduce((sum, word) => sum + word.length, 0);
+          const totalChars = wordsInChunk.reduce((sum: number, word: string) => sum + word.length, 0);
           const timePerChar = totalChars > 0 ? chunkDuration / totalChars : 0;
 
           let wordStart = chunkOffset;
-          const provisionalTimings = wordsInChunk.map((w) => {
+          const provisionalTimings = wordsInChunk.map((w: string) => {
             const wordDur = w.length * timePerChar + 0.05; // Base time + per-char time
             const timing = {
               word: w,
@@ -949,11 +949,11 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true }: UseKokoroWebWorkerTt
           });
 
           if (provisionalTimings.length) {
-            setWordTimings(prev => [...prev, ...provisionalTimings]);
+            setWordTimings((prev: Alignment[]) => [...prev, ...provisionalTimings]);
           }
         }
         
-        console.log(`✅ Chunk ${i + 1} processed: ${audioData.length} samples (${currentStreamDuration.toFixed(1)}s total)`);
+        console.log(`✅ Chunk ${i + 1} processed: ${audioData!.length} samples (${currentStreamDuration.toFixed(1)}s total)`);
 
         // Start streaming playback after first chunk
         if (i === 0) {
