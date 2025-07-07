@@ -1,6 +1,7 @@
 import React, { type FC } from 'react';
 import { useAppContext } from '../../contexts/AppContext';
 import AdSenseBanner from '../AdSenseBanner';
+import BuyMeACoffeeButton from '../BuyMeACoffeeButton';
 void React;
 
 // Small helper – joins classes conditionally
@@ -188,9 +189,13 @@ const Sidebar: FC = () => {
         </div>
       )}
       
-      {/* Sidebar Banner Ad */}
-      <div className="mt-auto">
-        <AdSenseBanner adSlot="5566778899" adFormat="rectangle" style={{ maxWidth: '280px', marginTop: '16px' }} />
+      {/* Donation Button */}
+      <div className="mt-auto flex flex-col items-center gap-4">
+        {/* TODO: Replace the link below with your Buy Me a Coffee page */}
+        <BuyMeACoffeeButton link="https://www.buymeacoffee.com/YOUR_USERNAME" style={{ maxWidth: '280px' }} />
+
+        {/* Sidebar Banner Ad */}
+        <AdSenseBanner adSlot="5566778899" adFormat="rectangle" style={{ maxWidth: '280px' }} />
       </div>
     </div>
   );

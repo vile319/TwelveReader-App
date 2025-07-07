@@ -13,3 +13,17 @@ root.render(
     <App />
   </React.StrictMode>
 );
+
+// Register service worker for model caching (once page loads)
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker
+      .register('/service-worker.js')
+      .then(() => {
+        console.log('🛟 Service worker registered – model files will be cached for offline use.');
+      })
+      .catch((err) => {
+        console.warn('⚠️ Service worker registration failed:', err);
+      });
+  });
+}
