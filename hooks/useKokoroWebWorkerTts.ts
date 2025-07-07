@@ -607,15 +607,13 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true }: UseKokoroWebWorkerTt
    }, [normalizeAudio]);
 
      // Detect if WebGPU is available and choose the best configuration
-   const detectWebGPU = useCallback(async (): Promise<{ device: 'webgpu' | 'wasm'; dtype: 'fp32' | 'q8' | 'fp16' | 'q4' }> => {
+   const detectWebGPU = useCallback(async (): Promise<{ device: 'webgpu' | 'wasm'; dtype: 'fp32' | 'q8' | 'fp16' }> => {
      const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 
      // Honour explicit WASM override first
      if (forceWasmMode) {
        console.log('🔧 Forcing WASM mode as requested.');
-       // Use q4 weights for lower memory footprint on mobile devices
-       const dtype = isMobile ? 'q4' : 'q8';
-       return { device: 'wasm', dtype };
+       return { device: 'wasm', dtype: 'q8' };
      }
 
      // Prefer WebGPU whenever it is available – including on modern mobile Safari (iOS 17+)
@@ -633,9 +631,8 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true }: UseKokoroWebWorkerTt
      }
 
      // Fallback path – CPU (WASM) back-end with quantised model to conserve memory
-     const fallbackDtype = isMobile ? 'q4' : 'q8';
-     console.log(`➡️ WebGPU not available or failed, using CPU (wasm) with ${fallbackDtype} model.`);
-     return { device: 'wasm', dtype: fallbackDtype };
+     console.log('➡️ WebGPU not available or failed, using CPU (wasm) with q8 model.');
+     return { device: 'wasm', dtype: 'q8' };
    }, [forceWasmMode]);
 
   // Initialize TTS model
