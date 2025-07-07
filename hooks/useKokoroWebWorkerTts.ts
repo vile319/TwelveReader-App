@@ -601,15 +601,114 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true }: UseKokoroWebWorkerTt
      return audioData;
    }, [normalizeAudio]);
 
-     // Detect if WebGPU is available and choose the best configuration
-   const detectWebGPU = useCallback(async (): Promise<{ device: 'webgpu' | 'wasm'; dtype: 'fp32' | 'q8' | 'fp16' }> => {
-     const isMobile = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+       // iOS detection for specific compatibility handling
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
 
-     // For mobile devices, default to wasm with q8 for stability and memory reasons
-     if (isMobile) {
-       console.log('📱 Mobile device detected. Forcing CPU mode (wasm) with q8 model.');
-       return { device: 'wasm', dtype: 'q8' };
-     }
+  // iOS Audio diagnostics and debugging
+  const diagnoseIOSAudio = useCallback(async () => {
+    if (!isIOS) return null;
+    
+    const diagnostics = {
+      userAgent: navigator.userAgent,
+      audioContextState: audioContextRef.current?.state,
+      audioContextSampleRate: audioContextRef.current?.sampleRate,
+      speechSynthesisAvailable: 'speechSynthesis' in window,
+      webAudioAvailable: 'AudioContext' in window || 'webkitAudioContext' in window,
+      memoryInfo: (performance as any).memory,
+      isIOS: true
+    };
+    
+    console.log('🔍 iOS Audio Diagnostics:', diagnostics);
+    
+    // Test audio context creation
+    try {
+      const testContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+      console.log('✅ AudioContext creation successful');
+      await testContext.close();
+    } catch (error) {
+      console.error('❌ AudioContext creation failed:', error);
+    }
+    
+    return diagnostics;
+  }, []);
+
+  // Web Speech API fallback for iOS
+  const speakWithWebSpeechAPI = useCallback(async (text: string, voice: string) => {
+    if (!('speechSynthesis' in window)) {
+      throw new Error('Web Speech API not available');
+    }
+
+    return new Promise<void>((resolve, reject) => {
+      const utterance = new SpeechSynthesisUtterance(text);
+      
+      // Map kokoro voice to system voice
+      const voices = speechSynthesis.getVoices();
+      let systemVoice = null;
+      
+      // Try to find a matching voice based on gender and language
+      if (voice.includes('f_') || voice.includes('female')) {
+        systemVoice = voices.find(v => 
+          v.lang.startsWith('en') && 
+          (v.name.toLowerCase().includes('female') || v.name.toLowerCase().includes('samantha'))
+        );
+      } else if (voice.includes('m_') || voice.includes('male')) {
+        systemVoice = voices.find(v => 
+          v.lang.startsWith('en') && 
+          (v.name.toLowerCase().includes('male') || v.name.toLowerCase().includes('daniel'))
+        );
+      }
+      
+      // Fallback to any English voice
+      if (!systemVoice) {
+        systemVoice = voices.find(v => v.lang.startsWith('en'));
+      }
+      
+      if (systemVoice) {
+        utterance.voice = systemVoice;
+      }
+      
+      utterance.rate = 1.0;
+      utterance.pitch = 1.0;
+      utterance.volume = 1.0;
+      
+      utterance.onend = () => {
+        console.log('✅ Web Speech API completed');
+        resolve();
+      };
+      
+      utterance.onerror = (e) => {
+        console.error('❌ Web Speech API error:', e);
+        reject(e);
+      };
+      
+      setIsPlaying(true);
+      speechSynthesis.speak(utterance);
+      
+      console.log(`🎤 Using Web Speech API fallback with voice: ${systemVoice?.name || 'default'}`);
+    });
+  }, []);
+
+  // Detect if WebGPU is available and choose the best configuration
+  const detectWebGPU = useCallback(async (): Promise<{ device: 'webgpu' | 'wasm'; dtype: 'fp32' | 'q8' | 'fp16' }> => {
+    const isMobile = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+
+    // For mobile devices, default to wasm with q8 for stability and memory reasons
+    if (isMobile) {
+      console.log('📱 Mobile device detected. Forcing CPU mode (wasm) with q8 model.');
+      
+      // Check available memory on iOS
+      const memoryInfo = (performance as any).memory;
+      if (memoryInfo) {
+        const availableMemory = memoryInfo.jsHeapSizeLimit - memoryInfo.usedJSHeapSize;
+        console.log('💾 Available memory:', Math.round(availableMemory / 1024 / 1024), 'MB');
+        
+        if (availableMemory < 100 * 1024 * 1024) { // Less than 100MB
+          console.log('⚠️ Low memory detected on iOS');
+        }
+      }
+      
+      return { device: 'wasm', dtype: 'q8' };
+    }
 
      // Respect the user's choice to force WASM mode
      if (forceWasmMode) {
@@ -743,6 +842,14 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true }: UseKokoroWebWorkerTt
     }
   }, [enabled, initializeTts]);
 
+  // Run iOS diagnostics on mount
+  useEffect(() => {
+    if (isIOS) {
+      console.log('🍎 iOS device detected - running compatibility diagnostics');
+      diagnoseIOSAudio();
+    }
+  }, [isIOS, diagnoseIOSAudio]);
+
   // Chunk text for better TTS processing
   const chunkText = useCallback((text: string, maxChunkSize: number = 2000): string[] => {
     if (text.length <= maxChunkSize) {
@@ -774,13 +881,27 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true }: UseKokoroWebWorkerTt
     return chunks.filter(chunk => chunk.length > 0);
   }, []);
 
-  // Generate speech
+  // Generate speech with iOS fallback
   const speak = useCallback(async (text: string, voice: string = 'af_bella', onProgress?: (progress: number) => void) => {
+    // iOS-specific: Try Web Speech API first if model loading failed
+    if (isIOS && (!isReady || !ttsRef.current)) {
+      console.log('🍎 iOS detected - trying Web Speech API fallback');
+      try {
+        await speakWithWebSpeechAPI(text, voice);
+        return;
+      } catch (error) {
+        console.warn('🍎 iOS Web Speech API fallback failed:', error);
+        // Continue to show the original error
+      }
+    }
+
     if (!isReady || !ttsRef.current) {
       console.warn('TTS not ready');
       onError({
         title: 'TTS Not Ready',
-        message: 'The TTS model is still loading. Please wait...'
+        message: isIOS 
+          ? 'TTS model failed to load on iOS. This is a known issue with iOS Safari. Please try refreshing the page or use a different browser.'
+          : 'The TTS model is still loading. Please wait...'
       });
       return;
     }
@@ -1037,9 +1158,23 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true }: UseKokoroWebWorkerTt
       console.error('Synthesis error:', error);
       setIsPlaying(false);
       currentSynthesisRef.current = null;
+      
+      // iOS fallback: Try Web Speech API if main synthesis fails
+      if (isIOS && (error.message.includes('memory') || error.message.includes('allocation'))) {
+        console.log('🍎 iOS synthesis failed with memory error - trying Web Speech API fallback');
+        try {
+          await speakWithWebSpeechAPI(text, voice);
+          return;
+        } catch (fallbackError) {
+          console.warn('🍎 iOS Web Speech API fallback also failed:', fallbackError);
+        }
+      }
+      
       onError({
         title: 'Synthesis Error',
-        message: `Failed to synthesize text: ${error.message}`
+        message: isIOS 
+          ? `Failed to synthesize text on iOS: ${error.message}. This is likely due to iOS Safari limitations with WebAssembly or Web Audio API.`
+          : `Failed to synthesize text: ${error.message}`
       });
     }
   }, [isReady, onError, chunkText]);
@@ -1484,7 +1619,11 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true }: UseKokoroWebWorkerTt
     synthesisComplete,
     // Utility: get combined audio buffer as WAV Blob
     getAudioBlob,
-    seek
+    seek,
+    // iOS-specific functionality
+    isIOS,
+    diagnoseIOSAudio,
+    speakWithWebSpeechAPI
   };
 };
 

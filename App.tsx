@@ -47,6 +47,10 @@ const App: React.FC = () => {
     getAudioBlob,
     isReady,
     seek,
+    // iOS-specific functionality
+    isIOS,
+    diagnoseIOSAudio,
+    speakWithWebSpeechAPI,
   } = useKokoroWebWorkerTts({
     onError: setError,
     enabled: modelAccepted
@@ -363,6 +367,28 @@ const App: React.FC = () => {
           {status}
         </div>
 
+        {/* iOS Compatibility Warning */}
+        {isIOS && (
+          <div style={{
+            backgroundColor: '#f59e0b',
+            color: '#1f2937',
+            padding: '12px',
+            borderRadius: '8px',
+            marginBottom: '24px',
+            fontSize: '12px',
+            fontWeight: '500'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+              <span>🍎</span>
+              <strong>iOS Safari Detected</strong>
+            </div>
+            <div style={{ lineHeight: '1.4' }}>
+              Due to iOS Safari limitations, advanced TTS features may fall back to system speech.
+              For best experience, try refreshing if audio fails.
+            </div>
+          </div>
+        )}
+
         {/* Voice Selection */}
         <div style={{ marginBottom: '24px' }}>
           <label style={{
@@ -522,6 +548,56 @@ const App: React.FC = () => {
         >
           📊 Check Cache
         </button>
+        
+        {/* iOS Diagnostics Button - only show on iOS */}
+        {isIOS && (
+          <button
+            onClick={async () => {
+              const diagnostics = await diagnoseIOSAudio();
+              let message = `🍎 iOS Compatibility Report:\n\n`;
+              message += `📱 Device: ${diagnostics?.userAgent?.includes('iPhone') ? 'iPhone' : 'iPad'}\n`;
+              message += `🎵 AudioContext: ${diagnostics?.audioContextState || 'Not created'}\n`;
+              message += `🗣️ Speech API: ${diagnostics?.speechSynthesisAvailable ? 'Available' : 'Not available'}\n`;
+              message += `🌐 WebAudio: ${diagnostics?.webAudioAvailable ? 'Available' : 'Not available'}\n`;
+              
+              if (diagnostics?.memoryInfo) {
+                const memMB = Math.round(diagnostics.memoryInfo.usedJSHeapSize / 1024 / 1024);
+                const limitMB = Math.round(diagnostics.memoryInfo.jsHeapSizeLimit / 1024 / 1024);
+                message += `💾 Memory: ${memMB}MB / ${limitMB}MB\n`;
+              }
+              
+              message += `\n💡 Try Web Speech API fallback?`;
+              
+              const tryFallback = confirm(message);
+              if (tryFallback && inputText.trim()) {
+                try {
+                  await speakWithWebSpeechAPI(inputText.trim(), selectedVoice);
+                } catch (error) {
+                  alert('Web Speech API test failed: ' + error.message);
+                }
+              }
+            }}
+            style={{
+              width: '100%',
+              padding: '8px',
+              borderRadius: '8px',
+              border: '1px solid #f59e0b',
+              backgroundColor: 'transparent',
+              color: '#f59e0b',
+              cursor: 'pointer',
+              fontSize: '12px',
+              fontWeight: '500',
+              marginBottom: '8px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '4px'
+            }}
+            title="Run iOS-specific audio diagnostics and test fallback"
+          >
+            🍎 iOS Diagnostics
+          </button>
+        )}
         
         {/* Debug Audio Quality Button */}
         <button
