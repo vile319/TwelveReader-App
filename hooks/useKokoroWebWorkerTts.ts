@@ -582,13 +582,13 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true }: UseKokoroWebWorkerTt
 
      // Function to toggle WASM mode
    const toggleForceWasm = useCallback(() => {
-     setForceWasmMode(prev => !prev);
+     setForceWasmMode((prev: boolean) => !prev);
      console.log('🔧 Force WASM mode:', !forceWasmMode);
    }, [forceWasmMode]);
 
    // Function to toggle audio normalization
    const toggleNormalizeAudio = useCallback(() => {
-     setNormalizeAudio(prev => !prev);
+     setNormalizeAudio((prev: boolean) => !prev);
      console.log('🔧 Audio normalization:', !normalizeAudio);
    }, [normalizeAudio]);
 
@@ -930,7 +930,7 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true }: UseKokoroWebWorkerTt
           // Fallback to provisional timings if alignments are not available
           const chunkDuration = audioData!.length / sampleRate;
           const chunkOffset = currentStreamDuration - chunkDuration;
-          const wordsInChunk = chunk.split(/\s+/).filter(w => w.length > 0);
+          const wordsInChunk = chunk.split(/\s+/).filter((w: string) => w.length > 0);
           
           // Improved timing estimation based on word length
           const totalChars = wordsInChunk.reduce((sum: number, word: string) => sum + word.length, 0);
