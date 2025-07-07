@@ -15,7 +15,7 @@
     "noEmit": true,
     "allowJs": true,
     "jsx": "react-jsx",
-    "types": ["react", "react-dom"],
+    "types": ["react", "react-dom", "node"],
 
     /* Linting */
     "strict": true,
