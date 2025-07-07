@@ -1,7 +1,7 @@
 import React, { type FC } from 'react';
 import { useAppContext } from '../../contexts/AppContext';
 import AdSenseBanner from '../AdSenseBanner';
-import BuyMeACoffeeButton from '../BuyMeACoffeeButton';
+import KoFiButton from '../KoFiButton';
 void React;
 
 // Small helper – joins classes conditionally
@@ -191,8 +191,8 @@ const Sidebar: FC = () => {
       
       {/* Donation Button */}
       <div className="mt-auto flex flex-col items-center gap-4">
-        {/* Provide username via env or prop. Remove placeholder link */}
-        <BuyMeACoffeeButton linkOrUsername="YOUR_USERNAME" style={{ maxWidth: '280px' }} />
+        {/* Ko-fi donation button */}
+        <KoFiButton username="Oronto" />
 
         {/* Sidebar Banner Ad */}
         <AdSenseBanner adSlot="5566778899" adFormat="rectangle" style={{ maxWidth: '280px' }} />
