@@ -601,27 +601,21 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true }: UseKokoroWebWorkerTt
 
      // Detect if WebGPU is available and choose the best configuration
    const detectWebGPU = useCallback(async (): Promise<{ device: 'webgpu' | 'wasm'; dtype: 'fp32' | 'q8' | 'fp16' }> => {
-     const isMobile = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+     const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 
-     // For mobile devices, default to wasm with q8 for stability and memory reasons
-     if (isMobile) {
-       console.log('📱 Mobile device detected. Forcing CPU mode (wasm) with q8 model.');
-       return { device: 'wasm', dtype: 'q8' };
-     }
-
-     // Respect the user's choice to force WASM mode
+     // Honour explicit WASM override first
      if (forceWasmMode) {
        console.log('🔧 Forcing WASM mode as requested.');
        return { device: 'wasm', dtype: 'q8' };
      }
-     
-     // Try to use WebGPU on desktop
+
+     // Prefer WebGPU whenever it is available – including on modern mobile Safari (iOS 17+)
      if (typeof navigator !== 'undefined' && (navigator as any).gpu) {
        try {
          const adapter = await (navigator as any).gpu.requestAdapter();
          if (adapter) {
-           console.log('✅ WebGPU available on desktop. Using stable fp32 model.');
-           // For WebGPU, only fp32 is consistently stable across devices.
+           console.log(`✅ WebGPU available on ${isMobile ? 'mobile' : 'desktop'}. Using stable fp32 model.`);
+           // fp32 is currently the most reliable across devices
            return { device: 'webgpu', dtype: 'fp32' };
          }
        } catch (e) {
@@ -629,7 +623,7 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true }: UseKokoroWebWorkerTt
        }
      }
 
-     // Default fallback for desktop without WebGPU
+     // Fallback path – CPU (WASM) back-end with quantised model to conserve memory
      console.log('➡️ WebGPU not available or failed, using CPU (wasm) with q8 model.');
      return { device: 'wasm', dtype: 'q8' };
    }, [forceWasmMode]);
@@ -1443,6 +1437,31 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true }: UseKokoroWebWorkerTt
     // Use the robust seekToTime function which handles all states
     seekToTime(time);
   }, [seekToTime]);
+
+  // NEW: Automatically unlock or create the AudioContext on first user interaction (needed for iOS Safari)
+  useEffect(() => {
+    const unlock = () => {
+      try {
+        if (!audioContextRef.current) {
+          audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+        }
+        if (audioContextRef.current.state === 'suspended') {
+          audioContextRef.current.resume();
+        }
+      } catch (e) {
+        console.warn('⚠️ Unable to unlock AudioContext:', e);
+      }
+      document.removeEventListener('touchend', unlock);
+      document.removeEventListener('click', unlock);
+    };
+    // Use once + passive to make sure the handler is lightweight
+    document.addEventListener('touchend', unlock, { once: true, passive: true });
+    document.addEventListener('click', unlock, { once: true, passive: true });
+    return () => {
+      document.removeEventListener('touchend', unlock);
+      document.removeEventListener('click', unlock);
+    };
+  }, []);
 
   return {
     speak,

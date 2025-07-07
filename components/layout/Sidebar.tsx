@@ -6,14 +6,7 @@ const Sidebar: React.FC = () => {
   const { state, actions, tts } = useAppContext();
 
   return (
-    <div className="sidebar" style={{
-      overflow: 'auto',
-      backgroundColor: '#1a1e26',
-      borderRight: '1px solid #2d3748',
-      padding: '24px',
-      display: 'flex',
-      flexDirection: 'column',
-    }}>
+    <div className="sidebar overflow-auto bg-slate-900 border-r border-slate-800 p-6 flex flex-col w-full md:w-80 md:fixed md:left-0 md:top-0 md:h-screen">
       {/* Logo */}
       <div style={{ marginBottom: '32px' }}>
         <h1 style={{ 
