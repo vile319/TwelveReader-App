@@ -21,13 +21,13 @@ interface ModelSelectorProps {
   onDtypeChange?: (dtype: 'fp32' | 'fp16' | 'q8' | 'q4' | 'q4f16') => void;
 }
 
-// Available models configuration with accurate sizes from Hugging Face
+// Available models configuration with accurate sizes from Hugging Face API
 const AVAILABLE_MODELS: ModelConfig[] = [
   {
     id: 'kokoro-82m-fp32',
     name: 'Kokoro 82M (FP32)',
     description: 'Full precision model with highest quality output. Best for GPU acceleration.',
-    size: '82MB',
+    size: '310MB',
     quality: 'high',
     url: 'onnx-community/Kokoro-82M-v1.0-ONNX',
     dtype: 'fp32',
@@ -38,7 +38,7 @@ const AVAILABLE_MODELS: ModelConfig[] = [
     id: 'kokoro-82m-fp16',
     name: 'Kokoro 82M (FP16)',
     description: 'Half precision model with good quality and smaller size.',
-    size: '41MB',
+    size: '156MB',
     quality: 'high',
     url: 'onnx-community/Kokoro-82M-v1.0-ONNX',
     dtype: 'fp16',
@@ -48,7 +48,7 @@ const AVAILABLE_MODELS: ModelConfig[] = [
     id: 'kokoro-82m-q8',
     name: 'Kokoro 82M (Q8)',
     description: '8-bit quantized model with balanced quality and performance.',
-    size: '45MB',
+    size: '82MB',
     quality: 'balanced',
     url: 'onnx-community/Kokoro-82M-v1.0-ONNX',
     dtype: 'q8',
@@ -58,7 +58,7 @@ const AVAILABLE_MODELS: ModelConfig[] = [
     id: 'kokoro-82m-q4',
     name: 'Kokoro 82M (Q4)',
     description: '4-bit quantized model for maximum speed and minimal memory usage.',
-    size: '22MB',
+    size: '291MB',
     quality: 'fast',
     url: 'onnx-community/Kokoro-82M-v1.0-ONNX',
     dtype: 'q4',
@@ -68,7 +68,7 @@ const AVAILABLE_MODELS: ModelConfig[] = [
     id: 'kokoro-82m-q4f16',
     name: 'Kokoro 82M (Q4F16)',
     description: '4-bit quantized with FP16 fallback for better quality than Q4.',
-    size: '22MB',
+    size: '147MB',
     quality: 'fast',
     url: 'onnx-community/Kokoro-82M-v1.0-ONNX',
     dtype: 'q4f16',

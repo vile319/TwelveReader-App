@@ -179,11 +179,11 @@ We welcome contributions! Please see our contributing guidelines for:
 The app now supports advanced model selection with multiple configurations:
 
 ### Available Models
-- **Kokoro 82M (FP32)** - 82MB - Highest quality, GPU optimized
-- **Kokoro 82M (FP16)** - 41MB - High quality, smaller size
-- **Kokoro 82M (Q8)** - 45MB - Balanced quality and performance
-- **Kokoro 82M (Q4)** - 22MB - Maximum speed, minimal memory
-- **Kokoro 82M (Q4F16)** - 22MB - Fast with better quality than Q4
+- **Kokoro 82M (FP32)** - 310MB - Highest quality, GPU optimized
+- **Kokoro 82M (FP16)** - 156MB - High quality, smaller size
+- **Kokoro 82M (Q8)** - 82MB - Balanced quality and performance
+- **Kokoro 82M (Q4)** - 291MB - Maximum speed, minimal memory
+- **Kokoro 82M (Q4F16)** - 147MB - Fast with better quality than Q4
 
 ### Device Selection
 - **GPU (WebGPU)** - Fastest processing when available
@@ -198,12 +198,12 @@ The app now supports advanced model selection with multiple configurations:
 - **Model caching** - Shows which models are already downloaded
 
 ### Model Sizes
-All model sizes are accurate and sourced from the official Hugging Face repository:
-- FP32: 82MB (full precision)
-- FP16: 41MB (half precision)
-- Q8: 45MB (8-bit quantized)
-- Q4: 22MB (4-bit quantized)
-- Q4F16: 22MB (4-bit with FP16 fallback)
+All model sizes are accurate and sourced from the official Hugging Face ONNX repository:
+- FP32: 310MB (full precision)
+- FP16: 156MB (half precision)
+- Q8: 82MB (8-bit quantized)
+- Q4: 291MB (4-bit quantized)
+- Q4F16: 147MB (4-bit with FP16 fallback)
 
 ---
 
