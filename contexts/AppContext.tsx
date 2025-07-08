@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, PropsWithChildren } from 'react';
 import useKokoroWebWorkerTts from '../hooks/useKokoroWebWorkerTts';
 import { AppContextType, AppState, AppError, SampleText } from '../types';
 
@@ -12,9 +12,7 @@ export const useAppContext = () => {
   return context;
 };
 
-interface AppProviderProps {
-  children: ReactNode;
-}
+type AppProviderProps = PropsWithChildren<{}>;
 
 // Sample texts for quick testing
 export const sampleTexts: SampleText[] = [
