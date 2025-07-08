@@ -41,6 +41,9 @@ export interface ModelState {
   modelAccepted: boolean;
   showModelWarning: boolean;
   normalizeAudio: boolean;
+  selectedModel: string;
+  autoSelect: boolean;
+  keepLocal: boolean;
 }
 
 export interface TextSet {
@@ -124,6 +127,11 @@ export interface AppContextType {
     
     // Voice actions
     setSelectedVoice: (voice: string) => void;
+    
+    // Model selection actions
+    setSelectedModel: (modelId: string) => void;
+    setAutoSelect: (enabled: boolean) => void;
+    setKeepLocal: (enabled: boolean) => void;
     
     // UI actions
     setError: (error: AppError | null) => void;

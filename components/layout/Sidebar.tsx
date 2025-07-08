@@ -2,6 +2,7 @@ import { FC, useState } from 'react';
 import { useAppContext } from '../../contexts/AppContext';
 import AdSenseBanner from '../AdSenseBanner';
 import KoFiButton from '../KoFiButton';
+import ModelSelector from '../ModelSelector';
 import { BRAND_NAME } from '../../utils/branding';
 
 // Small helper – joins classes conditionally
@@ -34,6 +35,15 @@ const Sidebar: FC = () => {
       {/* Status */}
       <div className="bg-slate-700 text-slate-200 text-sm rounded-lg p-3 mb-6">
         {state.model.status}
+      </div>
+
+      {/* Model Selection */}
+      <div className="mb-6">
+        <ModelSelector
+          selectedModel={state.model.selectedModel}
+          onModelChange={actions.setSelectedModel}
+          disabled={state.audio.isLoading}
+        />
       </div>
 
       {/* Voice Selection */}
