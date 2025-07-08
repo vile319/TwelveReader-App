@@ -120,6 +120,9 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
   };
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    // If audio is currently playing or a synthesis is in progress, stop it first
+    handleStopReading();
+
     const file = event.target.files?.[0];
     if (file && file.type === 'application/pdf') {
       setUploadedPDF(file);
@@ -134,6 +137,9 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     if (text.trim()) {
       setInputText(text);
       setError(null);
+      // Automatically start reading the newly extracted text
+      // This ensures a seamless flow: upload → extract → listen
+      handleStartReading();
     } else {
       setError({ title: 'PDF Error', message: 'Unable to extract text from this PDF. It might be a scanned PDF or password-protected.' });
     }
