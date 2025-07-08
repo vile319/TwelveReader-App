@@ -7,8 +7,9 @@ export interface ModelConfig {
   size: string;
   quality: 'fast' | 'balanced' | 'high';
   url: string;
-  dtype: 'fp32' | 'fp16' | 'q8' | 'q4' | 'q4f16';
+  dtype: 'fp32' | 'fp16' | 'q8' | 'q4' | 'q4f16' | 'uint8' | 'uint8f16';
   device: 'webgpu' | 'wasm' | 'cpu';
+  filename: string;
   isDefault?: boolean;
   isDownloaded?: boolean;
 }
@@ -18,61 +19,99 @@ interface ModelSelectorProps {
   onModelChange: (modelId: string) => void;
   disabled?: boolean;
   onDeviceChange?: (device: 'webgpu' | 'wasm' | 'cpu') => void;
-  onDtypeChange?: (dtype: 'fp32' | 'fp16' | 'q8' | 'q4' | 'q4f16') => void;
+  onDtypeChange?: (dtype: 'fp32' | 'fp16' | 'q8' | 'q4' | 'q4f16' | 'uint8' | 'uint8f16') => void;
 }
 
-// Available models configuration with accurate sizes from Hugging Face API
+// Available models configuration with accurate sizes and filenames from Hugging Face
 const AVAILABLE_MODELS: ModelConfig[] = [
   {
     id: 'kokoro-82m-fp32',
     name: 'Kokoro 82M (FP32)',
-    description: 'Full precision model with highest quality output. Best for GPU acceleration.',
+    description: 'Full precision model (model.onnx) - Highest quality, GPU recommended',
     size: '310MB',
     quality: 'high',
     url: 'onnx-community/Kokoro-82M-ONNX',
     dtype: 'fp32',
     device: 'webgpu',
+    filename: 'model.onnx',
     isDefault: true
   },
   {
     id: 'kokoro-82m-fp16',
     name: 'Kokoro 82M (FP16)',
-    description: 'Half precision model with good quality and smaller size.',
+    description: 'Half precision (model_fp16.onnx) - High quality, GPU recommended',
     size: '156MB',
     quality: 'high',
     url: 'onnx-community/Kokoro-82M-ONNX',
     dtype: 'fp16',
-    device: 'webgpu'
+    device: 'webgpu',
+    filename: 'model_fp16.onnx'
   },
   {
     id: 'kokoro-82m-q8',
     name: 'Kokoro 82M (Q8)',
-    description: '8-bit quantized model with balanced quality and performance.',
+    description: '8-bit quantized (model_q8f16.onnx) - Smallest, fastest for CPU/WASM',
     size: '82MB',
     quality: 'balanced',
     url: 'onnx-community/Kokoro-82M-ONNX',
     dtype: 'q8',
-    device: 'wasm'
+    device: 'wasm',
+    filename: 'model_q8f16.onnx'
+  },
+  {
+    id: 'kokoro-82m-q8-alt',
+    name: 'Kokoro 82M (Q8, alt)',
+    description: '8-bit quantized (model_quantized.onnx) - Alternate Q8, CPU/WASM',
+    size: '88MB',
+    quality: 'balanced',
+    url: 'onnx-community/Kokoro-82M-ONNX',
+    dtype: 'q8',
+    device: 'wasm',
+    filename: 'model_quantized.onnx'
   },
   {
     id: 'kokoro-82m-q4',
     name: 'Kokoro 82M (Q4)',
-    description: '4-bit quantized model for maximum speed and minimal memory usage.',
+    description: '4-bit quantized (model_q4.onnx) - Quantized, CPU/WASM',
     size: '290MB',
     quality: 'fast',
     url: 'onnx-community/Kokoro-82M-ONNX',
     dtype: 'q4',
-    device: 'wasm'
+    device: 'wasm',
+    filename: 'model_q4.onnx'
   },
   {
     id: 'kokoro-82m-q4f16',
     name: 'Kokoro 82M (Q4F16)',
-    description: '4-bit quantized with FP16 fallback for better quality than Q4.',
+    description: '4-bit quantized with FP16 fallback (model_q4f16.onnx)',
     size: '147MB',
     quality: 'fast',
     url: 'onnx-community/Kokoro-82M-ONNX',
     dtype: 'q4f16',
-    device: 'wasm'
+    device: 'wasm',
+    filename: 'model_q4f16.onnx'
+  },
+  {
+    id: 'kokoro-82m-uint8',
+    name: 'Kokoro 82M (UINT8)',
+    description: 'Extra quantized (model_uint8.onnx) - CPU/WASM',
+    size: '169MB',
+    quality: 'fast',
+    url: 'onnx-community/Kokoro-82M-ONNX',
+    dtype: 'uint8',
+    device: 'wasm',
+    filename: 'model_uint8.onnx'
+  },
+  {
+    id: 'kokoro-82m-uint8f16',
+    name: 'Kokoro 82M (UINT8F16)',
+    description: 'Extra quantized (model_uint8f16.onnx) - CPU/WASM',
+    size: '109MB',
+    quality: 'fast',
+    url: 'onnx-community/Kokoro-82M-ONNX',
+    dtype: 'uint8f16',
+    device: 'wasm',
+    filename: 'model_uint8f16.onnx'
   }
 ];
 

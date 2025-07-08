@@ -36,7 +36,7 @@ interface UseKokoroWebWorkerTtsProps {
   enabled?: boolean; // if false, delay model initialization
   selectedModel?: string; // New: selected model ID
   preferredDevice?: 'webgpu' | 'wasm' | 'cpu'; // New: preferred device
-  preferredDtype?: 'fp32' | 'fp16' | 'q8' | 'q4' | 'q4f16'; // New: preferred dtype
+  preferredDtype?: 'fp32' | 'fp16' | 'q8' | 'q4' | 'q4f16' | 'uint8' | 'uint8f16'; // New: preferred dtype
 }
 
 export interface AudioChunk {
@@ -623,7 +623,7 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
    }, [normalizeAudio]);
 
        // Detect if WebGPU is available and choose the best configuration
-  const detectWebGPU = useCallback(async (): Promise<{ device: 'webgpu' | 'wasm' | 'cpu'; dtype: 'fp32' | 'fp16' | 'q8' | 'q4' | 'q4f16' }> => {
+  const detectWebGPU = useCallback(async (): Promise<{ device: 'webgpu' | 'wasm' | 'cpu'; dtype: 'fp32' | 'fp16' | 'q8' | 'q4' | 'q4f16' | 'uint8' | 'uint8f16' }> => {
     const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 
     // Honour explicit WASM override first
@@ -645,15 +645,15 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
               return { device: preferredDevice, dtype: preferredDtype };
             } else {
               console.warn('⚠️ WebGPU requested but not available, falling back to WASM');
-              return { device: 'wasm', dtype: preferredDtype === 'fp32' || preferredDtype === 'fp16' ? 'q8' : preferredDtype };
+              return { device: 'wasm', dtype: preferredDtype };
             }
           } catch (e) {
             console.warn('⚠️ WebGPU detection failed:', e);
-            return { device: 'wasm', dtype: preferredDtype === 'fp32' || preferredDtype === 'fp16' ? 'q8' : preferredDtype };
+            return { device: 'wasm', dtype: preferredDtype };
           }
         } else {
           console.warn('⚠️ WebGPU requested but not supported, falling back to WASM');
-          return { device: 'wasm', dtype: preferredDtype === 'fp32' || preferredDtype === 'fp16' ? 'q8' : preferredDtype };
+          return { device: 'wasm', dtype: preferredDtype };
         }
       }
       
