@@ -42,6 +42,8 @@ export interface ModelState {
   showModelWarning: boolean;
   normalizeAudio: boolean;
   selectedModel: string;
+  preferredDevice: 'webgpu' | 'wasm' | 'cpu';
+  preferredDtype: 'fp32' | 'fp16' | 'q8' | 'q4' | 'q4f16';
   autoSelect: boolean;
   keepLocal: boolean;
 }
@@ -130,6 +132,8 @@ export interface AppContextType {
     
     // Model selection actions
     setSelectedModel: (modelId: string) => void;
+    setPreferredDevice: (device: 'webgpu' | 'wasm' | 'cpu') => void;
+    setPreferredDtype: (dtype: 'fp32' | 'fp16' | 'q8' | 'q4' | 'q4f16') => void;
     setAutoSelect: (enabled: boolean) => void;
     setKeepLocal: (enabled: boolean) => void;
     

@@ -54,7 +54,9 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
   const [modelAccepted, setModelAccepted] = useState(false);
   
   // Model selection state
-  const [selectedModel, setSelectedModel] = useState('kokoro-82m');
+  const [selectedModel, setSelectedModel] = useState('kokoro-82m-fp32');
+  const [preferredDevice, setPreferredDevice] = useState<'webgpu' | 'wasm' | 'cpu'>('webgpu');
+  const [preferredDtype, setPreferredDtype] = useState<'fp32' | 'fp16' | 'q8' | 'q4' | 'q4f16'>('fp32');
   const [autoSelect, setAutoSelect] = useState(true);
   const [keepLocal, setKeepLocal] = useState(true);
 
@@ -107,7 +109,10 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
   // Initialize TTS hook
   const tts = useKokoroWebWorkerTts({
     onError: setError,
-    enabled: modelAccepted
+    enabled: modelAccepted,
+    selectedModel,
+    preferredDevice,
+    preferredDtype
   });
 
   // Action handlers
@@ -245,6 +250,14 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     if (!tts.canScrub) return;
     console.log(`🖱️ Word clicked, seeking to: ${time.toFixed(2)}s`);
     tts.seekToTime(time);
+  };
+
+  const handleDeviceChange = (device: 'webgpu' | 'wasm' | 'cpu') => {
+    setPreferredDevice(device);
+  };
+
+  const handleDtypeChange = (dtype: 'fp32' | 'fp16' | 'q8' | 'q4' | 'q4f16') => {
+    setPreferredDtype(dtype);
   };
 
   const handleCloseOnboarding = () => {
@@ -433,6 +446,8 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       showModelWarning,
       normalizeAudio: tts.normalizeAudio,
       selectedModel,
+      preferredDevice,
+      preferredDtype,
       autoSelect,
       keepLocal,
     },
@@ -471,6 +486,8 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       handlePDFError,
       setSelectedVoice,
       setSelectedModel,
+      setPreferredDevice: handleDeviceChange,
+      setPreferredDtype: handleDtypeChange,
       setAutoSelect,
       setKeepLocal,
       setError,
