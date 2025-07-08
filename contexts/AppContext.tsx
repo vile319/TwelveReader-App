@@ -12,7 +12,8 @@ export const useAppContext = () => {
   return context;
 };
 
-type AppProviderProps = PropsWithChildren<Record<string, never>>;
+/* eslint-disable @typescript-eslint/no-empty-object-type */
+type AppProviderProps = PropsWithChildren<{}>;
 
 // Sample texts for quick testing
 export const sampleTexts: SampleText[] = [
