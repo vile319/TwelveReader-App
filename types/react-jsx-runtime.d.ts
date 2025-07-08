@@ -18,3 +18,23 @@ declare module 'react/jsx-runtime' {
   export function jsxs(type: React.ElementType, props: any, key?: React.Key): React.ReactElement;
   export const Fragment: typeof React.Fragment;
 }
+
+/*
+  Development build variant – used by React in development mode for better debugging.
+  We forward to the same helpers because for type-checking purposes the signatures are identical.
+*/
+
+declare module 'react/jsx-dev-runtime' {
+  import * as React from 'react';
+
+  export function jsxDEV(
+    type: React.ElementType,
+    props: any,
+    key: React.Key | undefined,
+    isStaticChildren: boolean,
+    source: { fileName: string; lineNumber: number; columnNumber: number },
+    self: any
+  ): React.ReactElement;
+
+  export { jsx, jsxs, Fragment } from 'react/jsx-runtime';
+}
