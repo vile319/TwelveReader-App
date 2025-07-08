@@ -1,4 +1,6 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
+// Touch the default import to avoid TS6133 (React might still be needed by JSX in future refactor)
+void React;
 import { KokoroTTS } from 'kokoro-js';
 import { AppError } from '../types';
 
