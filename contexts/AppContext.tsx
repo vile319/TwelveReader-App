@@ -52,6 +52,11 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
   // Model download consent
   const [showModelWarning, setShowModelWarning] = useState(false);
   const [modelAccepted, setModelAccepted] = useState(false);
+  
+  // Model selection state
+  const [selectedModel, setSelectedModel] = useState('kokoro-82m');
+  const [autoSelect, setAutoSelect] = useState(true);
+  const [keepLocal, setKeepLocal] = useState(true);
 
   // Store pending read request during model download
   const [pendingRead, setPendingRead] = useState<{ text: string; voice: string } | null>(null);
@@ -427,6 +432,9 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       modelAccepted,
       showModelWarning,
       normalizeAudio: tts.normalizeAudio,
+      selectedModel,
+      autoSelect,
+      keepLocal,
     },
     selectedVoice,
     error,
@@ -462,6 +470,9 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       handlePDFTextExtracted,
       handlePDFError,
       setSelectedVoice,
+      setSelectedModel,
+      setAutoSelect,
+      setKeepLocal,
       setError,
       setIsSeekingHover,
       setHoverTime,
