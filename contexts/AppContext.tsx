@@ -12,7 +12,7 @@ export const useAppContext = () => {
   return context;
 };
 
-type AppProviderProps = PropsWithChildren<{}>;
+type AppProviderProps = PropsWithChildren<Record<string, never>>;
 
 // Sample texts for quick testing
 export const sampleTexts: SampleText[] = [

@@ -1,4 +1,5 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
+/* eslint-disable @typescript-eslint/no-unused-vars */
 // Touch the default import to avoid TS6133 (React might still be needed by JSX in future refactor)
 void React;
 import { KokoroTTS } from 'kokoro-js';
@@ -275,8 +276,8 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true }: UseKokoroWebWorkerTt
       }
       
       // Calculate which chunk to start from
-      let samplesPerSecond = sampleRateRef.current;
-      let targetSample = Math.floor(startTime * samplesPerSecond);
+      const samplesPerSecond = sampleRateRef.current;
+      const targetSample = Math.floor(startTime * samplesPerSecond);
       let currentSample = 0;
       let chunkIndex = 0;
       
@@ -300,7 +301,7 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true }: UseKokoroWebWorkerTt
            const elapsed = audioContextRef.current.currentTime - streamingStartTimeRef.current;
            // Calculate max time from streaming audio length
            const totalStreamingSamples = streamingAudioRef.current.reduce((sum: number, chunk: Float32Array) => sum + chunk.length, 0);
-           const maxStreamTime = totalStreamingSamples / sampleRateRef.current;
+           const maxStreamTime = totalStreamingSamples / samplesPerSecond;
            const currentPos = Math.max(0, Math.min(elapsed, maxStreamTime));
            setCurrentTime(currentPos);
            
