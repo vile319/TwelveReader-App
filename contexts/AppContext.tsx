@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, PropsWithChildren } from 'react';
 import useKokoroWebWorkerTts from '../hooks/useKokoroWebWorkerTts';
 import { AppContextType, AppState, AppError, SampleText } from '../types';
 
@@ -12,9 +12,8 @@ export const useAppContext = () => {
   return context;
 };
 
-interface AppProviderProps {
-  children: ReactNode;
-}
+/* eslint-disable @typescript-eslint/no-empty-object-type */
+type AppProviderProps = PropsWithChildren<{}>;
 
 // Sample texts for quick testing
 export const sampleTexts: SampleText[] = [
@@ -119,7 +118,25 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     setCurrentSentence('');
   };
 
+  // --- New: Reset playback when input text changes directly ---
+  const updateInputText = (text: string) => {
+    // Stop any ongoing synthesis or playback to avoid conflicts
+    handleStopReading();
+
+    // Clear any previously uploaded PDF context
+    setUploadedPDF(null);
+
+    // Update the input text normally
+    setInputText(text);
+
+    // Reset error state (if any)
+    setError(null);
+  };
+
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    // If audio is currently playing or a synthesis is in progress, stop it first
+    handleStopReading();
+
     const file = event.target.files?.[0];
     if (file && file.type === 'application/pdf') {
       setUploadedPDF(file);
@@ -134,6 +151,9 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     if (text.trim()) {
       setInputText(text);
       setError(null);
+      // Automatically start reading the newly extracted text
+      // This ensures a seamless flow: upload → extract → listen
+      handleStartReading();
     } else {
       setError({ title: 'PDF Error', message: 'Unable to extract text from this PDF. It might be a scanned PDF or password-protected.' });
     }
@@ -250,7 +270,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
   const contextValue: AppContextType = {
     state,
     actions: {
-      setInputText,
+      setInputText: updateInputText,
       setUploadedPDF,
       setIsExtractingPDF,
       handleStartReading,
