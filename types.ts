@@ -30,6 +30,7 @@ export interface AudioState {
   synthesisComplete: boolean;
   wordTimings: WordTiming[];
   currentWordIndex: number;
+  playbackRate: number;
 }
 
 export interface ModelState {
@@ -123,6 +124,7 @@ export interface AppContextType {
     skipForward: () => void;
     skipBackward: () => void;
     getAudioBlob: () => Blob | null;
+    setPlaybackRate: (rate: number) => void;
   };
   
   // TTS hook data
@@ -151,5 +153,6 @@ export interface AppContextType {
     synthesisComplete: boolean;
     getAudioBlob: () => Blob | null;
     isReady: boolean;
+    setPlaybackRate: (rate: number) => void;
   };
 }
