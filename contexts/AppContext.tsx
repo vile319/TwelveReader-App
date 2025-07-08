@@ -1,6 +1,8 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import useKokoroWebWorkerTts from '../hooks/useKokoroWebWorkerTts';
-import { AppContextType, AppState, AppError, SampleText } from '../types';
+import { BRAND_NAME } from '../utils/branding';
+import { AppContextType, AppState, AppError, SampleText, TextSet } from '../types';
+import { driveHelpers } from '../utils/googleDrive';
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
@@ -60,10 +62,38 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
   const [isDragging, setIsDragging] = useState(false);
 
   // Modal states
+  const ONBOARDING_KEY = `${BRAND_NAME.toLowerCase()}-onboarding-completed`;
+  const TEXT_SETS_KEY = `${BRAND_NAME.toLowerCase()}-text-sets`;
+  const PROGRESS_KEY = `${BRAND_NAME.toLowerCase()}-progress`;
+
   const [showOnboarding, setShowOnboarding] = useState(() => {
-    // Show onboarding for first-time users
-    return !localStorage.getItem('twelvereader-onboarding-completed');
+    // Show onboarding for first-time users (also respect old key for smooth migration)
+    return !localStorage.getItem(ONBOARDING_KEY) && !localStorage.getItem('twelvereader-onboarding-completed');
   });
+
+  // Saved text sets (library)
+  const [savedTextSets, setSavedTextSets] = useState<TextSet[]>(() => {
+    try {
+      const raw = localStorage.getItem(TEXT_SETS_KEY);
+      if (raw) return JSON.parse(raw) as TextSet[];
+    } catch {}
+    return [];
+  });
+
+  // Which set is currently loaded
+  const [currentSetId, setCurrentSetId] = useState<string | null>(null);
+
+  // Reading progress map { setId: { audioTime: number; scrollTop: number } }
+  const [readingProgress, setReadingProgress] = useState<Record<string, { audioTime: number; scrollTop: number }>>(() => {
+    try {
+      const raw = localStorage.getItem(PROGRESS_KEY);
+      if (raw) return JSON.parse(raw) as Record<string, { audioTime: number; scrollTop: number }>;
+    } catch {}
+    return {};
+  });
+
+  // Google Drive linked flag (stub)
+  const [googleDriveLinked, setGoogleDriveLinked] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
 
   // Initialize TTS hook
@@ -188,7 +218,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'twelve_reader_audio.wav';
+    a.download = `${BRAND_NAME.toLowerCase()}_audio.wav`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -201,7 +231,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
 
   const handleCloseOnboarding = () => {
     setShowOnboarding(false);
-    localStorage.setItem('twelvereader-onboarding-completed', 'true');
+    localStorage.setItem(ONBOARDING_KEY, 'true');
   };
 
   const handleShowOnboarding = () => {
@@ -233,6 +263,133 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       })();
     }
   }, [tts.isReady, pendingRead, tts.speak]);
+
+  // -------- Library actions --------
+  const saveCurrentTextSet = (title?: string) => {
+    const cleaned = inputText.trim();
+    if (!cleaned) {
+      alert('Nothing to save. Please enter or load some text first.');
+      return;
+    }
+    const finalTitle = title || prompt('Enter a title for this text:', 'Untitled') || 'Untitled';
+    const newSet: TextSet = {
+      id: crypto.randomUUID(),
+      title: finalTitle,
+      text: cleaned,
+      lastPosition: 0,
+    };
+    // Check storage limit (~4.5MB)
+    try {
+      const prospective = JSON.stringify([...savedTextSets, newSet]);
+      const bytes = new Blob([prospective]).size;
+      if (bytes > 4.5 * 1024 * 1024) {
+        alert('Cannot save: local storage limit exceeded. Please delete existing items or use Google Drive sync.');
+        return;
+      }
+    } catch {}
+    setSavedTextSets((prev: TextSet[]) => [...prev, newSet]);
+    setCurrentSetId(newSet.id);
+  };
+
+  const loadTextSet = (id: string) => {
+    const set = savedTextSets.find((s: TextSet) => s.id === id);
+    if (!set) return;
+    updateInputText(set.text);
+    setCurrentSetId(id);
+    // If we have stored progress, seek after generation is ready
+    const prog = readingProgress[id];
+    if (prog?.audioTime && tts.canScrub) {
+      tts.seekToTime(prog.audioTime);
+    }
+  };
+
+  const deleteTextSet = (id: string) => {
+    if (!confirm('Delete this saved text permanently?')) return;
+    setSavedTextSets((prev: TextSet[]) => prev.filter((s: TextSet) => s.id !== id));
+    // Clear progress
+    setReadingProgress((prev: Record<string, { audioTime: number; scrollTop: number }>) => {
+      const copy = { ...prev } as Record<string, { audioTime: number; scrollTop: number }>;
+      delete copy[id];
+      return copy;
+    });
+    if (currentSetId === id) {
+      setCurrentSetId(null);
+      updateInputText('');
+    }
+  };
+
+  // -------- Cloud sync (Google Drive) --------
+  const linkGoogleDrive = async () => {
+    try {
+      await driveHelpers.signIn();
+      setGoogleDriveLinked(true);
+      const remoteSets = await driveHelpers.fetchTextSets();
+      if (remoteSets && remoteSets.length > 0) {
+        // Merge unique sets (by id)
+        setSavedTextSets((prev: TextSet[]) => {
+          const merged = [...prev];
+          remoteSets.forEach((r: TextSet) => {
+            if (!merged.find((s) => s.id === r.id)) merged.push(r);
+          });
+          return merged;
+        });
+      }
+      alert('Google Drive linked! Your library will now sync.');
+    } catch (err) {
+      console.error(err);
+      alert('Failed to link Google Drive. See console for details.');
+    }
+  };
+
+  // Sync to Drive whenever savedTextSets change
+  useEffect(() => {
+    (async () => {
+      if (!googleDriveLinked) return;
+      if (!driveHelpers.isSignedIn()) return;
+      try {
+        await driveHelpers.uploadTextSets(savedTextSets);
+      } catch (e) {
+        console.warn('Drive sync failed', e);
+      }
+    })();
+  }, [savedTextSets, googleDriveLinked]);
+
+  // Persist saved text sets whenever they change
+  useEffect(() => {
+    localStorage.setItem(TEXT_SETS_KEY, JSON.stringify(savedTextSets));
+  }, [savedTextSets]);
+
+  // Persist reading progress whenever it changes
+  useEffect(() => {
+    localStorage.setItem(PROGRESS_KEY, JSON.stringify(readingProgress));
+  }, [readingProgress]);
+
+  // Track playback progress for current set
+  useEffect(() => {
+    if (!currentSetId || !tts.canScrub) return;
+    const handle = setTimeout(() => {
+      setReadingProgress((prev: Record<string, { audioTime: number; scrollTop: number }>) => ({
+        ...prev,
+        [currentSetId]: {
+          audioTime: tts.currentTime,
+          scrollTop: prev[currentSetId]?.scrollTop || 0,
+        },
+      }));
+    }, 1000);
+    return () => clearTimeout(handle);
+  }, [tts.currentTime, currentSetId, tts.canScrub]);
+
+  // --- Scroll progress update ---
+  const updateScrollPosition = (scrollTop: number) => {
+    if (!currentSetId) return;
+    setReadingProgress((prev: Record<string, { audioTime: number; scrollTop: number }>) => ({
+      ...prev,
+      [currentSetId]: {
+        audioTime: prev[currentSetId]?.audioTime || 0,
+        scrollTop,
+      },
+    }));
+  };
 
   // Aggregate state
   const state: AppState = {
@@ -267,6 +424,10 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     pendingRead,
     showOnboarding,
     showHelp,
+    savedTextSets,
+    currentSetId,
+    googleDriveLinked,
+    readingProgress,
   };
 
   // Context value
@@ -306,6 +467,13 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       skipBackward: tts.skipBackward,
       getAudioBlob: tts.getAudioBlob,
       setPlaybackRate: tts.setPlaybackRate,
+      // Library
+      saveCurrentTextSet,
+      loadTextSet,
+      deleteTextSet,
+      // Cloud Sync
+      linkGoogleDrive,
+      updateScrollPosition,
     },
     tts,
   };

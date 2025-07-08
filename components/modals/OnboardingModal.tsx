@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { BRAND_NAME } from '../../utils/branding';
 
 interface OnboardingModalProps {
   isOpen: boolean;
@@ -10,7 +11,7 @@ const OnboardingModal: React.FC<OnboardingModalProps> = ({ isOpen, onClose }) =>
 
   const steps = [
     {
-      title: "Welcome to TwelveReader",
+      title: `Welcome to ${BRAND_NAME}`,
       icon: "🎉",
       content: (
         <div>
@@ -119,7 +120,7 @@ const OnboardingModal: React.FC<OnboardingModalProps> = ({ isOpen, onClose }) =>
       content: (
         <div>
           <p style={{ fontSize: '16px', lineHeight: '1.6', marginBottom: '16px' }}>
-            TwelveReader offers advanced audio features:
+            {BRAND_NAME} offers advanced audio features:
           </p>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
@@ -294,12 +295,12 @@ const OnboardingModal: React.FC<OnboardingModalProps> = ({ isOpen, onClose }) =>
               opacity: isFirstStep ? 0.5 : 1,
               transition: 'all 0.2s'
             }}
-            onMouseOver={(e) => {
+            onMouseOver={(e: React.MouseEvent<HTMLButtonElement>) => {
               if (!isFirstStep) {
                 e.currentTarget.style.backgroundColor = '#2d3748';
               }
             }}
-            onMouseOut={(e) => {
+            onMouseOut={(e: React.MouseEvent<HTMLButtonElement>) => {
               if (!isFirstStep) {
                 e.currentTarget.style.backgroundColor = 'transparent';
               }
@@ -327,10 +328,10 @@ const OnboardingModal: React.FC<OnboardingModalProps> = ({ isOpen, onClose }) =>
               fontWeight: '600',
               transition: 'all 0.2s'
             }}
-            onMouseOver={(e) => {
+            onMouseOver={(e: React.MouseEvent<HTMLButtonElement>) => {
               e.currentTarget.style.backgroundColor = '#357abd';
             }}
-            onMouseOut={(e) => {
+            onMouseOut={(e: React.MouseEvent<HTMLButtonElement>) => {
               e.currentTarget.style.backgroundColor = '#4a90e2';
             }}
           >

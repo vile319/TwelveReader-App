@@ -1,3 +1,4 @@
+import type React from 'react';
 import { type FC } from 'react';
 import { useAppContext } from '../../contexts/AppContext';
 import { cn } from '../../utils/cn';
@@ -59,7 +60,7 @@ const AudioPlayer: FC = () => {
           'w-full h-3 bg-slate-700 rounded-md relative overflow-hidden',
           state.audio.canScrub ? 'cursor-pointer' : 'cursor-not-allowed'
         )}
-        onMouseMove={(e) => {
+        onMouseMove={(e: React.MouseEvent<HTMLDivElement>) => {
           if (!state.audio.canScrub) return;
           const rect = e.currentTarget.getBoundingClientRect();
           const hoverPosition = (e.clientX - rect.left) / rect.width;
@@ -70,7 +71,7 @@ const AudioPlayer: FC = () => {
           if (!state.audio.canScrub) return;
           actions.setIsSeekingHover(false);
         }}
-        onMouseDown={(e) => {
+        onMouseDown={(e: React.MouseEvent<HTMLDivElement>) => {
           if (!state.audio.canScrub) return;
           actions.setIsDragging(true);
           const rect = e.currentTarget.getBoundingClientRect();

@@ -2,6 +2,7 @@ import { FC, useState } from 'react';
 import { useAppContext } from '../../contexts/AppContext';
 import AdSenseBanner from '../AdSenseBanner';
 import KoFiButton from '../KoFiButton';
+import { BRAND_NAME } from '../../utils/branding';
 
 // Small helper – joins classes conditionally
 const cn = (...classes: (string | false | null | undefined)[]) => classes.filter(Boolean).join(' ');
@@ -25,7 +26,7 @@ const Sidebar: FC = () => {
       {/* Logo */}
       <div className="mb-8">
         <h1 className="text-2xl font-bold mb-1 bg-gradient-to-r from-indigo-400 to-purple-500 bg-clip-text text-transparent">
-          TwelveReader
+          {BRAND_NAME}
         </h1>
         <p className="text-sm text-gray-400 m-0">AI-powered reading</p>
       </div>
@@ -160,6 +161,14 @@ const Sidebar: FC = () => {
               )}
             >
               {state.model.normalizeAudio ? '✅' : '📢'} Audio Fix: {state.model.normalizeAudio ? 'ON' : 'OFF'}
+            </button>
+
+            {/* Google Drive Sync */}
+            <button
+              onClick={actions.linkGoogleDrive}
+              className="w-full py-2 rounded-lg border border-sky-500 text-sky-500 text-xs font-medium flex items-center justify-center gap-1 hover:bg-sky-500/10 transition-colors"
+            >
+              {state.googleDriveLinked ? '☁️ Google Drive: Linked' : '☁️ Link Google Drive'}
             </button>
           </div>
         )}

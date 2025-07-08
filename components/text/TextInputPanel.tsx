@@ -1,15 +1,33 @@
-import { type FC, type ChangeEvent } from 'react';
+import React, { type FC, type ChangeEvent, useRef, useEffect } from 'react';
 import { useAppContext, sampleTexts } from '../../contexts/AppContext';
 import HighlightedText from '../HighlightedText';
 import PDFReader from '../PDFReader';
 import { cn } from '../../utils/cn';
+import { TextSet } from '../../types';
 
 const TextInputPanel: FC = () => {
   const { state, actions } = useAppContext();
 
+  const contentRef = useRef<HTMLDivElement>(null);
+
+  // Restore scroll on load of set
+  useEffect(() => {
+    if (!contentRef.current) return;
+    const setId = state.currentSetId;
+    if (!setId) return;
+    const prog = state.readingProgress[setId];
+    if (prog && typeof prog.scrollTop === 'number') {
+      contentRef.current.scrollTop = prog.scrollTop;
+    }
+  }, [state.currentSetId]);
+
   const renderContent = () => {
     return (
-      <div className="flex-1 bg-slate-800 border border-slate-700 rounded-lg p-5 min-h-[200px] overflow-auto">
+      <div
+        ref={contentRef}
+        onScroll={(e: React.UIEvent<HTMLDivElement>) => actions.updateScrollPosition((e.currentTarget).scrollTop)}
+        className="flex-1 bg-slate-800 border border-slate-700 rounded-lg p-5 min-h-[200px] overflow-auto"
+      >
         {state.inputText.length > 0 ? (
           <HighlightedText 
             text={state.inputText} 
@@ -33,10 +51,22 @@ const TextInputPanel: FC = () => {
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-lg font-semibold text-slate-200 m-0">Text Input</h2>
-        <div className="text-sm text-slate-400 flex items-center gap-2">
-          <span>{state.inputText.length.toLocaleString()} characters</span>
-          {state.inputText.length > 0 && (
-            <span className="text-xs px-2 py-0.5 rounded bg-blue-500/20 text-blue-400 font-medium">Ready</span>
+        <div className="flex items-center gap-3">
+          <div className="text-sm text-slate-400 flex items-center gap-2">
+            <span>{state.inputText.length.toLocaleString()} characters</span>
+            {state.inputText.length > 0 && (
+              <span className="text-xs px-2 py-0.5 rounded bg-blue-500/20 text-blue-400 font-medium">Ready</span>
+            )}
+          </div>
+          {/* Save Button */}
+          {state.inputText.trim().length > 0 && (
+            <button
+              onClick={() => actions.saveCurrentTextSet()}
+              title="Save this text for later"
+              className="px-3 py-1.5 rounded-md bg-emerald-600 text-white text-xs font-semibold hover:bg-emerald-700 transition-colors"
+            >
+              💾 Save
+            </button>
           )}
         </div>
       </div>
@@ -71,6 +101,32 @@ const TextInputPanel: FC = () => {
           ))}
         </div>
       </div>
+
+      {/* Saved Texts */}
+      {state.savedTextSets.length > 0 && (
+        <div className="mt-6">
+          <div className="text-sm font-semibold text-slate-200 mb-3">💾 Your Saved Texts</div>
+          <div className="flex flex-col gap-2">
+            {state.savedTextSets.map((set: TextSet) => (
+              <div key={set.id} className="flex items-center justify-between bg-slate-800 border border-slate-700 rounded-md p-2 text-xs">
+                <button
+                  onClick={() => actions.loadTextSet(set.id)}
+                  className="text-left flex-1 truncate hover:text-blue-400"
+                >
+                  {set.title}
+                </button>
+                <button
+                  onClick={() => actions.deleteTextSet(set.id)}
+                  title="Delete"
+                  className="text-red-500 px-2 py-0.5 hover:text-red-600"
+                >
+                  🗑️
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Current Reading Indicator */}
       {state.currentSentence && (

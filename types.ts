@@ -43,6 +43,18 @@ export interface ModelState {
   normalizeAudio: boolean;
 }
 
+export interface TextSet {
+  id: string;
+  title: string;
+  text: string;
+  lastPosition?: number; // seconds into the audio where the user left off
+}
+
+export interface ReadingProgressEntry {
+  audioTime: number;
+  scrollTop: number;
+}
+
 export interface AppState {
   // Text and PDF state
   inputText: string;
@@ -72,6 +84,14 @@ export interface AppState {
   // Modal states
   showOnboarding: boolean;
   showHelp: boolean;
+
+  // 💾 Library / Sync
+  savedTextSets: TextSet[];
+  currentSetId: string | null;
+  googleDriveLinked: boolean;
+
+  // Progress map
+  readingProgress: Record<string, ReadingProgressEntry>;
 }
 
 export interface AppContextType {
@@ -127,6 +147,17 @@ export interface AppContextType {
     skipBackward: () => void;
     getAudioBlob: () => Blob | null;
     setPlaybackRate: (rate: number) => void;
+
+    // Library actions
+    saveCurrentTextSet: (title?: string) => void;
+    loadTextSet: (id: string) => void;
+    deleteTextSet: (id: string) => void;
+
+    // Cloud sync
+    linkGoogleDrive: () => Promise<void>;
+
+    // Scroll progress
+    updateScrollPosition: (scrollTop: number) => void;
   };
   
   // TTS hook data

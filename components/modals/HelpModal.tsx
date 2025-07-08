@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { BRAND_NAME } from '../../utils/branding';
 
 interface HelpModalProps {
   isOpen: boolean;
@@ -9,10 +10,10 @@ interface HelpModalProps {
 const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose, onShowOnboarding }) => {
   const [activeSection, setActiveSection] = useState<'faq' | 'troubleshooting' | 'about'>('faq');
 
-  const faqItems = [
+  const faqItemsRaw = [
     {
-      question: "How does TwelveReader work?",
-      answer: "TwelveReader uses advanced AI models that run entirely in your browser to convert text into natural-sounding speech. All processing happens locally - your text never leaves your device."
+      question: `How does ${BRAND_NAME} work?`,
+      answer: `${BRAND_NAME} uses advanced AI models that run entirely in your browser to convert text into natural-sounding speech. All processing happens locally - your text never leaves your device.`
     },
     {
       question: "What file formats are supported?",
@@ -40,7 +41,7 @@ const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose, onShowOnboarding
     }
   ];
 
-  const troubleshootingItems = [
+  const troubleshootingItemsRaw = [
     {
       question: "Audio sounds distorted or too quiet",
       answer: "Try enabling the 'Audio Fix' toggle in the sidebar. This normalizes audio levels and can resolve scaling issues on some systems."
@@ -66,6 +67,16 @@ const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose, onShowOnboarding
       answer: "TwelveReader works best in modern browsers (Chrome, Firefox, Safari, Edge). Older browsers may have limited support for AI models."
     }
   ];
+
+  const faqItems = faqItemsRaw.map((item) => ({
+    question: item.question.replace(/TwelveReader/g, BRAND_NAME),
+    answer: item.answer.replace(/TwelveReader/g, BRAND_NAME),
+  }));
+
+  const troubleshootingItems = troubleshootingItemsRaw.map((item) => ({
+    question: item.question.replace(/TwelveReader/g, BRAND_NAME),
+    answer: item.answer.replace(/TwelveReader/g, BRAND_NAME),
+  }));
 
   if (!isOpen) return null;
 
@@ -178,7 +189,7 @@ const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose, onShowOnboarding
                 borderRadius: '8px',
                 fontSize: '14px'
               }}>
-                <strong>💡 New to TwelveReader?</strong>{' '}
+                <strong>💡 New to {BRAND_NAME}?</strong>{' '}
                 <button
                   onClick={() => {
                     onClose();
@@ -267,7 +278,7 @@ const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose, onShowOnboarding
                   WebkitTextFillColor: 'transparent',
                   backgroundClip: 'text'
                 }}>
-                  TwelveReader
+                  {BRAND_NAME}
                 </h3>
                 <div style={{ fontSize: '14px', color: '#a0a0a0' }}>
                   AI-Powered Reading Assistant
@@ -295,7 +306,7 @@ const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose, onShowOnboarding
                 }}>
                   <h4 style={{ color: '#e5e5e5', marginBottom: '8px' }}>🔒 Privacy Promise</h4>
                   <p style={{ fontSize: '14px', color: '#a0a0a0', lineHeight: '1.5', margin: 0 }}>
-                    Your privacy is our priority. TwelveReader runs entirely in your browser 
+                    Your privacy is our priority. {BRAND_NAME} runs entirely in your browser 
                     with no data collection, no tracking, and no server uploads. 
                     What you read stays with you.
                   </p>
@@ -324,7 +335,7 @@ const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose, onShowOnboarding
                     <strong>💚 Open Source</strong>
                   </div>
                   <div style={{ fontSize: '12px', color: '#a0a0a0', marginTop: '4px' }}>
-                    TwelveReader is built with open technologies and community support
+                    {BRAND_NAME} is built with open technologies and community support
                   </div>
                 </div>
               </div>
