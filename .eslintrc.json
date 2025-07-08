@@ -24,6 +24,7 @@
     "@typescript-eslint/no-explicit-any": "off",
     "react/prop-types": "off",
     "react/no-unescaped-entities": "off",
-    "no-empty": "off"
+    "no-empty": "off",
+    "react/react-in-jsx-scope": "off"
   }
 }
