@@ -34,6 +34,9 @@ if (typeof window !== 'undefined') {
 interface UseKokoroWebWorkerTtsProps {
   onError: (error: AppError) => void;
   enabled?: boolean; // if false, delay model initialization
+  selectedModel?: string; // New: selected model ID
+  preferredDevice?: 'webgpu' | 'wasm' | 'cpu'; // New: preferred device
+  preferredDtype?: 'fp32' | 'fp16' | 'q8' | 'q4' | 'q4f16'; // New: preferred dtype
 }
 
 export interface AudioChunk {
@@ -51,12 +54,12 @@ type Alignment = {
   end_time: number;   // seconds
 };
 
-const useKokoroWebWorkerTts = ({ onError, enabled = true }: UseKokoroWebWorkerTtsProps) => {
+const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokoro-82m-fp32', preferredDevice, preferredDtype }: UseKokoroWebWorkerTtsProps) => {
   const [isReady, setIsReady] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [status, setStatus] = useState('Initializing Kokoro AI...');
-  const [currentDevice, setCurrentDevice] = useState<'webgpu' | 'wasm' | null>(null);
+  const [currentDevice, setCurrentDevice] = useState<'webgpu' | 'wasm' | 'cpu' | null>(null);
   const [debugMode, setDebugMode] = useState(false);
   const [storedChunks, setStoredChunks] = useState<AudioChunk[]>([]);
   
@@ -619,34 +622,61 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true }: UseKokoroWebWorkerTt
      return audioData;
    }, [normalizeAudio]);
 
-     // Detect if WebGPU is available and choose the best configuration
-   const detectWebGPU = useCallback(async (): Promise<{ device: 'webgpu' | 'wasm'; dtype: 'fp32' | 'q8' | 'fp16' }> => {
-     const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+       // Detect if WebGPU is available and choose the best configuration
+  const detectWebGPU = useCallback(async (): Promise<{ device: 'webgpu' | 'wasm' | 'cpu'; dtype: 'fp32' | 'fp16' | 'q8' | 'q4' | 'q4f16' }> => {
+    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 
-     // Honour explicit WASM override first
-     if (forceWasmMode) {
-       console.log('🔧 Forcing WASM mode as requested.');
-       return { device: 'wasm', dtype: 'q8' };
-     }
+    // Honour explicit WASM override first
+    if (forceWasmMode) {
+      console.log('🔧 Forcing WASM mode as requested.');
+      return { device: 'wasm', dtype: 'q8' };
+    }
 
-     // Prefer WebGPU whenever it is available – including on modern mobile Safari (iOS 17+)
-     if (typeof navigator !== 'undefined' && (navigator as any).gpu) {
-       try {
-         const adapter = await (navigator as any).gpu.requestAdapter();
-         if (adapter) {
-           console.log(`✅ WebGPU available on ${isMobile ? 'mobile' : 'desktop'}. Using stable fp32 model.`);
-           // fp32 is currently the most reliable across devices
-           return { device: 'webgpu', dtype: 'fp32' };
-         }
-       } catch (e) {
-         console.warn('⚠️ WebGPU detection failed:', e);
-       }
-     }
+    // Use user preferences if provided
+    if (preferredDevice && preferredDtype) {
+      console.log(`🔧 Using user preferences: ${preferredDevice} with ${preferredDtype}`);
+      
+      // Validate device availability
+      if (preferredDevice === 'webgpu') {
+        if (typeof navigator !== 'undefined' && (navigator as any).gpu) {
+          try {
+            const adapter = await (navigator as any).gpu.requestAdapter();
+            if (adapter) {
+              return { device: preferredDevice, dtype: preferredDtype };
+            } else {
+              console.warn('⚠️ WebGPU requested but not available, falling back to WASM');
+              return { device: 'wasm', dtype: preferredDtype === 'fp32' || preferredDtype === 'fp16' ? 'q8' : preferredDtype };
+            }
+          } catch (e) {
+            console.warn('⚠️ WebGPU detection failed:', e);
+            return { device: 'wasm', dtype: preferredDtype === 'fp32' || preferredDtype === 'fp16' ? 'q8' : preferredDtype };
+          }
+        } else {
+          console.warn('⚠️ WebGPU requested but not supported, falling back to WASM');
+          return { device: 'wasm', dtype: preferredDtype === 'fp32' || preferredDtype === 'fp16' ? 'q8' : preferredDtype };
+        }
+      }
+      
+      return { device: preferredDevice, dtype: preferredDtype };
+    }
 
-     // Fallback path – CPU (WASM) back-end with quantised model to conserve memory
-     console.log('➡️ WebGPU not available or failed, using CPU (wasm) with q8 model.');
-     return { device: 'wasm', dtype: 'q8' };
-   }, [forceWasmMode]);
+    // Auto-detection logic (fallback)
+    if (typeof navigator !== 'undefined' && (navigator as any).gpu) {
+      try {
+        const adapter = await (navigator as any).gpu.requestAdapter();
+        if (adapter) {
+          console.log(`✅ WebGPU available on ${isMobile ? 'mobile' : 'desktop'}. Using stable fp32 model.`);
+          return { device: 'webgpu', dtype: 'fp32' };
+        }
+      } catch (e) {
+        console.warn('⚠️ WebGPU detection failed:', e);
+      }
+    }
+
+    // Fallback path – CPU (WASM) back-end with quantised model to conserve memory
+    console.log('➡️ WebGPU not available or failed, using CPU (wasm) with q8 model.');
+    return { device: 'wasm', dtype: 'q8' };
+  }, [forceWasmMode, preferredDevice, preferredDtype]);
 
   // Initialize TTS model
   const initializeTts = useCallback(async () => {
@@ -748,12 +778,12 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true }: UseKokoroWebWorkerTt
     }
   }, [onError, detectWebGPU]);
 
-  // Initialize when enabled flips true
+  // Initialize when enabled flips true or model configuration changes
   useEffect(() => {
     if (enabled) {
       initializeTts();
     }
-  }, [enabled, initializeTts]);
+  }, [enabled, selectedModel, preferredDevice, preferredDtype, initializeTts]);
 
   // Chunk text for better TTS processing
   const chunkText = useCallback((text: string, maxChunkSize: number = 2000): string[] => {

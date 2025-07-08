@@ -174,7 +174,40 @@ We welcome contributions! Please see our contributing guidelines for:
 
 ---
 
-## 🏆 Why TwelveReader?
+## �️ Model Selection
+
+The app now supports advanced model selection with multiple configurations:
+
+### Available Models
+- **Kokoro 82M (FP32)** - 82MB - Highest quality, GPU optimized
+- **Kokoro 82M (FP16)** - 41MB - High quality, smaller size
+- **Kokoro 82M (Q8)** - 45MB - Balanced quality and performance
+- **Kokoro 82M (Q4)** - 22MB - Maximum speed, minimal memory
+- **Kokoro 82M (Q4F16)** - 22MB - Fast with better quality than Q4
+
+### Device Selection
+- **GPU (WebGPU)** - Fastest processing when available
+- **CPU (WASM)** - Works on all devices
+- **CPU (Native)** - Fallback option
+
+### Features
+- **Auto-select** - Automatically chooses the best model for your device
+- **Manual selection** - Choose specific model and device combinations
+- **Download persistence** - Keep models cached for faster loading
+- **GPU detection** - Automatically detects WebGPU availability
+- **Model caching** - Shows which models are already downloaded
+
+### Model Sizes
+All model sizes are accurate and sourced from the official Hugging Face repository:
+- FP32: 82MB (full precision)
+- FP16: 41MB (half precision)
+- Q8: 45MB (8-bit quantized)
+- Q4: 22MB (4-bit quantized)
+- Q4F16: 22MB (4-bit with FP16 fallback)
+
+---
+
+## �🏆 Why TwelveReader?
 
 | Feature | TwelveReader | Traditional TTS | Online Services |
 |---------|--------------|-----------------|-----------------|
