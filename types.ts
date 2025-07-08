@@ -1,3 +1,5 @@
+/// <reference types="react" />
+
 export interface AppError {
   title: string;
   message: string;

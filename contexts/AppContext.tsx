@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, PropsWithChildren } from 'react';
+import React, { createContext, useContext, useState, useEffect } from 'react';
 import useKokoroWebWorkerTts from '../hooks/useKokoroWebWorkerTts';
 import { AppContextType, AppState, AppError, SampleText } from '../types';
 
@@ -13,7 +13,9 @@ export const useAppContext = () => {
 };
 
 /* eslint-disable @typescript-eslint/no-empty-object-type */
-type AppProviderProps = PropsWithChildren<{}>;
+interface AppProviderProps {
+  children?: React.ReactNode;
+}
 
 // Sample texts for quick testing
 export const sampleTexts: SampleText[] = [
