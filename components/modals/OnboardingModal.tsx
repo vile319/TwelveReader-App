@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { BRAND_NAME } from '../../utils/branding';
 
 interface OnboardingModalProps {
   isOpen: boolean;
@@ -10,7 +11,7 @@ const OnboardingModal: React.FC<OnboardingModalProps> = ({ isOpen, onClose }) =>
 
   const steps = [
     {
-      title: "Welcome to TwelveReader",
+      title: `Welcome to ${BRAND_NAME}`,
       icon: "🎉",
       content: (
         <div>
@@ -119,7 +120,7 @@ const OnboardingModal: React.FC<OnboardingModalProps> = ({ isOpen, onClose }) =>
       content: (
         <div>
           <p style={{ fontSize: '16px', lineHeight: '1.6', marginBottom: '16px' }}>
-            TwelveReader offers advanced audio features:
+            {BRAND_NAME} offers advanced audio features:
           </p>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
