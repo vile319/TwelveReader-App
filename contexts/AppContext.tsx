@@ -119,6 +119,21 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     setCurrentSentence('');
   };
 
+  // --- New: Reset playback when input text changes directly ---
+  const updateInputText = (text: string) => {
+    // Stop any ongoing synthesis or playback to avoid conflicts
+    handleStopReading();
+
+    // Clear any previously uploaded PDF context
+    setUploadedPDF(null);
+
+    // Update the input text normally
+    setInputText(text);
+
+    // Reset error state (if any)
+    setError(null);
+  };
+
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     // If audio is currently playing or a synthesis is in progress, stop it first
     handleStopReading();
@@ -256,7 +271,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
   const contextValue: AppContextType = {
     state,
     actions: {
-      setInputText,
+      setInputText: updateInputText,
       setUploadedPDF,
       setIsExtractingPDF,
       handleStartReading,
