@@ -61,6 +61,9 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
   const [hoverTime, setHoverTime] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
 
+  // Generation progress (0-100)
+  const [generationProgress, setGenerationProgress] = useState<number>(0);
+
   // Modal states
   const ONBOARDING_KEY = `${BRAND_NAME.toLowerCase()}-onboarding-completed`;
   const TEXT_SETS_KEY = `${BRAND_NAME.toLowerCase()}-text-sets`;
@@ -103,35 +106,43 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
   });
 
   // Action handlers
-  const handleStartReading = async () => {
-    if (!inputText.trim()) {
+  const handleStartReading = async (providedText?: string) => {
+    const textToRead = (providedText ?? inputText).trim();
+
+    if (!textToRead) {
       setError({ title: 'No Text', message: 'Please enter some text or upload a PDF to read.' });
       return;
     }
     
+    // Reset generation progress
+    setGenerationProgress(0);
+
     // Stop any previous audio before starting anew
     tts.stop();
 
     // If model not accepted yet, show warning and remember intention
     if (!modelAccepted) {
-      setPendingRead({ text: inputText.trim(), voice: selectedVoice });
+      setPendingRead({ text: textToRead, voice: selectedVoice });
       setShowModelWarning(true);
       return;
     }
 
     // If accepted but model still loading, store pending read and wait
     if (!tts.isReady) {
-      setPendingRead({ text: inputText.trim(), voice: selectedVoice });
+      setPendingRead({ text: textToRead, voice: selectedVoice });
       return;
     }
     
     console.log('🎵 Starting audio reading...');
     setIsReading(true);
-    setCurrentSentence(inputText.trim());
+    setCurrentSentence(textToRead);
     
     try {
-      await tts.speak(inputText.trim(), selectedVoice);
+      await tts.speak(textToRead, selectedVoice, (p: number) => setGenerationProgress(Math.round(p)));
       console.log('✅ Audio generation completed');
+      
+      // Ensure progress shows complete
+      setGenerationProgress(100);
       
       // Audio is ready, user can now use play/pause controls
       setIsReading(false);
@@ -148,6 +159,9 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     setIsReading(false);
     tts.stop();
     setCurrentSentence('');
+
+    // Reset progress
+    setGenerationProgress(0);
   };
 
   // --- New: Reset playback when input text changes directly ---
@@ -183,9 +197,8 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     if (text.trim()) {
       setInputText(text);
       setError(null);
-      // Automatically start reading the newly extracted text
-      // This ensures a seamless flow: upload → extract → listen
-      handleStartReading();
+      // Automatically start reading the newly extracted text using the freshly extracted text
+      handleStartReading(text);
     } else {
       setError({ title: 'PDF Error', message: 'Unable to extract text from this PDF. It might be a scanned PDF or password-protected.' });
     }
@@ -277,6 +290,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       title: finalTitle,
       text: cleaned,
       lastPosition: 0,
+      audioGenerated: tts.synthesisComplete,
     };
     // Check storage limit (~4.5MB)
     try {
@@ -428,6 +442,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     currentSetId,
     googleDriveLinked,
     readingProgress,
+    generationProgress,
   };
 
   // Context value

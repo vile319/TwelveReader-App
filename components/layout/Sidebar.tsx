@@ -75,7 +75,13 @@ const Sidebar: FC = () => {
 
       {/* Generate Button */}
       <button
-        onClick={state.isReading ? actions.handleStopReading : actions.handleStartReading}
+        onClick={() => {
+          if (state.isReading) {
+            actions.handleStopReading();
+          } else {
+            actions.handleStartReading();
+          }
+        }}
         disabled={isGenerateDisabled}
         className={cn(
           'w-full py-4 rounded-lg font-semibold text-white mb-4 transition-colors',
@@ -83,8 +89,8 @@ const Sidebar: FC = () => {
           isGenerateDisabled && 'opacity-50 cursor-not-allowed'
         )}
       >
-        {state.audio.isLoading ? '⏳ Generating...' : 
-         state.isReading ? '⏹️ Stop Generation' : 
+        {state.audio.isLoading ? '⏳ Loading Model...' :
+         state.isReading ? `⏹️ Stop (${state.generationProgress}%)` :
          state.audio.canScrub ? '🔄 Regenerate' :
          '▶️ Generate Audio'}
       </button>

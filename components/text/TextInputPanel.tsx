@@ -111,8 +111,14 @@ const TextInputPanel: FC = () => {
               <div key={set.id} className="flex items-center justify-between bg-slate-800 border border-slate-700 rounded-md p-2 text-xs">
                 <button
                   onClick={() => actions.loadTextSet(set.id)}
-                  className="text-left flex-1 truncate hover:text-blue-400"
+                  className="text-left flex-1 truncate hover:text-blue-400 flex items-center gap-2"
                 >
+                  {/* Indicator for audio availability */}
+                  {set.audioGenerated ? (
+                    <span title="Audio generated" className="text-emerald-400">🔊</span>
+                  ) : (
+                    <span title="No audio yet" className="text-slate-500">📝</span>
+                  )}
                   {set.title}
                 </button>
                 <button

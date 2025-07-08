@@ -74,6 +74,7 @@ const PDFReader: FC<PDFReaderProps> = ({
   const extractPDFText = async () => {
     setIsLoading(true);
     setError('');
+    let pdf: any = null;
     
     try {
       console.log('📄 Starting PDF text extraction...');
@@ -84,7 +85,7 @@ const PDFReader: FC<PDFReaderProps> = ({
       pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.269/pdf.worker.min.mjs`;
       
       const arrayBuffer = await file.arrayBuffer();
-      const pdf = await pdfjsLib.getDocument({ 
+      pdf = await pdfjsLib.getDocument({ 
         data: arrayBuffer,
         verbosity: 0 
       }).promise;
@@ -136,6 +137,12 @@ const PDFReader: FC<PDFReaderProps> = ({
       } else {
         throw new Error('Could not extract readable text from this PDF');
       }
+      
+      // Cleanup PDF resources to free memory
+      try {
+        await pdf.cleanup?.();
+        await pdf.destroy?.();
+      } catch {}
       
     } catch (error) {
       console.error('❌ PDF extraction failed:', error);
