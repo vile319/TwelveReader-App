@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { KokoroTTS } from 'kokoro-js';
 import { AppError } from '../types';
 
