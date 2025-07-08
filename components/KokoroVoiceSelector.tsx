@@ -1,4 +1,4 @@
-import React from 'react';
+import { type FC, type ChangeEvent, type FocusEvent } from 'react';
 
 interface KokoroVoice {
   name: string;
@@ -14,13 +14,13 @@ interface KokoroVoiceSelectorProps {
   disabled: boolean;
 }
 
-const KokoroVoiceSelector: React.FC<KokoroVoiceSelectorProps> = ({ 
+const KokoroVoiceSelector: FC<KokoroVoiceSelectorProps> = ({ 
   voices, 
   selectedVoice, 
   onVoiceChange, 
   disabled
 }) => {
-  const handleSelect = (event: React.ChangeEvent<HTMLSelectElement>) => {
+  const handleSelect = (event: ChangeEvent<HTMLSelectElement>) => {
     const selectedName = event.target.value;
     onVoiceChange(selectedName);
   };
@@ -66,13 +66,13 @@ const KokoroVoiceSelector: React.FC<KokoroVoiceSelectorProps> = ({
           transition: 'border-color 0.2s ease',
           outline: 'none'
         }}
-        onFocus={(e) => {
+        onFocus={(e: FocusEvent<HTMLSelectElement>) => {
           if (!disabled) {
             e.target.style.borderColor = '#3182ce';
             e.target.style.boxShadow = '0 0 0 3px rgba(49, 130, 206, 0.1)';
           }
         }}
-        onBlur={(e) => {
+        onBlur={(e: FocusEvent<HTMLSelectElement>) => {
           e.target.style.borderColor = '#e1e5e9';
           e.target.style.boxShadow = 'none';
         }}

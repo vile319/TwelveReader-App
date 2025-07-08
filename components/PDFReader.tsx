@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { type FC, useEffect, useState } from 'react';
 import HighlightedText from './HighlightedText';
 
 // --- New Robust PDF.js Loader ---
@@ -54,7 +54,7 @@ interface PDFReaderProps {
   currentWordIndex?: number;
 }
 
-const PDFReader: React.FC<PDFReaderProps> = ({ 
+const PDFReader: FC<PDFReaderProps> = ({ 
   file, 
   onTextExtracted, 
   currentSentence,

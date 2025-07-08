@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import { type FC, useMemo, memo, Fragment } from 'react';
 
 interface HighlightedTextProps {
   text: string;
@@ -8,7 +8,7 @@ interface HighlightedTextProps {
   onWordClick?: (time: number) => void;
 }
 
-const HighlightedText: React.FC<HighlightedTextProps> = React.memo(({
+const HighlightedText: FC<HighlightedTextProps> = memo(({
   text,
   wordTimings,
   currentWordIndex,
@@ -33,7 +33,7 @@ const HighlightedText: React.FC<HighlightedTextProps> = React.memo(({
     return parts.map((part, i) => {
       // Whitespace parts are returned as-is to preserve formatting.
       if (part.trim() === '') {
-        return <React.Fragment key={i}>{part}</React.Fragment>;
+        return <Fragment key={i}>{part}</Fragment>;
       }
 
       // It's a word, so apply highlighting logic.
