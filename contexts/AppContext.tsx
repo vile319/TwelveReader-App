@@ -61,6 +61,9 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
   const [hoverTime, setHoverTime] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
 
+  // Generation progress (0-100)
+  const [generationProgress, setGenerationProgress] = useState<number>(0);
+
   // Modal states
   const ONBOARDING_KEY = `${BRAND_NAME.toLowerCase()}-onboarding-completed`;
   const TEXT_SETS_KEY = `${BRAND_NAME.toLowerCase()}-text-sets`;
@@ -111,6 +114,9 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       return;
     }
     
+    // Reset generation progress
+    setGenerationProgress(0);
+
     // Stop any previous audio before starting anew
     tts.stop();
 
@@ -132,8 +138,11 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     setCurrentSentence(textToRead);
     
     try {
-      await tts.speak(textToRead, selectedVoice);
+      await tts.speak(textToRead, selectedVoice, (p: number) => setGenerationProgress(Math.round(p)));
       console.log('✅ Audio generation completed');
+      
+      // Ensure progress shows complete
+      setGenerationProgress(100);
       
       // Audio is ready, user can now use play/pause controls
       setIsReading(false);
@@ -150,6 +159,9 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     setIsReading(false);
     tts.stop();
     setCurrentSentence('');
+
+    // Reset progress
+    setGenerationProgress(0);
   };
 
   // --- New: Reset playback when input text changes directly ---
@@ -430,6 +442,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     currentSetId,
     googleDriveLinked,
     readingProgress,
+    generationProgress,
   };
 
   // Context value

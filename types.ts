@@ -94,6 +94,9 @@ export interface AppState {
 
   // Progress map
   readingProgress: Record<string, ReadingProgressEntry>;
+
+  /** Progress percentage while generating audio (0-100). 0 when idle */
+  generationProgress: number;
 }
 
 export interface AppContextType {

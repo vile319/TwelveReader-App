@@ -1103,6 +1103,15 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true }: UseKokoroWebWorkerTt
       completeAudioSourceRef.current = null;
     }
 
+    // Close AudioContext to release resources (important on memory-constrained devices)
+    if (audioContextRef.current) {
+      try {
+        // Close returns a promise but we don't need to await inside sync function
+        audioContextRef.current.close();
+      } catch {}
+      audioContextRef.current = null;
+    }
+
     // Clear audio buffer and reset scrubbing state
     audioBufferRef.current = [];
     playbackPositionRef.current = 0;

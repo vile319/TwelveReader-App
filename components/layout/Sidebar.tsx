@@ -83,8 +83,8 @@ const Sidebar: FC = () => {
           isGenerateDisabled && 'opacity-50 cursor-not-allowed'
         )}
       >
-        {state.audio.isLoading ? '⏳ Generating...' : 
-         state.isReading ? '⏹️ Stop Generation' : 
+        {state.audio.isLoading ? '⏳ Loading Model...' :
+         state.isReading ? `⏹️ Stop (${state.generationProgress}%)` :
          state.audio.canScrub ? '🔄 Regenerate' :
          '▶️ Generate Audio'}
       </button>
