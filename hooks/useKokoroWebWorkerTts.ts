@@ -742,7 +742,7 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
         setStatus('⚠️ GPU failed, trying CPU fallback...');
         
         try {
-          const tts = await KokoroTTS.from_pretrained('onnx-community/Kokoro-82M-v1.0-ONNX', {
+          const tts = await KokoroTTS.from_pretrained('onnx-community/Kokoro-82M-ONNX', {
             dtype: 'q8',
             device: 'wasm',
             progress_callback: (progress: { status: string; progress?: number }) => {

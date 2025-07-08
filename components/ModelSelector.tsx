@@ -29,7 +29,7 @@ const AVAILABLE_MODELS: ModelConfig[] = [
     description: 'Full precision model with highest quality output. Best for GPU acceleration.',
     size: '310MB',
     quality: 'high',
-    url: 'onnx-community/Kokoro-82M-v1.0-ONNX',
+    url: 'onnx-community/Kokoro-82M-ONNX',
     dtype: 'fp32',
     device: 'webgpu',
     isDefault: true
@@ -40,7 +40,7 @@ const AVAILABLE_MODELS: ModelConfig[] = [
     description: 'Half precision model with good quality and smaller size.',
     size: '156MB',
     quality: 'high',
-    url: 'onnx-community/Kokoro-82M-v1.0-ONNX',
+    url: 'onnx-community/Kokoro-82M-ONNX',
     dtype: 'fp16',
     device: 'webgpu'
   },
@@ -50,7 +50,7 @@ const AVAILABLE_MODELS: ModelConfig[] = [
     description: '8-bit quantized model with balanced quality and performance.',
     size: '82MB',
     quality: 'balanced',
-    url: 'onnx-community/Kokoro-82M-v1.0-ONNX',
+    url: 'onnx-community/Kokoro-82M-ONNX',
     dtype: 'q8',
     device: 'wasm'
   },
@@ -58,9 +58,9 @@ const AVAILABLE_MODELS: ModelConfig[] = [
     id: 'kokoro-82m-q4',
     name: 'Kokoro 82M (Q4)',
     description: '4-bit quantized model for maximum speed and minimal memory usage.',
-    size: '291MB',
+    size: '290MB',
     quality: 'fast',
-    url: 'onnx-community/Kokoro-82M-v1.0-ONNX',
+    url: 'onnx-community/Kokoro-82M-ONNX',
     dtype: 'q4',
     device: 'wasm'
   },
@@ -70,7 +70,7 @@ const AVAILABLE_MODELS: ModelConfig[] = [
     description: '4-bit quantized with FP16 fallback for better quality than Q4.',
     size: '147MB',
     quality: 'fast',
-    url: 'onnx-community/Kokoro-82M-v1.0-ONNX',
+    url: 'onnx-community/Kokoro-82M-ONNX',
     dtype: 'q4f16',
     device: 'wasm'
   }
