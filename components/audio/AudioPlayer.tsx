@@ -1,8 +1,8 @@
-import React from 'react';
+import { type FC } from 'react';
 import { useAppContext } from '../../contexts/AppContext';
 import { cn } from '../../utils/cn';
 
-const AudioPlayer: React.FC = () => {
+const AudioPlayer: FC = () => {
   const { state, actions } = useAppContext();
 
   const disabled = !state.audio.canScrub;
