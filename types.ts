@@ -48,6 +48,8 @@ export interface TextSet {
   title: string;
   text: string;
   lastPosition?: number; // seconds into the audio where the user left off
+  /** Indicates if audio has been generated for this text set */
+  audioGenerated?: boolean;
 }
 
 export interface ReadingProgressEntry {
@@ -103,7 +105,7 @@ export interface AppContextType {
     setIsExtractingPDF: (extracting: boolean) => void;
     
     // Audio actions
-    handleStartReading: () => void;
+    handleStartReading: (text?: string) => void;
     handleStopReading: () => void;
     handleWordClick: (time: number) => void;
     handleDownloadAudio: () => void;
