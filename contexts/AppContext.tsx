@@ -52,9 +52,6 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
   // Store pending read request during model download
   const [pendingRead, setPendingRead] = useState<{ text: string; voice: string } | null>(null);
 
-  // Playback speed
-  const [playbackRate, setPlaybackRate] = useState<number>(1);
-
   // Seeking state
   const [isSeekingHover, setIsSeekingHover] = useState(false);
   const [hoverTime, setHoverTime] = useState(0);
@@ -235,11 +232,6 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     }
   }, [tts.isReady, pendingRead, tts.speak]);
 
-  // Keep local playbackRate in sync with TTS hook
-  useEffect(() => {
-    setPlaybackRate(tts.playbackRate);
-  }, [tts.playbackRate]);
-
   // Aggregate state
   const state: AppState = {
     inputText,
@@ -311,10 +303,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       skipForward: tts.skipForward,
       skipBackward: tts.skipBackward,
       getAudioBlob: tts.getAudioBlob,
-      setPlaybackRate: (rate: number) => {
-        tts.setPlaybackRate(rate);
-        setPlaybackRate(rate);
-      },
+      setPlaybackRate: tts.setPlaybackRate,
     },
     tts,
   };
