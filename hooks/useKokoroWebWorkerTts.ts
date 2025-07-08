@@ -841,8 +841,8 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true }: UseKokoroWebWorkerTt
           onProgress?.(chunkProgress);
 
           if (currentSynthesisRef.current !== text) {
-            console.log(`🛑 Synthesis stopped (user stopped)`);
-            return;
+            console.log(`🛑 Synthesis stopped after generate() – discarding chunk ${i + 1}`);
+            return; // Exit early, abandon this synthesis entirely
           }
 
           console.log(`🔄 Processing chunk ${i + 1}: ${chunk.length} characters`);
@@ -857,32 +857,38 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true }: UseKokoroWebWorkerTt
             return_alignments: true // <-- Requesting alignments
           });
 
-        // Extract audio data
-        let audioData: Float32Array | null = null;
+          // === New cancellation check ===
+          if (currentSynthesisRef.current !== text) {
+            console.log(`🛑 Synthesis stopped after generate() – discarding chunk ${i + 1}`);
+            return; // Exit early, abandon this synthesis entirely
+          }
 
-        if (audioObject && typeof audioObject === 'object') {
-          if (audioObject.audio && audioObject.audio instanceof Float32Array) {
-            audioData = audioObject.audio;
-            sampleRate = audioObject.sample_rate || audioObject.sampling_rate || 24000;
-          } else if (audioObject.data && audioObject.data instanceof Float32Array) {
-            audioData = audioObject.data;
-            sampleRate = audioObject.sample_rate || audioObject.sampling_rate || 24000;
-          } else if (audioObject instanceof Float32Array) {
-            audioData = audioObject;
-          } else {
-            for (const value of Object.values(audioObject)) {
-              if (value instanceof Float32Array) {
-                audioData = value;
-                break;
+          // Extract audio data
+          let audioData: Float32Array | null = null;
+
+          if (audioObject && typeof audioObject === 'object') {
+            if (audioObject.audio && audioObject.audio instanceof Float32Array) {
+              audioData = audioObject.audio;
+              sampleRate = audioObject.sample_rate || audioObject.sampling_rate || 24000;
+            } else if (audioObject.data && audioObject.data instanceof Float32Array) {
+              audioData = audioObject.data;
+              sampleRate = audioObject.sample_rate || audioObject.sampling_rate || 24000;
+            } else if (audioObject instanceof Float32Array) {
+              audioData = audioObject;
+            } else {
+              for (const value of Object.values(audioObject)) {
+                if (value instanceof Float32Array) {
+                  audioData = value;
+                  break;
+                }
               }
             }
           }
-        }
 
-        if (!audioData || audioData.length === 0) {
-          console.error(`❌ No audio data generated for chunk ${i + 1}`);
-          continue; // Skip this chunk and continue
-        }
+          if (!audioData || audioData.length === 0) {
+            console.error(`❌ No audio data generated for chunk ${i + 1}`);
+            continue; // Skip this chunk and continue
+          }
 
                 // Debug audio sample rate and scaling - avoid stack overflow with large arrays
         let peak = 0;
