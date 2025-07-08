@@ -122,7 +122,7 @@ const AudioPlayer: React.FC = () => {
           <span>Speed:</span>
           <select
             value={state.audio.playbackRate}
-            onChange={(e) => actions.setPlaybackRate(parseFloat(e.target.value))}
+            onChange={(e: React.ChangeEvent<HTMLSelectElement>) => actions.setPlaybackRate(parseFloat(e.target.value))}
             className="bg-slate-700 rounded px-2 py-1 focus:outline-none"
           >
             <option value="0.5">0.5x</option>

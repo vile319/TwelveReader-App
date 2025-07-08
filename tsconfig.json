@@ -16,7 +16,7 @@
     "noEmit": true,
     "allowJs": true,
     "jsx": "react-jsx",
-    "types": ["vite/client", "react", "react-dom", "node"],
+    "types": ["react", "react-dom", "node"],
     "allowSyntheticDefaultImports": true,
 
     /* Linting */
