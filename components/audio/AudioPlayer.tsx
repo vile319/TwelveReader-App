@@ -116,6 +116,25 @@ const AudioPlayer: React.FC = () => {
         </div>
       )}
 
+      {/* Playback Speed Controls */}
+      {state.audio.canScrub && (
+        <div className="mt-4 flex items-center justify-center gap-2 text-sm text-slate-200">
+          <span>Speed:</span>
+          <select
+            value={state.audio.playbackRate}
+            onChange={(e: React.ChangeEvent<HTMLSelectElement>) => actions.setPlaybackRate(parseFloat(e.target.value))}
+            className="bg-slate-700 rounded px-2 py-1 focus:outline-none"
+          >
+            <option value="0.5">0.5x</option>
+            <option value="0.75">0.75x</option>
+            <option value="1">1x</option>
+            <option value="1.25">1.25x</option>
+            <option value="1.5">1.5x</option>
+            <option value="2">2x</option>
+          </select>
+        </div>
+      )}
+
       {/* Audio Stats */}
       {state.audio.canScrub && (
         <div className="mt-3 text-center text-xs text-slate-400">

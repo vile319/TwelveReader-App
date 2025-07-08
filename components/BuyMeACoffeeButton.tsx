@@ -1,5 +1,5 @@
 // BuyMeACoffeeButton component
-import React, { type FC } from 'react';
+import { type FC, type CSSProperties } from 'react';
 
 interface BuyMeACoffeeButtonProps {
   /**
@@ -18,7 +18,7 @@ interface BuyMeACoffeeButtonProps {
   /**
    * Override for inline style if you need to tweak spacing / sizing.
    */
-  style?: React.CSSProperties;
+  style?: CSSProperties;
 }
 
 /**

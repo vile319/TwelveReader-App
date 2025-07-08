@@ -1,8 +1,7 @@
-import React, { type FC } from 'react';
+import { FC, useState } from 'react';
 import { useAppContext } from '../../contexts/AppContext';
 import AdSenseBanner from '../AdSenseBanner';
 import KoFiButton from '../KoFiButton';
-void React;
 
 // Small helper – joins classes conditionally
 const cn = (...classes: (string | false | null | undefined)[]) => classes.filter(Boolean).join(' ');
@@ -16,7 +15,7 @@ interface Voice {
 const Sidebar: FC = () => {
   const { state, actions, tts } = useAppContext();
   // Local toggle to show/hide rarely-used technical controls
-  const [showAdvanced, setShowAdvanced] = React.useState(false);
+  const [showAdvanced, setShowAdvanced] = useState(false);
 
   const isGenerateDisabled = !state.inputText.trim() || state.audio.isLoading;
   const voices: Voice[] = tts.voices as Voice[];
@@ -43,7 +42,7 @@ const Sidebar: FC = () => {
         </label>
         <select
           value={state.selectedVoice}
-          onChange={(e) => actions.setSelectedVoice(e.target.value)}
+          onChange={(e: React.ChangeEvent<HTMLSelectElement>) => actions.setSelectedVoice(e.target.value)}
           className="w-full p-3 rounded-lg bg-slate-700 border border-slate-600 text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
         >
           {voices.map((voice) => (

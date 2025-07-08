@@ -1,10 +1,10 @@
-import React from 'react';
+import { type FC, type ChangeEvent } from 'react';
 import { useAppContext, sampleTexts } from '../../contexts/AppContext';
 import HighlightedText from '../HighlightedText';
 import PDFReader from '../PDFReader';
 import { cn } from '../../utils/cn';
 
-const TextInputPanel: React.FC = () => {
+const TextInputPanel: FC = () => {
   const { state, actions } = useAppContext();
 
   const renderContent = () => {
@@ -44,7 +44,7 @@ const TextInputPanel: React.FC = () => {
       {/* Text Input Area */}
       <textarea
         value={state.inputText}
-        onChange={(e) => actions.setInputText(e.target.value)}
+        onChange={(e: ChangeEvent<HTMLTextAreaElement>) => actions.setInputText(e.target.value)}
         placeholder="Enter text here or upload a PDF file..."
         className={cn(
           'w-full min-h-[120px] resize-y rounded-lg border border-slate-700 bg-slate-800 p-3 mb-4',

@@ -1,4 +1,4 @@
-import React, { type FC } from 'react';
+import { type FC } from 'react';
 
 interface KoFiButtonProps {
   /** Ko-fi username (without https://ko-fi.com) */

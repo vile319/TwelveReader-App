@@ -1,13 +1,13 @@
-import React, { useEffect } from 'react';
+import { type FC, useEffect, type CSSProperties } from 'react';
 
 interface AdSenseBannerProps {
   adSlot: string;
   adFormat?: 'auto' | 'rectangle' | 'vertical' | 'horizontal';
-  style?: React.CSSProperties;
+  style?: CSSProperties;
   className?: string;
 }
 
-const AdSenseBanner: React.FC<AdSenseBannerProps> = ({ 
+const AdSenseBanner: FC<AdSenseBannerProps> = ({ 
   adSlot, 
   adFormat = 'auto', 
   style = {},
