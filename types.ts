@@ -50,6 +50,11 @@ export interface TextSet {
   lastPosition?: number; // seconds into the audio where the user left off
 }
 
+export interface ReadingProgressEntry {
+  audioTime: number;
+  scrollTop: number;
+}
+
 export interface AppState {
   // Text and PDF state
   inputText: string;
@@ -84,6 +89,9 @@ export interface AppState {
   savedTextSets: TextSet[];
   currentSetId: string | null;
   googleDriveLinked: boolean;
+
+  // Progress map
+  readingProgress: Record<string, ReadingProgressEntry>;
 }
 
 export interface AppContextType {
@@ -147,6 +155,9 @@ export interface AppContextType {
 
     // Cloud sync
     linkGoogleDrive: () => Promise<void>;
+
+    // Scroll progress
+    updateScrollPosition: (scrollTop: number) => void;
   };
   
   // TTS hook data

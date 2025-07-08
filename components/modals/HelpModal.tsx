@@ -12,8 +12,8 @@ const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose, onShowOnboarding
 
   const faqItemsRaw = [
     {
-      question: "How does TwelveReader work?",
-      answer: "TwelveReader uses advanced AI models that run entirely in your browser to convert text into natural-sounding speech. All processing happens locally - your text never leaves your device."
+      question: `How does ${BRAND_NAME} work?`,
+      answer: `${BRAND_NAME} uses advanced AI models that run entirely in your browser to convert text into natural-sounding speech. All processing happens locally - your text never leaves your device.`
     },
     {
       question: "What file formats are supported?",
@@ -189,7 +189,7 @@ const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose, onShowOnboarding
                 borderRadius: '8px',
                 fontSize: '14px'
               }}>
-                <strong>💡 New to TwelveReader?</strong>{' '}
+                <strong>💡 New to {BRAND_NAME}?</strong>{' '}
                 <button
                   onClick={() => {
                     onClose();

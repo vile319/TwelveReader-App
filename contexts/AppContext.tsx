@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import useKokoroWebWorkerTts from '../hooks/useKokoroWebWorkerTts';
 import { BRAND_NAME } from '../utils/branding';
 import { AppContextType, AppState, AppError, SampleText, TextSet } from '../types';
+import { driveHelpers } from '../utils/googleDrive';
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
@@ -82,11 +83,11 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
   // Which set is currently loaded
   const [currentSetId, setCurrentSetId] = useState<string | null>(null);
 
-  // Reading progress map { setId: timeInSeconds }
-  const [readingProgress, setReadingProgress] = useState<Record<string, number>>(() => {
+  // Reading progress map { setId: { audioTime: number; scrollTop: number } }
+  const [readingProgress, setReadingProgress] = useState<Record<string, { audioTime: number; scrollTop: number }>>(() => {
     try {
       const raw = localStorage.getItem(PROGRESS_KEY);
-      if (raw) return JSON.parse(raw) as Record<string, number>;
+      if (raw) return JSON.parse(raw) as Record<string, { audioTime: number; scrollTop: number }>;
     } catch {}
     return {};
   });
@@ -277,6 +278,15 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       text: cleaned,
       lastPosition: 0,
     };
+    // Check storage limit (~4.5MB)
+    try {
+      const prospective = JSON.stringify([...savedTextSets, newSet]);
+      const bytes = new Blob([prospective]).size;
+      if (bytes > 4.5 * 1024 * 1024) {
+        alert('Cannot save: local storage limit exceeded. Please delete existing items or use Google Drive sync.');
+        return;
+      }
+    } catch {}
     setSavedTextSets((prev: TextSet[]) => [...prev, newSet]);
     setCurrentSetId(newSet.id);
   };
@@ -287,9 +297,9 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     updateInputText(set.text);
     setCurrentSetId(id);
     // If we have stored progress, seek after generation is ready
-    const pos = readingProgress[id];
-    if (pos && tts.canScrub) {
-      tts.seekToTime(pos);
+    const prog = readingProgress[id];
+    if (prog?.audioTime && tts.canScrub) {
+      tts.seekToTime(prog.audioTime);
     }
   };
 
@@ -297,8 +307,8 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     if (!confirm('Delete this saved text permanently?')) return;
     setSavedTextSets((prev: TextSet[]) => prev.filter((s: TextSet) => s.id !== id));
     // Clear progress
-    setReadingProgress((prev: Record<string, number>) => {
-      const copy: Record<string, number> = { ...prev };
+    setReadingProgress((prev: Record<string, { audioTime: number; scrollTop: number }>) => {
+      const copy = { ...prev } as Record<string, { audioTime: number; scrollTop: number }>;
       delete copy[id];
       return copy;
     });
@@ -310,10 +320,39 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
 
   // -------- Cloud sync (Google Drive) --------
   const linkGoogleDrive = async () => {
-    alert('Google Drive sync is in beta and not fully implemented yet.');
-    // TODO: Implement gapi auth & file sync
-    setGoogleDriveLinked(true);
+    try {
+      await driveHelpers.signIn();
+      setGoogleDriveLinked(true);
+      const remoteSets = await driveHelpers.fetchTextSets();
+      if (remoteSets && remoteSets.length > 0) {
+        // Merge unique sets (by id)
+        setSavedTextSets((prev: TextSet[]) => {
+          const merged = [...prev];
+          remoteSets.forEach((r: TextSet) => {
+            if (!merged.find((s) => s.id === r.id)) merged.push(r);
+          });
+          return merged;
+        });
+      }
+      alert('Google Drive linked! Your library will now sync.');
+    } catch (err) {
+      console.error(err);
+      alert('Failed to link Google Drive. See console for details.');
+    }
   };
+
+  // Sync to Drive whenever savedTextSets change
+  useEffect(() => {
+    (async () => {
+      if (!googleDriveLinked) return;
+      if (!driveHelpers.isSignedIn()) return;
+      try {
+        await driveHelpers.uploadTextSets(savedTextSets);
+      } catch (e) {
+        console.warn('Drive sync failed', e);
+      }
+    })();
+  }, [savedTextSets, googleDriveLinked]);
 
   // Persist saved text sets whenever they change
   useEffect(() => {
@@ -328,12 +367,29 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
   // Track playback progress for current set
   useEffect(() => {
     if (!currentSetId || !tts.canScrub) return;
-    // Throttle by writing only every 1s
     const handle = setTimeout(() => {
-      setReadingProgress((prev: Record<string, number>) => ({ ...prev, [currentSetId]: tts.currentTime }));
+      setReadingProgress((prev: Record<string, { audioTime: number; scrollTop: number }>) => ({
+        ...prev,
+        [currentSetId]: {
+          audioTime: tts.currentTime,
+          scrollTop: prev[currentSetId]?.scrollTop || 0,
+        },
+      }));
     }, 1000);
     return () => clearTimeout(handle);
   }, [tts.currentTime, currentSetId, tts.canScrub]);
+
+  // --- Scroll progress update ---
+  const updateScrollPosition = (scrollTop: number) => {
+    if (!currentSetId) return;
+    setReadingProgress((prev: Record<string, { audioTime: number; scrollTop: number }>) => ({
+      ...prev,
+      [currentSetId]: {
+        audioTime: prev[currentSetId]?.audioTime || 0,
+        scrollTop,
+      },
+    }));
+  };
 
   // Aggregate state
   const state: AppState = {
@@ -371,6 +427,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     savedTextSets,
     currentSetId,
     googleDriveLinked,
+    readingProgress,
   };
 
   // Context value
@@ -416,6 +473,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       deleteTextSet,
       // Cloud Sync
       linkGoogleDrive,
+      updateScrollPosition,
     },
     tts,
   };

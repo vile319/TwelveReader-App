@@ -1,4 +1,4 @@
-import { type FC, type ChangeEvent } from 'react';
+import React, { type FC, type ChangeEvent, useRef, useEffect } from 'react';
 import { useAppContext, sampleTexts } from '../../contexts/AppContext';
 import HighlightedText from '../HighlightedText';
 import PDFReader from '../PDFReader';
@@ -8,9 +8,26 @@ import { TextSet } from '../../types';
 const TextInputPanel: FC = () => {
   const { state, actions } = useAppContext();
 
+  const contentRef = useRef<HTMLDivElement>(null);
+
+  // Restore scroll on load of set
+  useEffect(() => {
+    if (!contentRef.current) return;
+    const setId = state.currentSetId;
+    if (!setId) return;
+    const prog = state.readingProgress[setId];
+    if (prog && typeof prog.scrollTop === 'number') {
+      contentRef.current.scrollTop = prog.scrollTop;
+    }
+  }, [state.currentSetId]);
+
   const renderContent = () => {
     return (
-      <div className="flex-1 bg-slate-800 border border-slate-700 rounded-lg p-5 min-h-[200px] overflow-auto">
+      <div
+        ref={contentRef}
+        onScroll={(e: React.UIEvent<HTMLDivElement>) => actions.updateScrollPosition((e.currentTarget).scrollTop)}
+        className="flex-1 bg-slate-800 border border-slate-700 rounded-lg p-5 min-h-[200px] overflow-auto"
+      >
         {state.inputText.length > 0 ? (
           <HighlightedText 
             text={state.inputText} 
