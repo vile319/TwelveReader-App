@@ -1,4 +1,4 @@
-import * as React from 'react';
+import type React from 'react';
 import { type FC } from 'react';
 import { useAppContext } from '../../contexts/AppContext';
 import { cn } from '../../utils/cn';
