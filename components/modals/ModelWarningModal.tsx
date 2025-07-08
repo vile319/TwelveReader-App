@@ -57,10 +57,10 @@ const ModelWarningModal: React.FC = () => {
               fontWeight: '600',
               transition: 'background-color 0.2s'
             }}
-            onMouseOver={(e) => {
+            onMouseOver={(e: React.MouseEvent<HTMLButtonElement>) => {
               e.currentTarget.style.backgroundColor = '#357abd';
             }}
-            onMouseOut={(e) => {
+            onMouseOut={(e: React.MouseEvent<HTMLButtonElement>) => {
               e.currentTarget.style.backgroundColor = '#4a90e2';
             }}
           >
@@ -79,11 +79,11 @@ const ModelWarningModal: React.FC = () => {
               fontWeight: '600',
               transition: 'all 0.2s'
             }}
-            onMouseOver={(e) => {
+            onMouseOver={(e: React.MouseEvent<HTMLButtonElement>) => {
               e.currentTarget.style.backgroundColor = '#2d3748';
               e.currentTarget.style.borderColor = '#718096';
             }}
-            onMouseOut={(e) => {
+            onMouseOut={(e: React.MouseEvent<HTMLButtonElement>) => {
               e.currentTarget.style.backgroundColor = 'transparent';
               e.currentTarget.style.borderColor = '#4a5568';
             }}

@@ -295,12 +295,12 @@ const OnboardingModal: React.FC<OnboardingModalProps> = ({ isOpen, onClose }) =>
               opacity: isFirstStep ? 0.5 : 1,
               transition: 'all 0.2s'
             }}
-            onMouseOver={(e) => {
+            onMouseOver={(e: React.MouseEvent<HTMLButtonElement>) => {
               if (!isFirstStep) {
                 e.currentTarget.style.backgroundColor = '#2d3748';
               }
             }}
-            onMouseOut={(e) => {
+            onMouseOut={(e: React.MouseEvent<HTMLButtonElement>) => {
               if (!isFirstStep) {
                 e.currentTarget.style.backgroundColor = 'transparent';
               }
@@ -328,10 +328,10 @@ const OnboardingModal: React.FC<OnboardingModalProps> = ({ isOpen, onClose }) =>
               fontWeight: '600',
               transition: 'all 0.2s'
             }}
-            onMouseOver={(e) => {
+            onMouseOver={(e: React.MouseEvent<HTMLButtonElement>) => {
               e.currentTarget.style.backgroundColor = '#357abd';
             }}
-            onMouseOut={(e) => {
+            onMouseOut={(e: React.MouseEvent<HTMLButtonElement>) => {
               e.currentTarget.style.backgroundColor = '#4a90e2';
             }}
           >
