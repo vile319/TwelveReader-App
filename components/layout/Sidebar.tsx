@@ -32,7 +32,7 @@ const Sidebar: FC = () => {
 
       {/* Status */}
       <div className="bg-slate-700 text-slate-200 text-sm rounded-lg p-3 mb-6">
-        {state.model.status}
+        {state.model.isReady ? '✅ Ready to generate audio' : state.model.status}
       </div>
 
       {/* Voice Selection */}
