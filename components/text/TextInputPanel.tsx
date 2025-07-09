@@ -82,6 +82,30 @@ const TextInputPanel: FC = () => {
           'focus:outline-none focus:ring-2 focus:ring-blue-500'
         )}
       />
+
+      {/* Generate Button */}
+      <div className="flex justify-center mb-4">
+        <button
+          onClick={() => {
+            if (state.isReading) {
+              actions.handleStopReading();
+            } else {
+              actions.handleStartReading();
+            }
+          }}
+          disabled={!state.inputText.trim() || state.audio.isLoading}
+          className={cn(
+            'px-8 py-3 rounded-lg font-semibold text-white transition-colors',
+            state.isReading ? 'bg-red-600 hover:bg-red-700' : 'bg-blue-500 hover:bg-blue-600',
+            (!state.inputText.trim() || state.audio.isLoading) && 'opacity-50 cursor-not-allowed'
+          )}
+        >
+          {state.audio.isLoading ? '⏳ Loading Model...' :
+           state.isReading ? `⏹️ Stop (${state.generationProgress}%)` :
+           state.audio.canScrub ? '🔄 Regenerate' :
+           '▶️ Generate Audio'}
+        </button>
+      </div>
       
       {/* Content Display */}
       {renderContent()}
