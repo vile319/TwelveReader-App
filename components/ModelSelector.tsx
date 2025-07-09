@@ -7,7 +7,7 @@ export interface ModelConfig {
   size: string;
   quality: 'fast' | 'balanced' | 'high';
   url: string;
-  dtype: 'fp32' | 'fp16' | 'q8' | 'q4' | 'q4f16' | 'uint8' | 'uint8f16';
+  dtype: 'fp32' | 'fp16' | 'q8' | 'q4' | 'q4f16';
   device: 'webgpu' | 'wasm' | 'cpu';
   filename: string;
   isDefault?: boolean;
@@ -19,7 +19,7 @@ interface ModelSelectorProps {
   onModelChange: (modelId: string) => void;
   disabled?: boolean;
   onDeviceChange?: (device: 'webgpu' | 'wasm' | 'cpu') => void;
-  onDtypeChange?: (dtype: 'fp32' | 'fp16' | 'q8' | 'q4' | 'q4f16' | 'uint8' | 'uint8f16') => void;
+  onDtypeChange?: (dtype: 'fp32' | 'fp16' | 'q8' | 'q4' | 'q4f16') => void;
 }
 
 // Available models configuration with accurate sizes and filenames from Hugging Face
@@ -91,28 +91,7 @@ const AVAILABLE_MODELS: ModelConfig[] = [
     device: 'wasm',
     filename: 'model_q4f16.onnx'
   },
-  {
-    id: 'kokoro-82m-uint8',
-    name: 'Kokoro 82M (UINT8)',
-    description: 'Extra quantized (model_uint8.onnx) - CPU/WASM',
-    size: '169MB',
-    quality: 'fast',
-    url: 'onnx-community/Kokoro-82M-ONNX',
-    dtype: 'uint8',
-    device: 'wasm',
-    filename: 'model_uint8.onnx'
-  },
-  {
-    id: 'kokoro-82m-uint8f16',
-    name: 'Kokoro 82M (UINT8F16)',
-    description: 'Extra quantized (model_uint8f16.onnx) - CPU/WASM',
-    size: '109MB',
-    quality: 'fast',
-    url: 'onnx-community/Kokoro-82M-ONNX',
-    dtype: 'uint8f16',
-    device: 'wasm',
-    filename: 'model_uint8f16.onnx'
-  }
+
 ];
 
 // Helper function to get model information
@@ -387,8 +366,67 @@ const ModelSelector: FC<ModelSelectorProps> = ({
         <label className="block mb-3 text-sm font-semibold text-slate-200">
           🎛️ Model Selection ({AVAILABLE_MODELS.length} available)
         </label>
-        <div className="space-y-2">
-          {AVAILABLE_MODELS.map((model) => (
+        
+        {/* GPU-Optimized Models */}
+        <div className="mb-4">
+          <h4 className="text-xs font-semibold text-blue-400 mb-2 flex items-center gap-1">
+            ⚡ GPU-Optimized Models (WebGPU)
+          </h4>
+          <div className="space-y-2">
+            {AVAILABLE_MODELS.filter(model => model.device === 'webgpu').map((model) => (
+              <div
+                key={model.id}
+                className={`p-3 rounded-lg border cursor-pointer transition-colors ${
+                  selectedModel === model.id
+                    ? 'border-blue-500 bg-blue-500/10'
+                    : 'border-slate-600 bg-slate-700 hover:border-slate-500'
+                } ${autoSelect || disabled ? 'cursor-not-allowed' : ''}`}
+                onClick={() => !autoSelect && !disabled && handleModelChange(model.id)}
+              >
+                <div className="flex items-start justify-between">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="font-medium text-slate-200">{model.name}</span>
+                      {model.isDefault && (
+                        <span className="px-2 py-0.5 text-xs bg-blue-500 text-white rounded">Default</span>
+                      )}
+                      {downloadedModels.has(model.id) && (
+                        <span className="px-2 py-0.5 text-xs bg-green-500 text-white rounded">Downloaded</span>
+                      )}
+                      <span className={`text-sm ${getQualityColor(model.quality)}`}>
+                        {getQualityIcon(model.quality)} {model.quality}
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-400 mb-1">{model.description}</p>
+                    <div className="flex items-center gap-4 text-xs text-slate-500">
+                      <span>📦 {model.size}</span>
+                      <span>🎯 {model.dtype.toUpperCase()}</span>
+                    </div>
+                  </div>
+                  <div className="ml-3">
+                    <input
+                      type="radio"
+                      name="model-selection"
+                      value={model.id}
+                      checked={selectedModel === model.id}
+                      onChange={() => !autoSelect && !disabled && handleModelChange(model.id)}
+                      disabled={autoSelect || disabled}
+                      className="w-4 h-4 text-blue-600 bg-slate-700 border-slate-600 focus:ring-blue-500 focus:ring-2"
+                    />
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* CPU-Optimized Models */}
+        <div className="mb-4">
+          <h4 className="text-xs font-semibold text-green-400 mb-2 flex items-center gap-1">
+            🖥️ CPU-Optimized Models (WebAssembly)
+          </h4>
+          <div className="space-y-2">
+            {AVAILABLE_MODELS.filter(model => model.device === 'wasm' || model.device === 'cpu').map((model) => (
             <div
               key={model.id}
               className={`p-3 rounded-lg border cursor-pointer transition-colors ${
@@ -410,9 +448,6 @@ const ModelSelector: FC<ModelSelectorProps> = ({
                     )}
                     <span className={`text-sm ${getQualityColor(model.quality)}`}>
                       {getQualityIcon(model.quality)} {model.quality}
-                    </span>
-                    <span className="text-sm text-slate-400">
-                      {getDeviceIcon(model.device)} {model.device.toUpperCase()}
                     </span>
                   </div>
                   <p className="text-xs text-slate-400 mb-1">{model.description}</p>
@@ -437,6 +472,7 @@ const ModelSelector: FC<ModelSelectorProps> = ({
           ))}
         </div>
       </div>
+    </div>
 
       {/* Info text */}
       <div className="text-xs text-slate-400 bg-slate-800/50 p-3 rounded-lg">

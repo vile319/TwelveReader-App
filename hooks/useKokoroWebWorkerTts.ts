@@ -37,7 +37,7 @@ interface UseKokoroWebWorkerTtsProps {
   enabled?: boolean; // if false, delay model initialization
   selectedModel?: string; // New: selected model ID
   preferredDevice?: 'webgpu' | 'wasm' | 'cpu'; // New: preferred device
-  preferredDtype?: 'fp32' | 'fp16' | 'q8' | 'q4' | 'q4f16' | 'uint8' | 'uint8f16'; // New: preferred dtype
+  preferredDtype?: 'fp32' | 'fp16' | 'q8' | 'q4' | 'q4f16'; // New: preferred dtype
 }
 
 export interface AudioChunk {
@@ -301,14 +301,14 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
       }
       
              // Start playback from the appropriate chunk
-       streamingStartTimeRef.current = audioContextRef.current.currentTime - startTime / playbackSpeedRef.current;
+                   streamingStartTimeRef.current = audioContextRef.current.currentTime - startTime / playbackRateRef.current;
        
        if (!isPlaying) setIsPlaying(true);
        
        // Start progress tracking for streaming
        const trackStreamingProgress = () => {
          if (isPlaybackActiveRef.current && audioContextRef.current) {
-           const elapsed = (audioContextRef.current.currentTime - streamingStartTimeRef.current) * playbackSpeedRef.current;
+                       const elapsed = (audioContextRef.current.currentTime - streamingStartTimeRef.current) * playbackRateRef.current;
            // Calculate max time from streaming audio length
            const totalStreamingSamples = streamingAudioRef.current.reduce((sum: number, chunk: Float32Array) => sum + chunk.length, 0);
            const maxStreamTime = totalStreamingSamples / samplesPerSecond;
@@ -631,7 +631,7 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
    }, [normalizeAudio]);
 
        // Detect if WebGPU is available and choose the best configuration
-  const detectWebGPU = useCallback(async (): Promise<{ device: 'webgpu' | 'wasm' | 'cpu'; dtype: 'fp32' | 'fp16' | 'q8' | 'q4' | 'q4f16' | 'uint8' | 'uint8f16' }> => {
+  const detectWebGPU = useCallback(async (): Promise<{ device: 'webgpu' | 'wasm' | 'cpu'; dtype: 'fp32' | 'fp16' | 'q8' | 'q4' | 'q4f16' }> => {
     const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 
     // Honour explicit WASM override first
@@ -1501,34 +1501,32 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
     return new Blob([view], { type: 'audio/wav' });
   }, [completeAudioBuffer, completeAudioSampleRate]);
 
-  // Load audio WAV blob back into player (for saved books)
-  const loadAudioFromBlob = useCallback(async (blob: Blob) => {
-    if (!blob) return;
-    if (!audioContextRef.current) {
-      audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
-    }
-    try {
-      const arrayBuffer = await blob.arrayBuffer();
-      const audioBuffer = await audioContextRef.current.decodeAudioData(arrayBuffer);
-
-      const channelData = audioBuffer.getChannelData(0);
-      const floatData = new Float32Array(channelData.length);
-      floatData.set(channelData);
-
-      setCompleteAudioBuffer(floatData);
-      setCompleteAudioSampleRate(audioBuffer.sampleRate);
-      setDuration(audioBuffer.duration);
-      setCurrentTime(0);
-      setCanScrub(true);
-      setIsStreaming(false);
-      setSynthesisComplete(true);
-      setWordTimings([]);
-      setCurrentWordIndex(-1);
-      console.log('📚 Loaded saved audio book');
-    } catch (err) {
-      console.error('Failed to decode saved audio', err);
-    }
-  }, []);
+  // Load audio WAV blob back into player (for saved books) - deprecated
+  // const loadAudioFromBlob = useCallback(async (blob: Blob) => {
+  //   if (!blob) return;
+  //   if (!audioContextRef.current) {
+  //     audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+  //   }
+  //   try {
+  //     const arrayBuffer = await blob.arrayBuffer();
+  //     const audioBuffer = await audioContextRef.current.decodeAudioData(arrayBuffer);
+  //     const channelData = audioBuffer.getChannelData(0);
+  //     const floatData = new Float32Array(channelData.length);
+  //     floatData.set(channelData);
+  //     setCompleteAudioBuffer(floatData);
+  //     setCompleteAudioSampleRate(audioBuffer.sampleRate);
+  //     setDuration(audioBuffer.duration);
+  //     setCurrentTime(0);
+  //     setCanScrub(true);
+  //     setIsStreaming(false);
+  //     setSynthesisComplete(true);
+  //     setWordTimings([]);
+  //     setCurrentWordIndex(-1);
+  //     console.log('📚 Loaded saved audio book');
+  //   } catch (err) {
+  //     console.error('Failed to decode saved audio', err);
+  //   }
+  // }, []);
 
   const seek = useCallback((time: number) => {
     console.log(`🎤 Seeking to ${time.toFixed(2)}s`);

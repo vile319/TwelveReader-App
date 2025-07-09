@@ -37,17 +37,6 @@ const Sidebar: FC = () => {
         {state.model.status}
       </div>
 
-      {/* Model Selection */}
-      <div className="mb-6">
-        <ModelSelector
-          selectedModel={state.model.selectedModel}
-          onModelChange={actions.setSelectedModel}
-          onDeviceChange={actions.setPreferredDevice}
-          onDtypeChange={actions.setPreferredDtype}
-          disabled={state.audio.isLoading}
-        />
-      </div>
-
       {/* Voice Selection */}
       <div className="mb-6">
         <label className="block mb-3 text-sm font-semibold text-slate-200">
@@ -106,6 +95,26 @@ const Sidebar: FC = () => {
          state.audio.canScrub ? '🔄 Regenerate' :
          '▶️ Generate Audio'}
       </button>
+
+      {/* Help Button */}
+      <button
+        onClick={actions.handleShowHelp}
+        className="w-full py-3 rounded-lg border border-blue-500 bg-blue-500/10 text-blue-500 font-semibold flex items-center justify-center gap-2 mb-6 hover:bg-blue-500/20 transition-colors"
+        title="Get help and view tutorial"
+      >
+        ❓ Help & FAQ
+      </button>
+
+      {/* Model Selection */}
+      <div className="mb-6">
+        <ModelSelector
+          selectedModel={state.model.selectedModel}
+          onModelChange={actions.setSelectedModel}
+          onDeviceChange={actions.setPreferredDevice}
+          onDtypeChange={actions.setPreferredDtype}
+          disabled={state.audio.isLoading}
+        />
+      </div>
 
       {/* Advanced Options (collapsed by default) */}
       <div className="mb-6">
@@ -191,15 +200,6 @@ const Sidebar: FC = () => {
           </div>
         )}
       </div>
-
-      {/* Help Button */}
-      <button
-        onClick={actions.handleShowHelp}
-        className="w-full py-3 rounded-lg border border-blue-500 bg-blue-500/10 text-blue-500 font-semibold flex items-center justify-center gap-2 mb-6 hover:bg-blue-500/20 transition-colors"
-        title="Get help and view tutorial"
-      >
-        ❓ Help & FAQ
-      </button>
 
       {/* Error Display */}
       {state.error && (
