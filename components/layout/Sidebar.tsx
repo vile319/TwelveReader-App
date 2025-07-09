@@ -18,8 +18,6 @@ const Sidebar: FC = () => {
   const { state, actions, tts } = useAppContext();
   // Local toggle to show/hide rarely-used technical controls
   const [showAdvanced, setShowAdvanced] = useState(false);
-
-  const isGenerateDisabled = !state.inputText.trim() || state.audio.isLoading;
   const voices: Voice[] = tts.voices as Voice[];
 
   return (
@@ -74,27 +72,7 @@ const Sidebar: FC = () => {
         )}
       </div>
 
-      {/* Generate Button */}
-      <button
-        onClick={() => {
-          if (state.isReading) {
-            actions.handleStopReading();
-          } else {
-            actions.handleStartReading();
-          }
-        }}
-        disabled={isGenerateDisabled}
-        className={cn(
-          'w-full py-4 rounded-lg font-semibold text-white mb-4 transition-colors',
-          state.isReading ? 'bg-red-600 hover:bg-red-700' : 'bg-blue-500 hover:bg-blue-600',
-          isGenerateDisabled && 'opacity-50 cursor-not-allowed'
-        )}
-      >
-        {state.audio.isLoading ? '⏳ Loading Model...' :
-         state.isReading ? `⏹️ Stop (${state.generationProgress}%)` :
-         state.audio.canScrub ? '🔄 Regenerate' :
-         '▶️ Generate Audio'}
-      </button>
+
 
       {/* Help Button */}
       <button

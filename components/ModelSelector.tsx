@@ -297,21 +297,48 @@ const ModelSelector: FC<ModelSelectorProps> = ({
 
   return (
     <div className="space-y-4">
-      {/* Auto-selection toggle */}
-      <div className="flex items-center justify-between">
-        <label className="flex items-center gap-2 text-sm font-medium text-slate-200">
-          <input
-            type="checkbox"
-            checked={autoSelect}
-            onChange={handleAutoSelectChange}
-            disabled={disabled}
-            className="w-4 h-4 text-blue-600 bg-slate-700 border-slate-600 rounded focus:ring-blue-500 focus:ring-2"
-          />
-          🤖 Auto-select best model
-        </label>
-        <span className="text-xs text-slate-400">
-          {autoSelect ? 'Enabled' : 'Manual'}
-        </span>
+      {/* Auto-selection option */}
+      <div className="mb-4">
+        <h4 className="text-xs font-semibold text-purple-400 mb-2 flex items-center gap-1">
+          🤖 Automatic Selection
+        </h4>
+        <div
+          className={`p-3 rounded-lg border cursor-pointer transition-colors ${
+            autoSelect
+              ? 'border-purple-500 bg-purple-500/10'
+              : 'border-slate-600 bg-slate-700 hover:border-slate-500'
+          } ${disabled ? 'cursor-not-allowed' : ''}`}
+          onClick={() => !disabled && handleAutoSelectChange({ target: { checked: !autoSelect } } as ChangeEvent<HTMLInputElement>)}
+        >
+          <div className="flex items-start justify-between">
+            <div className="flex-1">
+              <div className="flex items-center gap-2 mb-1">
+                <span className="font-medium text-slate-200">🤖 Auto-select best model</span>
+                {autoSelect && (
+                  <span className="px-2 py-0.5 text-xs bg-purple-500 text-white rounded">Active</span>
+                )}
+                <span className="text-sm text-purple-400">
+                  ⚡ Automatic
+                </span>
+              </div>
+              <p className="text-xs text-slate-400 mb-1">Automatically chooses the best model for your device and use case</p>
+              <div className="flex items-center gap-4 text-xs text-slate-500">
+                <span>🎯 Device-aware</span>
+                <span>⚡ Performance optimized</span>
+              </div>
+            </div>
+            <div className="ml-3">
+              <input
+                type="radio"
+                name="model-selection"
+                checked={autoSelect}
+                onChange={() => !disabled && handleAutoSelectChange({ target: { checked: !autoSelect } } as ChangeEvent<HTMLInputElement>)}
+                disabled={disabled}
+                className="w-4 h-4 text-purple-600 bg-slate-700 border-slate-600 focus:ring-purple-500 focus:ring-2"
+              />
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Local storage toggle */}
@@ -361,11 +388,11 @@ const ModelSelector: FC<ModelSelectorProps> = ({
         )}
       </div>
 
-      {/* Model selection (disabled when auto-select is on) */}
+      {/* Manual Model selection (disabled when auto-select is on) */}
       <div className={`transition-opacity ${autoSelect ? 'opacity-50' : 'opacity-100'}`}>
-        <label className="block mb-3 text-sm font-semibold text-slate-200">
-          🎛️ Model Selection ({AVAILABLE_MODELS.length} available)
-        </label>
+        <h4 className="text-xs font-semibold text-blue-400 mb-2 flex items-center gap-1">
+          🎛️ Manual Model Selection ({AVAILABLE_MODELS.length} available)
+        </h4>
         
         {/* GPU-Optimized Models */}
         <div className="mb-4">
@@ -477,16 +504,19 @@ const ModelSelector: FC<ModelSelectorProps> = ({
       {/* Info text */}
       <div className="text-xs text-slate-400 bg-slate-800/50 p-3 rounded-lg">
         <p className="mb-1">
-          <strong>Auto-select:</strong> Automatically chooses the best model for your device and use case.
+          <strong>🤖 Automatic Selection:</strong> Click the automatic option above to let the system choose the best model for your device.
         </p>
         <p className="mb-1">
-          <strong>Keep models downloaded:</strong> Saves downloaded models in browser cache for faster loading.
+          <strong>🎛️ Manual Selection:</strong> Choose a specific model from the options below for more control.
         </p>
         <p className="mb-1">
-          <strong>Device selection:</strong> GPU provides fastest processing, CPU works on all devices.
+          <strong>💾 Keep models downloaded:</strong> Saves downloaded models in browser cache for faster loading.
+        </p>
+        <p className="mb-1">
+          <strong>🔧 Device selection:</strong> GPU provides fastest processing, CPU works on all devices.
         </p>
         <p>
-          <strong>Model quality:</strong> FP32/FP16 for highest quality, Q8 for balance, Q4 for speed.
+          <strong>📊 Model quality:</strong> FP32/FP16 for highest quality, Q8 for balance, Q4 for speed.
         </p>
       </div>
     </div>
