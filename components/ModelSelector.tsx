@@ -388,10 +388,54 @@ const ModelSelector: FC<ModelSelectorProps> = ({
         )}
       </div>
 
+      {/* Manual Model selection */}
+      <div className="mb-4">
+        <h4 className="text-xs font-semibold text-blue-400 mb-2 flex items-center gap-1">
+          🎛️ Manual Model Selection
+        </h4>
+        <div
+          className={`p-3 rounded-lg border cursor-pointer transition-colors ${
+            !autoSelect
+              ? 'border-blue-500 bg-blue-500/10'
+              : 'border-slate-600 bg-slate-700 hover:border-slate-500'
+          } ${disabled ? 'cursor-not-allowed' : ''}`}
+          onClick={() => !disabled && handleAutoSelectChange({ target: { checked: false } } as ChangeEvent<HTMLInputElement>)}
+        >
+          <div className="flex items-start justify-between">
+            <div className="flex-1">
+              <div className="flex items-center gap-2 mb-1">
+                <span className="font-medium text-slate-200">🎛️ Manual model selection</span>
+                {!autoSelect && (
+                  <span className="px-2 py-0.5 text-xs bg-blue-500 text-white rounded">Active</span>
+                )}
+                <span className="text-sm text-blue-400">
+                  🎯 Manual
+                </span>
+              </div>
+              <p className="text-xs text-slate-400 mb-1">Choose a specific model for more control over quality and performance</p>
+              <div className="flex items-center gap-4 text-xs text-slate-500">
+                <span>🎛️ Full control</span>
+                <span>⚙️ Custom settings</span>
+              </div>
+            </div>
+            <div className="ml-3">
+              <input
+                type="radio"
+                name="model-selection"
+                checked={!autoSelect}
+                onChange={() => !disabled && handleAutoSelectChange({ target: { checked: false } } as ChangeEvent<HTMLInputElement>)}
+                disabled={disabled}
+                className="w-4 h-4 text-blue-600 bg-slate-700 border-slate-600 focus:ring-blue-500 focus:ring-2"
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* Manual Model selection (disabled when auto-select is on) */}
       <div className={`transition-opacity ${autoSelect ? 'opacity-50' : 'opacity-100'}`}>
         <h4 className="text-xs font-semibold text-blue-400 mb-2 flex items-center gap-1">
-          🎛️ Manual Model Selection ({AVAILABLE_MODELS.length} available)
+          🎛️ Available Models ({AVAILABLE_MODELS.length} total)
         </h4>
         
         {/* GPU-Optimized Models */}
@@ -504,10 +548,10 @@ const ModelSelector: FC<ModelSelectorProps> = ({
       {/* Info text */}
       <div className="text-xs text-slate-400 bg-slate-800/50 p-3 rounded-lg">
         <p className="mb-1">
-          <strong>🤖 Automatic Selection:</strong> Click the automatic option above to let the system choose the best model for your device.
+          <strong>🤖 Automatic Selection:</strong> Let the system choose the best model for your device automatically.
         </p>
         <p className="mb-1">
-          <strong>🎛️ Manual Selection:</strong> Choose a specific model from the options below for more control.
+          <strong>🎛️ Manual Selection:</strong> Choose a specific model for more control over quality and performance.
         </p>
         <p className="mb-1">
           <strong>💾 Keep models downloaded:</strong> Saves downloaded models in browser cache for faster loading.

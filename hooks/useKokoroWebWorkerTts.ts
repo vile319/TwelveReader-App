@@ -59,7 +59,7 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
   const [isReady, setIsReady] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [status, setStatus] = useState('Initializing Kokoro AI...');
+  const [status, setStatus] = useState('Ready to generate audio');
   const [currentDevice, setCurrentDevice] = useState<'webgpu' | 'wasm' | 'cpu' | null>(null);
   const [debugMode, setDebugMode] = useState(false);
   const [storedChunks, setStoredChunks] = useState<AudioChunk[]>([]);
@@ -689,7 +689,7 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
   // Initialize TTS model
   const initializeTts = useCallback(async () => {
     setIsLoading(true);
-    setStatus('Initializing Kokoro AI...');
+    setStatus('Initializing model...');
 
     // All device and dtype decision logic is now consolidated in detectWebGPU.
     const { device, dtype } = await detectWebGPU();
