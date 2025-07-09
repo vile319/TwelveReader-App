@@ -167,6 +167,11 @@ export interface AppContextType {
     getAudioBlob: () => Blob | null;
     setPlaybackRate: (rate: number) => void;
 
+    // Model management actions
+    cleanupUnwantedModels: () => Promise<void>;
+    resetAllModelData: () => Promise<void>;
+    getModelCacheSize: () => Promise<{ totalSize: number; fileCount: number; sizeFormatted: string }>;
+
     // Library actions
     saveCurrentTextSet: (title?: string) => void;
     loadTextSet: (id: string) => void;

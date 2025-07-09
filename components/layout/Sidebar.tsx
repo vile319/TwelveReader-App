@@ -108,28 +108,42 @@ const Sidebar: FC = () => {
         {/* Collapsible content */}
         {showAdvanced && (
           <div className="pt-4 space-y-2">
-            {/* Reset Model */}
-            <button
-              onClick={async () => {
-                await actions.clearModel();
-                actions.setInputText('');
-                actions.setUploadedPDF(null);
-              }}
-              className="w-full py-2 rounded-lg border border-red-600 text-red-600 text-xs font-semibold flex items-center justify-center gap-2 hover:bg-red-600/10 transition-colors"
-            >
-              🔄 Reset Model
-            </button>
+            {/* Model Management */}
+            <div className="space-y-2">
+              <button
+                onClick={async () => {
+                  await actions.cleanupUnwantedModels();
+                  alert('🧹 Cleaned up unwanted models. Only models you chose to keep are now cached.');
+                }}
+                className="w-full py-2 rounded-lg border border-green-600 text-green-600 text-xs font-semibold flex items-center justify-center gap-2 hover:bg-green-600/10 transition-colors"
+              >
+                🧹 Cleanup Models
+              </button>
 
-            {/* Check Cache */}
-            <button
-              onClick={async () => {
-                const status = await actions.checkCacheStatus();
-                alert(`Cache Status:\n${status.cached ? '✅ Model is cached' : '❌ No cache found'}\nFiles: ${status.fileCount}\nSize: ${status.sizeFormatted || 'Unknown'}\n\nCheck console for detailed cache info.`);
-              }}
-              className="w-full py-2 rounded-lg border border-slate-500 text-slate-500 text-xs font-medium flex items-center justify-center gap-1 hover:bg-slate-500/10 transition-colors"
-            >
-              📊 Check Cache
-            </button>
+              <button
+                onClick={async () => {
+                  const cacheInfo = await actions.getModelCacheSize();
+                  alert(`Cache Status:\n📦 Total Size: ${cacheInfo.sizeFormatted}\n📁 Files: ${cacheInfo.fileCount}\n\nModels kept: ${Object.keys(state.model.modelKeepLocal).filter(id => state.model.modelKeepLocal[id]).length}`);
+                }}
+                className="w-full py-2 rounded-lg border border-slate-500 text-slate-500 text-xs font-medium flex items-center justify-center gap-1 hover:bg-slate-500/10 transition-colors"
+              >
+                📊 Cache Info
+              </button>
+
+              <button
+                onClick={async () => {
+                  if (confirm('⚠️ This will reset ALL model data and clear all caches. Are you sure?')) {
+                    await actions.resetAllModelData();
+                    actions.setInputText('');
+                    actions.setUploadedPDF(null);
+                    alert('🔄 All model data has been reset.');
+                  }
+                }}
+                className="w-full py-2 rounded-lg border border-red-600 text-red-600 text-xs font-semibold flex items-center justify-center gap-2 hover:bg-red-600/10 transition-colors"
+              >
+                🔄 Reset All Models
+              </button>
+            </div>
 
             {/* Debug Audio */}
             <button

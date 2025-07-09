@@ -3,6 +3,7 @@ import useKokoroWebWorkerTts from '../hooks/useKokoroWebWorkerTts';
 import { BRAND_NAME } from '../utils/branding';
 import { AppContextType, AppState, AppError, SampleText, TextSet } from '../types';
 import { driveHelpers } from '../utils/googleDrive';
+import { modelManager } from '../utils/modelManager';
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
@@ -53,13 +54,24 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
   const [showModelWarning, setShowModelWarning] = useState(false);
   const [modelAccepted, setModelAccepted] = useState(false);
   
-  // Model selection state
-  const [selectedModel, setSelectedModel] = useState('kokoro-82m-fp32');
-  const [preferredDevice, setPreferredDevice] = useState<'webgpu' | 'wasm' | 'cpu'>('webgpu');
+  // Model selection state - initialized from model manager
+  const [selectedModel, setSelectedModel] = useState(() => {
+    const preferences = modelManager.getPreferences();
+    return preferences.selectedModel;
+  });
+  const [preferredDevice, setPreferredDevice] = useState<'webgpu' | 'wasm' | 'cpu'>(() => {
+    const preferences = modelManager.getPreferences();
+    return preferences.preferredDevice;
+  });
   const [preferredDtype, setPreferredDtype] = useState<'fp32' | 'fp16' | 'q8' | 'q4' | 'q4f16'>('fp32');
-  const [autoSelect, setAutoSelect] = useState(true);
+  const [autoSelect, setAutoSelect] = useState(() => {
+    const preferences = modelManager.getPreferences();
+    return preferences.autoSelect;
+  });
   const [keepLocal, setKeepLocal] = useState(true);
-  const [modelKeepLocal, setModelKeepLocal] = useState<Record<string, boolean>>({});
+  const [modelKeepLocal, setModelKeepLocal] = useState<Record<string, boolean>>(() => {
+    return modelManager.getAllKeepLocalSettings();
+  });
 
   // Store pending read request during model download
   const [pendingRead, setPendingRead] = useState<{ text: string; voice: string } | null>(null);
@@ -255,6 +267,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
 
   const handleDeviceChange = (device: 'webgpu' | 'wasm' | 'cpu') => {
     setPreferredDevice(device);
+    modelManager.savePreferences({ preferredDevice: device });
   };
 
   const handleDtypeChange = (dtype: 'fp32' | 'fp16' | 'q8' | 'q4' | 'q4f16') => {
@@ -494,6 +507,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       setKeepLocal,
       setModelKeepLocal: (modelId: string, keepLocal: boolean) => {
         setModelKeepLocal((prev: Record<string, boolean>) => ({ ...prev, [modelId]: keepLocal }));
+        modelManager.setModelKeepLocal(modelId, keepLocal);
       },
       setError,
       setIsSeekingHover,
@@ -508,6 +522,24 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       checkCacheStatus: tts.checkCacheStatus,
       debugAudioQuality: tts.debugAudioQuality,
       checkAudioQuality: tts.checkAudioQuality,
+      // New model management actions
+      cleanupUnwantedModels: async () => {
+        await modelManager.cleanupUnwantedModels();
+        // Refresh the keep local settings after cleanup
+        setModelKeepLocal(modelManager.getAllKeepLocalSettings());
+      },
+      resetAllModelData: async () => {
+        await modelManager.resetAllModelData();
+        // Reset state after cleanup
+        const preferences = modelManager.getPreferences();
+        setSelectedModel(preferences.selectedModel);
+        setPreferredDevice(preferences.preferredDevice);
+        setAutoSelect(preferences.autoSelect);
+        setModelKeepLocal(modelManager.getAllKeepLocalSettings());
+      },
+      getModelCacheSize: async () => {
+        return await modelManager.getCacheSize();
+      },
       toggleNormalizeAudio: tts.toggleNormalizeAudio,
       seekToTime: tts.seekToTime,
       togglePlayPause: tts.togglePlayPause,
