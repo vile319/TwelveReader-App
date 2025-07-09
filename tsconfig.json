@@ -6,6 +6,7 @@
     "module": "ESNext",
     "lib": ["ES2020", "DOM", "DOM.Iterable"],
     "skipLibCheck": true,
+    "jsxImportSource": "react",
 
     /* Bundler mode */
     "moduleResolution": "bundler",
@@ -15,16 +16,18 @@
     "noEmit": true,
     "allowJs": true,
     "jsx": "react-jsx",
+    "types": ["react", "react-dom", "node"],
+    "allowSyntheticDefaultImports": true,
 
     /* Linting */
     "strict": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
-    "noUncheckedSideEffectImports": true,
 
     "paths": {
       "@/*" :  ["./*"]
-    }
+    },
+    "typeRoots": ["./types", "./node_modules/@types"]
   }
 }

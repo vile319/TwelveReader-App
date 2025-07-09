@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { type FC, useEffect, useState } from 'react';
 import HighlightedText from './HighlightedText';
 
 // --- New Robust PDF.js Loader ---
@@ -50,16 +50,14 @@ interface PDFReaderProps {
   file: File;
   onTextExtracted: (text: string) => void;
   currentSentence: string;
-  readingProgress: number;
   wordTimings?: Array<{word: string, start: number, end: number}>;
   currentWordIndex?: number;
 }
 
-const PDFReader: React.FC<PDFReaderProps> = ({ 
+const PDFReader: FC<PDFReaderProps> = ({ 
   file, 
   onTextExtracted, 
   currentSentence,
-  readingProgress,
   wordTimings = [],
   currentWordIndex = -1
 }) => {
@@ -76,6 +74,7 @@ const PDFReader: React.FC<PDFReaderProps> = ({
   const extractPDFText = async () => {
     setIsLoading(true);
     setError('');
+    let pdf: any = null;
     
     try {
       console.log('📄 Starting PDF text extraction...');
@@ -86,7 +85,7 @@ const PDFReader: React.FC<PDFReaderProps> = ({
       pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.269/pdf.worker.min.mjs`;
       
       const arrayBuffer = await file.arrayBuffer();
-      const pdf = await pdfjsLib.getDocument({ 
+      pdf = await pdfjsLib.getDocument({ 
         data: arrayBuffer,
         verbosity: 0 
       }).promise;
@@ -129,8 +128,8 @@ const PDFReader: React.FC<PDFReaderProps> = ({
           
         setExtractedText(finalText);
         
-        // Create simple chapters based on length
-        const chapters = createChapters(finalText);
+        // Create chapters if you wish to use them by uncommenting below
+        // const chapters = createChapters(finalText);
         
         console.log(`🎯 Final text ready: ${finalText.length} characters`);
         onTextExtracted(finalText);
@@ -138,6 +137,12 @@ const PDFReader: React.FC<PDFReaderProps> = ({
       } else {
         throw new Error('Could not extract readable text from this PDF');
       }
+      
+      // Cleanup PDF resources to free memory
+      try {
+        await pdf.cleanup?.();
+        await pdf.destroy?.();
+      } catch {}
       
     } catch (error) {
       console.error('❌ PDF extraction failed:', error);
@@ -149,31 +154,31 @@ const PDFReader: React.FC<PDFReaderProps> = ({
     }
   };
 
-  const createChapters = (text: string): Array<{id: string, title: string, page: number}> => {
-    const chapters: Array<{id: string, title: string, page: number}> = [];
-    
-    // Split text into roughly equal chunks for chapters
-    const wordsPerChapter = Math.max(500, Math.floor(text.split(' ').length / 5));
-    const words = text.split(' ');
-    
-    for (let i = 0; i < words.length; i += wordsPerChapter) {
-      const chapterNumber = Math.floor(i / wordsPerChapter) + 1;
-      const startWords = words.slice(i, i + 10).join(' ');
-      const title = startWords.length > 50 
-        ? startWords.substring(0, 47) + '...'
-        : startWords;
-        
-      chapters.push({
-        id: `chapter-${chapterNumber}`,
-        title: `Chapter ${chapterNumber}: ${title}`,
-        page: chapterNumber
-      });
-    }
-    
-    return chapters.length > 0 ? chapters : [
-      { id: 'full-document', title: 'Full Document', page: 1 }
-    ];
-  };
+  // const createChapters = (text: string): Array<{id: string, title: string, page: number}> => {
+  //   const chapters: Array<{id: string, title: string, page: number}> = [];
+  //   
+  //   // Split text into roughly equal chunks for chapters
+  //   const wordsPerChapter = Math.max(500, Math.floor(text.split(' ').length / 5));
+  //   const words = text.split(' ');
+  //   
+  //   for (let i = 0; i < words.length; i += wordsPerChapter) {
+  //     const chapterNumber = Math.floor(i / wordsPerChapter) + 1;
+  //     const startWords = words.slice(i, i + 10).join(' ');
+  //     const title = startWords.length > 50 
+  //       ? startWords.substring(0, 47) + '...'
+  //       : startWords;
+  //       
+  //     chapters.push({
+  //       id: `chapter-${chapterNumber}`,
+  //       title: `Chapter ${chapterNumber}: ${title}`,
+  //       page: chapterNumber
+  //     });
+  //   }
+  //   
+  //   return chapters.length > 0 ? chapters : [
+  //     { id: 'full-document', title: 'Full Document', page: 1 }
+  //   ];
+  // };
 
   if (isLoading) {
     return (

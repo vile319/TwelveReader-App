@@ -1,4 +1,7 @@
-import { useState, useCallback, useRef, useEffect } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
+/* eslint-disable @typescript-eslint/no-unused-vars */
+// Touch the default import to avoid TS6133 (React might still be needed by JSX in future refactor)
+void React;
 import { KokoroTTS } from 'kokoro-js';
 import { AppError } from '../types';
 
@@ -32,6 +35,9 @@ if (typeof window !== 'undefined') {
 interface UseKokoroWebWorkerTtsProps {
   onError: (error: AppError) => void;
   enabled?: boolean; // if false, delay model initialization
+  selectedModel?: string; // New: selected model ID
+  preferredDevice?: 'webgpu' | 'wasm' | 'cpu'; // New: preferred device
+  preferredDtype?: 'fp32' | 'fp16' | 'q8' | 'q4' | 'q4f16' | 'uint8' | 'uint8f16'; // New: preferred dtype
 }
 
 export interface AudioChunk {
@@ -42,16 +48,19 @@ export interface AudioChunk {
   duration: number;
 }
 
-// Maximum characters per chunk when sending to Kokoro TTS.
-// Roughly corresponds to < 512 token limit (tokens ≈ bytes/characters for English).
-const MAX_CHARS_PER_CHUNK = 400;
+// Alignment object returned by Kokoro when `return_alignments` is true
+type Alignment = {
+  word: string;
+  start_time: number; // seconds
+  end_time: number;   // seconds
+};
 
-const useKokoroWebWorkerTts = ({ onError, enabled = true }: UseKokoroWebWorkerTtsProps) => {
+const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokoro-82m-fp32', preferredDevice, preferredDtype }: UseKokoroWebWorkerTtsProps) => {
   const [isReady, setIsReady] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [status, setStatus] = useState('Initializing Kokoro AI...');
-  const [currentDevice, setCurrentDevice] = useState<'webgpu' | 'wasm' | null>(null);
+  const [currentDevice, setCurrentDevice] = useState<'webgpu' | 'wasm' | 'cpu' | null>(null);
   const [debugMode, setDebugMode] = useState(false);
   const [storedChunks, setStoredChunks] = useState<AudioChunk[]>([]);
   
@@ -77,25 +86,14 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true }: UseKokoroWebWorkerTt
   // New synthesis complete flag
   const [synthesisComplete, setSynthesisComplete] = useState(false);
   
+  // === Playback Rate State ===
+  const [playbackRate, setPlaybackRateState] = useState<number>(1);
+  const playbackRateRef = useRef<number>(1);
+  
   // New state for playback trigger
   const [isFirstChunkReady, setIsFirstChunkReady] = useState(false);
   
-  // ========================
-  // Playback speed handling
-  // ========================
-  const [playbackSpeed, setPlaybackSpeed] = useState<number>(1);
-  const playbackSpeedRef = useRef<number>(1);
-  useEffect(() => {
-    playbackSpeedRef.current = playbackSpeed;
-    // Update currently-playing source if one exists
-    if (completeAudioSourceRef.current) {
-      try {
-        completeAudioSourceRef.current.playbackRate.value = playbackSpeed;
-      } catch {}
-    }
-  }, [playbackSpeed]);
-  
-  const lastWordUpdateRef = useRef(0);
+  // Ref for last word update time (reserved for future use)
   const wordTimingsRef = useRef(wordTimings);
   wordTimingsRef.current = wordTimings;
   
@@ -141,7 +139,7 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true }: UseKokoroWebWorkerTt
     }
     
     // Update the index using a setter function to avoid stale closure
-    setCurrentWordIndex(prevIndex => {
+    setCurrentWordIndex((prevIndex: number) => {
       if (newIndex !== prevIndex) {
         console.log(`📝 Word highlight: ${prevIndex} → ${newIndex} (time: ${currentTime.toFixed(2)}s)`);
         if (newIndex >= 0 && newIndex < timings.length) {
@@ -162,8 +160,8 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true }: UseKokoroWebWorkerTt
   const completeAudioSourceRef = useRef<AudioBufferSourceNode | null>(null);
   const playbackStartTimeRef = useRef<number>(0);
   const playbackOffsetRef = useRef<number>(0);
-  const seekTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const progressIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const seekTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const progressIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   
   // New continuous audio buffer system
   const audioBufferRef = useRef<Float32Array[]>([]);
@@ -212,12 +210,10 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true }: UseKokoroWebWorkerTt
     { name: 'bm_lewis', label: '🇬🇧 Lewis (British Male)', nationality: 'British', gender: 'Male' },
   ];
 
-  // Add audio to buffer (no longer used but keeping for compatibility)
-  const addAudioChunk = useCallback((audioData: Float32Array, sampleRate: number) => {
-    // This function is no longer used in the new chunking system
-    // Audio is now processed and combined in the speak function
-    console.log('⚠️ addAudioChunk called but chunking system is in use');
-  }, []);
+  // Deprecated: kept as a placeholder for backwards-compatibility with older saves
+  // const addAudioChunk = useCallback((audioData: Float32Array, sampleRate: number) => {
+  //   console.log('⚠️ addAudioChunk called but chunking system is in use');
+  // }, []);
 
   // Old continuous playback system removed - now using streaming system
 
@@ -290,8 +286,8 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true }: UseKokoroWebWorkerTt
       }
       
       // Calculate which chunk to start from
-      let samplesPerSecond = sampleRateRef.current;
-      let targetSample = Math.floor(startTime * samplesPerSecond);
+      const samplesPerSecond = sampleRateRef.current;
+      const targetSample = Math.floor(startTime * samplesPerSecond);
       let currentSample = 0;
       let chunkIndex = 0;
       
@@ -314,15 +310,10 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true }: UseKokoroWebWorkerTt
          if (isPlaybackActiveRef.current && audioContextRef.current) {
            const elapsed = (audioContextRef.current.currentTime - streamingStartTimeRef.current) * playbackSpeedRef.current;
            // Calculate max time from streaming audio length
-           const totalStreamingSamples = streamingAudioRef.current.reduce((sum, chunk) => sum + chunk.length, 0);
-           const maxStreamTime = totalStreamingSamples / sampleRateRef.current;
-           const currentPos = Math.max(0, Math.min(elapsed, maxStreamTime));
-           const now = performance.now();
-           if (now - lastTimeUpdateRef.current > 100) {
-             lastTimeUpdateRef.current = now;
-             setCurrentTime(currentPos);
-             updateCurrentWordIndex(currentPos);
-           }
+           const totalStreamingSamples = streamingAudioRef.current.reduce((sum: number, chunk: Float32Array) => sum + chunk.length, 0);
+           const maxStreamTime = totalStreamingSamples / samplesPerSecond;
+           const currentPos = Math.max(0, Math.min(elapsed * playbackRateRef.current, maxStreamTime));
+           setCurrentTime(currentPos);
            
            // Update current word index for highlighting (un-throttled for accuracy)
            updateCurrentWordIndex(currentPos);
@@ -370,8 +361,9 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true }: UseKokoroWebWorkerTt
         
         const source = audioContextRef.current.createBufferSource();
         source.buffer = audioBuffer;
-        // Apply current playback speed
-        source.playbackRate.value = playbackSpeedRef.current;
+        try {
+          source.playbackRate.value = playbackRateRef.current;
+        } catch {}
         source.connect(audioContextRef.current.destination);
         
         // Store the source so we can stop it if needed
@@ -451,8 +443,9 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true }: UseKokoroWebWorkerTt
       // Create and configure source
       const source = audioContextRef.current.createBufferSource();
       source.buffer = audioBuffer;
-      // Apply current playback speed
-      source.playbackRate.value = playbackSpeedRef.current;
+      try {
+        source.playbackRate.value = playbackRateRef.current;
+      } catch {}
       source.connect(audioContextRef.current.destination);
       
       completeAudioSourceRef.current = source;
@@ -467,8 +460,8 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true }: UseKokoroWebWorkerTt
           return; // Audio stopped, stop updating
         }
         
-        const elapsed = (audioContextRef.current!.currentTime - playbackStartTimeRef.current) * playbackSpeedRef.current;
-        const currentPos = playbackOffsetRef.current + elapsed;
+        const elapsed = audioContextRef.current!.currentTime - playbackStartTimeRef.current;
+        const currentPos = playbackOffsetRef.current + elapsed * playbackRateRef.current;
         
         const now = performance.now();
         if (currentPos >= duration && now - lastTimeUpdateRef.current > 100) {
@@ -497,8 +490,8 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true }: UseKokoroWebWorkerTt
       // Also use an interval as backup for consistent updates
       progressIntervalRef.current = setInterval(() => {
         if (completeAudioSourceRef.current && audioContextRef.current) {
-          const elapsed = (audioContextRef.current.currentTime - playbackStartTimeRef.current) * playbackSpeedRef.current;
-          const currentPos = playbackOffsetRef.current + elapsed;
+          const elapsed = audioContextRef.current.currentTime - playbackStartTimeRef.current;
+          const currentPos = playbackOffsetRef.current + elapsed * playbackRateRef.current;
           
           const nowInt = performance.now();
           if (currentPos < duration && nowInt - lastTimeUpdateRef.current > 100) {
@@ -555,8 +548,8 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true }: UseKokoroWebWorkerTt
         playbackOffsetRef.current = pausedTime;
       } else if (completeAudioSourceRef.current && audioContextRef.current) {
         // For complete audio mode
-        const elapsed = (audioContextRef.current.currentTime - playbackStartTimeRef.current) * playbackSpeedRef.current;
-        const currentPos = playbackOffsetRef.current + elapsed;
+        const elapsed = audioContextRef.current.currentTime - playbackStartTimeRef.current;
+        const currentPos = playbackOffsetRef.current + elapsed * playbackRateRef.current;
         const pausedTime = Math.max(0, Math.min(currentPos, duration));
         console.log(`⏸️ Pausing complete audio at ${pausedTime.toFixed(2)}s`);
         setCurrentTime(pausedTime);
@@ -592,9 +585,9 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true }: UseKokoroWebWorkerTt
         // For streaming mode, restart streaming playback
         startStreamingFromPosition(currentTime);
       } else if (completeAudioBuffer) {
-        // For single-chunk synthesis start playback automatically
+        // Resume complete audio from the last known position instead of restarting
         isPlaybackActiveRef.current = true;
-        playCompleteAudio(0);
+        playCompleteAudio(currentTime);
         setIsPlaying(true);
       }
     }
@@ -613,13 +606,13 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true }: UseKokoroWebWorkerTt
 
      // Function to toggle WASM mode
    const toggleForceWasm = useCallback(() => {
-     setForceWasmMode(prev => !prev);
+     setForceWasmMode((prev: boolean) => !prev);
      console.log('🔧 Force WASM mode:', !forceWasmMode);
    }, [forceWasmMode]);
 
    // Function to toggle audio normalization
    const toggleNormalizeAudio = useCallback(() => {
-     setNormalizeAudio(prev => !prev);
+     setNormalizeAudio((prev: boolean) => !prev);
      console.log('🔧 Audio normalization:', !normalizeAudio);
    }, [normalizeAudio]);
 
@@ -637,40 +630,61 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true }: UseKokoroWebWorkerTt
      return audioData;
    }, [normalizeAudio]);
 
-     // Detect if WebGPU is available and choose the best configuration
-   const detectWebGPU = useCallback(async (): Promise<{ device: 'webgpu' | 'wasm'; dtype: 'fp32' | 'q8' | 'fp16' }> => {
-     const isMobile = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+       // Detect if WebGPU is available and choose the best configuration
+  const detectWebGPU = useCallback(async (): Promise<{ device: 'webgpu' | 'wasm' | 'cpu'; dtype: 'fp32' | 'fp16' | 'q8' | 'q4' | 'q4f16' | 'uint8' | 'uint8f16' }> => {
+    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 
-     // For mobile devices, default to wasm with q8 for stability and memory reasons
-     if (isMobile) {
-       console.log('📱 Mobile device detected. Forcing CPU mode (wasm) with q8 model.');
-       return { device: 'wasm', dtype: 'q8' };
-     }
+    // Honour explicit WASM override first
+    if (forceWasmMode) {
+      console.log('🔧 Forcing WASM mode as requested.');
+      return { device: 'wasm', dtype: 'q8' };
+    }
 
-     // Respect the user's choice to force WASM mode
-     if (forceWasmMode) {
-       console.log('🔧 Forcing WASM mode as requested.');
-       return { device: 'wasm', dtype: 'q8' };
-     }
-     
-     // Try to use WebGPU on desktop
-     if (typeof navigator !== 'undefined' && (navigator as any).gpu) {
-       try {
-         const adapter = await (navigator as any).gpu.requestAdapter();
-         if (adapter) {
-           console.log('✅ WebGPU available on desktop. Using stable fp32 model.');
-           // For WebGPU, only fp32 is consistently stable across devices.
-           return { device: 'webgpu', dtype: 'fp32' };
-         }
-       } catch (e) {
-         console.warn('⚠️ WebGPU detection failed:', e);
-       }
-     }
+    // Use user preferences if provided
+    if (preferredDevice && preferredDtype) {
+      console.log(`🔧 Using user preferences: ${preferredDevice} with ${preferredDtype}`);
+      
+      // Validate device availability
+      if (preferredDevice === 'webgpu') {
+        if (typeof navigator !== 'undefined' && (navigator as any).gpu) {
+          try {
+            const adapter = await (navigator as any).gpu.requestAdapter();
+            if (adapter) {
+              return { device: preferredDevice, dtype: preferredDtype };
+            } else {
+              console.warn('⚠️ WebGPU requested but not available, falling back to WASM');
+              return { device: 'wasm', dtype: preferredDtype };
+            }
+          } catch (e) {
+            console.warn('⚠️ WebGPU detection failed:', e);
+            return { device: 'wasm', dtype: preferredDtype };
+          }
+        } else {
+          console.warn('⚠️ WebGPU requested but not supported, falling back to WASM');
+          return { device: 'wasm', dtype: preferredDtype };
+        }
+      }
+      
+      return { device: preferredDevice, dtype: preferredDtype };
+    }
 
-     // Default fallback for desktop without WebGPU
-     console.log('➡️ WebGPU not available or failed, using CPU (wasm) with q8 model.');
-     return { device: 'wasm', dtype: 'q8' };
-   }, [forceWasmMode]);
+    // Auto-detection logic (fallback)
+    if (typeof navigator !== 'undefined' && (navigator as any).gpu) {
+      try {
+        const adapter = await (navigator as any).gpu.requestAdapter();
+        if (adapter) {
+          console.log(`✅ WebGPU available on ${isMobile ? 'mobile' : 'desktop'}. Using stable fp32 model.`);
+          return { device: 'webgpu', dtype: 'fp32' };
+        }
+      } catch (e) {
+        console.warn('⚠️ WebGPU detection failed:', e);
+      }
+    }
+
+    // Fallback path – CPU (WASM) back-end with quantised model to conserve memory
+    console.log('➡️ WebGPU not available or failed, using CPU (wasm) with q8 model.');
+    return { device: 'wasm', dtype: 'q8' };
+  }, [forceWasmMode, preferredDevice, preferredDtype]);
 
   // Initialize TTS model
   const initializeTts = useCallback(async () => {
@@ -705,12 +719,12 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true }: UseKokoroWebWorkerTt
       }
 
       const modelLoadStart = performance.now();
-      const tts = await KokoroTTS.from_pretrained('onnx-community/Kokoro-82M-v1.0-ONNX', {
+      const tts = await KokoroTTS.from_pretrained('onnx-community/Kokoro-82M-ONNX', {
         dtype: dtype,
         device: device,
-        progress_callback: (progress) => {
+        progress_callback: (progress: { status: string; progress?: number }) => {
           if (progress.status === 'progress') {
-            const percent = Math.round(Math.min(progress.progress * 100, 100));
+            const percent = Math.round(Math.min((progress.progress ?? 0) * 100, 100));
             const deviceLabel = device === 'webgpu' ? 'GPU' : 'CPU';
             setStatus(`Downloading model (${deviceLabel}): ${percent}%`);
           } else if (progress.status === 'ready') {
@@ -736,12 +750,12 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true }: UseKokoroWebWorkerTt
         setStatus('⚠️ GPU failed, trying CPU fallback...');
         
         try {
-          const tts = await KokoroTTS.from_pretrained('onnx-community/Kokoro-82M-v1.0-ONNX', {
+          const tts = await KokoroTTS.from_pretrained('onnx-community/Kokoro-82M-ONNX', {
             dtype: 'q8',
             device: 'wasm',
-            progress_callback: (progress) => {
+            progress_callback: (progress: { status: string; progress?: number }) => {
               if (progress.status === 'progress') {
-                const percent = Math.round(Math.min(progress.progress * 100, 100));
+                const percent = Math.round(Math.min((progress.progress ?? 0) * 100, 100));
                 setStatus(`CPU fallback - Downloading: ${percent}%`);
               }
             }
@@ -772,12 +786,12 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true }: UseKokoroWebWorkerTt
     }
   }, [onError, detectWebGPU]);
 
-  // Initialize when enabled flips true
+  // Initialize when enabled flips true or model configuration changes
   useEffect(() => {
     if (enabled) {
       initializeTts();
     }
-  }, [enabled, initializeTts]);
+  }, [enabled, selectedModel, preferredDevice, preferredDtype, initializeTts]);
 
   // Chunk text for better TTS processing
   const chunkText = useCallback((text: string, maxChunkSize: number = 2000): string[] => {
@@ -842,8 +856,8 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true }: UseKokoroWebWorkerTt
     try {
       console.log(`📚 Processing text (${text.length} characters)`);
       
-      // Chunk text for better processing - below model limit (<512 tokens)
-      const chunks = chunkText(text, MAX_CHARS_PER_CHUNK);
+      // Chunk text for better processing - shorter chunks to avoid TTS cutoff
+      const chunks = chunkText(text, 300);
       console.log(`📝 Split into ${chunks.length} chunks for processing`);
       
       // Process all chunks but in smaller batches to prevent stack overflow
@@ -871,8 +885,8 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true }: UseKokoroWebWorkerTt
           onProgress?.(chunkProgress);
 
           if (currentSynthesisRef.current !== text) {
-            console.log(`🛑 Synthesis stopped (user stopped)`);
-            return;
+            console.log(`🛑 Synthesis stopped after generate() – discarding chunk ${i + 1}`);
+            return; // Exit early, abandon this synthesis entirely
           }
 
           console.log(`🔄 Processing chunk ${i + 1}: ${chunk.length} characters`);
@@ -887,66 +901,72 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true }: UseKokoroWebWorkerTt
             return_alignments: true // <-- Requesting alignments
           });
 
-        // Extract audio data
-        let audioData: Float32Array | null = null;
+          // === New cancellation check ===
+          if (currentSynthesisRef.current !== text) {
+            console.log(`🛑 Synthesis stopped after generate() – discarding chunk ${i + 1}`);
+            return; // Exit early, abandon this synthesis entirely
+          }
 
-        if (audioObject && typeof audioObject === 'object') {
-          if (audioObject.audio && audioObject.audio instanceof Float32Array) {
-            audioData = audioObject.audio;
-            sampleRate = audioObject.sample_rate || audioObject.sampling_rate || 24000;
-          } else if (audioObject.data && audioObject.data instanceof Float32Array) {
-            audioData = audioObject.data;
-            sampleRate = audioObject.sample_rate || audioObject.sampling_rate || 24000;
-          } else if (audioObject instanceof Float32Array) {
-            audioData = audioObject;
-          } else {
-            for (const [key, value] of Object.entries(audioObject)) {
-              if (value instanceof Float32Array) {
-                audioData = value;
-                break;
+          // Extract audio data
+          let audioData: Float32Array | null = null;
+
+          if (audioObject && typeof audioObject === 'object') {
+            if (audioObject.audio && audioObject.audio instanceof Float32Array) {
+              audioData = audioObject.audio;
+              sampleRate = audioObject.sample_rate || audioObject.sampling_rate || 24000;
+            } else if (audioObject.data && audioObject.data instanceof Float32Array) {
+              audioData = audioObject.data;
+              sampleRate = audioObject.sample_rate || audioObject.sampling_rate || 24000;
+            } else if (audioObject instanceof Float32Array) {
+              audioData = audioObject;
+            } else {
+              for (const value of Object.values(audioObject)) {
+                if (value instanceof Float32Array) {
+                  audioData = value;
+                  break;
+                }
               }
             }
           }
-        }
 
-        if (!audioData || audioData.length === 0) {
-          console.error(`❌ No audio data generated for chunk ${i + 1}`);
-          continue; // Skip this chunk and continue
-        }
+          if (!audioData || audioData.length === 0) {
+            console.error(`❌ No audio data generated for chunk ${i + 1}`);
+            continue; // Skip this chunk and continue
+          }
 
                 // Debug audio sample rate and scaling - avoid stack overflow with large arrays
         let peak = 0;
         let rmsSum = 0;
-        for (let j = 0; j < audioData.length; j++) {
-          const abs = Math.abs(audioData[j]);
+        for (let j = 0; j < audioData!.length; j++) {
+          const abs = Math.abs(audioData![j]);
           if (abs > peak) peak = abs;
-          rmsSum += audioData[j] * audioData[j];
+          rmsSum += audioData![j] * audioData![j];
         }
-        const rms = Math.sqrt(rmsSum / audioData.length);
+        const rms = Math.sqrt(rmsSum / audioData!.length);
         
         console.log(`🎵 Chunk ${i + 1} audio info:`, {
-          samples: audioData.length,
+          samples: audioData!.length,
           sampleRate: sampleRate,
-          duration: (audioData.length / sampleRate).toFixed(3) + 's',
+          duration: (audioData!.length / sampleRate).toFixed(3) + 's',
           peak: peak.toFixed(4),
           rms: rms.toFixed(4)
         });
 
         // Apply normalization if enabled
-        audioData = normalizeAudioData(audioData);
+        audioData = normalizeAudioData(audioData!);
 
-        allAudioChunks.push(audioData);
-        totalSamples += audioData.length;
+        allAudioChunks.push(audioData!);
+        totalSamples += audioData!.length;
         
         // Add to streaming buffer for immediate playback
-        streamingAudioRef.current.push(audioData);
+        streamingAudioRef.current.push(audioData!);
         const currentStreamDuration = (totalSamples / sampleRate);
         setSynthesizedDuration(currentStreamDuration);
 
         // --- New: Use precise word timings if available ---
         if (audioObject.alignments) {
-          const chunkOffset = currentStreamDuration - (audioData.length / sampleRate);
-          const alignedTimings = audioObject.alignments.map((alignment: any) => ({
+          const chunkOffset = currentStreamDuration - (audioData!.length / sampleRate);
+          const alignedTimings = (audioObject.alignments as Alignment[]).map((alignment) => ({
             word: alignment.word,
             start: chunkOffset + alignment.start_time,
             end: chunkOffset + alignment.end_time
@@ -954,20 +974,20 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true }: UseKokoroWebWorkerTt
           
           if (alignedTimings.length > 0) {
             console.log(`📊 Received ${alignedTimings.length} precise word timings for chunk ${i + 1}.`);
-            setWordTimings(prev => [...prev, ...alignedTimings]);
+            setWordTimings((prev: { word: string; start: number; end: number }[]) => [...prev, ...alignedTimings]);
           }
         } else {
           // Fallback to provisional timings if alignments are not available
-          const chunkDuration = audioData.length / sampleRate;
+          const chunkDuration = audioData!.length / sampleRate;
           const chunkOffset = currentStreamDuration - chunkDuration;
-          const wordsInChunk = chunk.split(/\s+/).filter(w => w.length > 0);
+          const wordsInChunk = chunk.split(/\s+/).filter((w: string) => w.length > 0);
           
           // Improved timing estimation based on word length
-          const totalChars = wordsInChunk.reduce((sum, word) => sum + word.length, 0);
+          const totalChars = wordsInChunk.reduce((sum: number, word: string) => sum + word.length, 0);
           const timePerChar = totalChars > 0 ? chunkDuration / totalChars : 0;
 
           let wordStart = chunkOffset;
-          const provisionalTimings = wordsInChunk.map((w) => {
+          const provisionalTimings = wordsInChunk.map((w: string) => {
             const wordDur = w.length * timePerChar + 0.05; // Base time + per-char time
             const timing = {
               word: w,
@@ -979,11 +999,11 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true }: UseKokoroWebWorkerTt
           });
 
           if (provisionalTimings.length) {
-            setWordTimings(prev => [...prev, ...provisionalTimings]);
+            setWordTimings((prev: { word: string; start: number; end: number }[]) => [...prev, ...provisionalTimings]);
           }
         }
         
-        console.log(`✅ Chunk ${i + 1} processed: ${audioData.length} samples (${currentStreamDuration.toFixed(1)}s total)`);
+        console.log(`✅ Chunk ${i + 1} processed: ${audioData!.length} samples (${currentStreamDuration.toFixed(1)}s total)`);
 
         // Start streaming playback after first chunk
         if (i === 0) {
@@ -1115,6 +1135,15 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true }: UseKokoroWebWorkerTt
         console.log('🛑 Complete audio source already stopped:', e);
       }
       completeAudioSourceRef.current = null;
+    }
+
+    // Close AudioContext to release resources (important on memory-constrained devices)
+    if (audioContextRef.current) {
+      try {
+        // Close returns a promise but we don't need to await inside sync function
+        audioContextRef.current.close();
+      } catch {}
+      audioContextRef.current = null;
     }
 
     // Clear audio buffer and reset scrubbing state
@@ -1507,6 +1536,49 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true }: UseKokoroWebWorkerTt
     seekToTime(time);
   }, [seekToTime]);
 
+  // NEW: Automatically unlock or create the AudioContext on first user interaction (needed for iOS Safari)
+  useEffect(() => {
+    const unlock = () => {
+      try {
+        if (!audioContextRef.current) {
+          audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+        }
+        if (audioContextRef.current.state === 'suspended') {
+          audioContextRef.current.resume();
+        }
+      } catch (e) {
+        console.warn('⚠️ Unable to unlock AudioContext:', e);
+      }
+      document.removeEventListener('touchend', unlock);
+      document.removeEventListener('click', unlock);
+    };
+    // Use once + passive to make sure the handler is lightweight
+    document.addEventListener('touchend', unlock, { once: true, passive: true });
+    document.addEventListener('click', unlock, { once: true, passive: true });
+    return () => {
+      document.removeEventListener('touchend', unlock);
+      document.removeEventListener('click', unlock);
+    };
+  }, []);
+
+  const setPlaybackRate = useCallback((rate: number) => {
+    if (rate <= 0) return;
+    playbackRateRef.current = rate;
+    setPlaybackRateState(rate);
+
+    // Apply new rate to any actively playing sources
+    try {
+      if (completeAudioSourceRef.current) {
+        completeAudioSourceRef.current.playbackRate.value = rate;
+      }
+      if (sourceNodeRef.current) {
+        sourceNodeRef.current.playbackRate.value = rate;
+      }
+    } catch (e) {
+      console.warn('⚠️ Unable to set playbackRate on current source:', e);
+    }
+  }, [sourceNodeRef, completeAudioSourceRef]);
+
   return {
     speak,
     stop,
@@ -1545,11 +1617,9 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true }: UseKokoroWebWorkerTt
     synthesisComplete,
     // Utility: get combined audio buffer as WAV Blob
     getAudioBlob,
-    loadAudioFromBlob,
     seek,
-    // Playback speed controls
-    playbackSpeed,
-    setPlaybackSpeed
+    playbackRate,
+    setPlaybackRate,
   };
 };
 

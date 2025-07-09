@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { type FC, useState, useEffect, type MouseEvent } from 'react';
 
 interface AdSensePopupProps {
   adSlot: string;
@@ -6,7 +6,7 @@ interface AdSensePopupProps {
   onClose?: () => void;
 }
 
-const AdSensePopup: React.FC<AdSensePopupProps> = ({ 
+const AdSensePopup: FC<AdSensePopupProps> = ({ 
   adSlot, 
   showInterval = 15, // Show every 15 minutes
   onClose 
@@ -118,11 +118,11 @@ const AdSensePopup: React.FC<AdSensePopupProps> = ({
             borderRadius: '50%',
             transition: 'all 0.2s ease'
           }}
-          onMouseEnter={(e) => {
+          onMouseEnter={(e: MouseEvent<HTMLButtonElement>) => {
             e.currentTarget.style.backgroundColor = '#2d3748';
             e.currentTarget.style.color = '#e5e5e5';
           }}
-          onMouseLeave={(e) => {
+          onMouseLeave={(e: MouseEvent<HTMLButtonElement>) => {
             e.currentTarget.style.backgroundColor = 'transparent';
             e.currentTarget.style.color = '#a0a0a0';
           }}
