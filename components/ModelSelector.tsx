@@ -20,6 +20,8 @@ interface ModelSelectorProps {
   disabled?: boolean;
   onDeviceChange?: (device: 'webgpu' | 'wasm' | 'cpu') => void;
   onDtypeChange?: (dtype: 'fp32' | 'fp16' | 'q8' | 'q4' | 'q4f16') => void;
+  modelKeepLocal?: Record<string, boolean>;
+  onModelKeepLocalChange?: (modelId: string, keepLocal: boolean) => void;
 }
 
 // Available models configuration with accurate sizes and filenames from Hugging Face
@@ -109,10 +111,11 @@ const ModelSelector: FC<ModelSelectorProps> = ({
   onModelChange, 
   disabled = false,
   onDeviceChange,
-  onDtypeChange
-}) => {
+  onDtypeChange,
+  modelKeepLocal = {},
+  onModelKeepLocalChange
+}: ModelSelectorProps) => {
   const [autoSelect, setAutoSelect] = useState(true);
-  const [keepLocal, setKeepLocal] = useState(true);
   const [preferredDevice, setPreferredDevice] = useState<'webgpu' | 'wasm' | 'cpu'>('webgpu');
   const [gpuAvailable, setGpuAvailable] = useState(false);
   const [downloadedModels, setDownloadedModels] = useState<Set<string>>(new Set());
@@ -177,7 +180,6 @@ const ModelSelector: FC<ModelSelectorProps> = ({
       if (saved) {
         const preferences = JSON.parse(saved);
         setAutoSelect(preferences.autoSelect ?? true);
-        setKeepLocal(preferences.keepLocal ?? true);
         setPreferredDevice(preferences.preferredDevice ?? 'webgpu');
         
         // If auto-select is enabled and we have a saved model, use it
@@ -191,26 +193,23 @@ const ModelSelector: FC<ModelSelectorProps> = ({
   }, [localStorageKey, onModelChange]);
 
   // Save preferences to localStorage when they change
-  const savePreferences = (newAutoSelect: boolean, newKeepLocal: boolean, newSelectedModel: string, newPreferredDevice: string) => {
-    if (keepLocal) {
-      try {
-        const preferences = {
-          autoSelect: newAutoSelect,
-          keepLocal: newKeepLocal,
-          selectedModel: newSelectedModel,
-          preferredDevice: newPreferredDevice
-        };
-        localStorage.setItem(localStorageKey, JSON.stringify(preferences));
-      } catch (error) {
-        console.warn('Failed to save model preferences:', error);
-      }
+  const savePreferences = (newAutoSelect: boolean, newSelectedModel: string, newPreferredDevice: string) => {
+    try {
+      const preferences = {
+        autoSelect: newAutoSelect,
+        selectedModel: newSelectedModel,
+        preferredDevice: newPreferredDevice
+      };
+      localStorage.setItem(localStorageKey, JSON.stringify(preferences));
+    } catch (error) {
+      console.warn('Failed to save model preferences:', error);
     }
   };
 
   const handleAutoSelectChange = (e: ChangeEvent<HTMLInputElement>) => {
     const checked = e.target.checked;
     setAutoSelect(checked);
-    savePreferences(checked, keepLocal, selectedModel, preferredDevice);
+    savePreferences(checked, selectedModel, preferredDevice);
     
     // If enabling auto-select, use the best model for the device
     if (checked) {
@@ -219,21 +218,10 @@ const ModelSelector: FC<ModelSelectorProps> = ({
     }
   };
 
-  const handleKeepLocalChange = (e: ChangeEvent<HTMLInputElement>) => {
-    const checked = e.target.checked;
-    setKeepLocal(checked);
-    savePreferences(autoSelect, checked, selectedModel, preferredDevice);
-    
-    // If disabling keep local, clear localStorage
-    if (!checked) {
-      localStorage.removeItem(localStorageKey);
-    }
-  };
-
   const handleDeviceChange = (e: ChangeEvent<HTMLSelectElement>) => {
     const device = e.target.value as 'webgpu' | 'wasm' | 'cpu';
     setPreferredDevice(device);
-    savePreferences(autoSelect, keepLocal, selectedModel, device);
+    savePreferences(autoSelect, selectedModel, device);
     onDeviceChange?.(device);
     
     // If auto-select is enabled, update to best model for new device
@@ -245,7 +233,7 @@ const ModelSelector: FC<ModelSelectorProps> = ({
 
   const handleModelChange = (modelId: string) => {
     onModelChange(modelId);
-    savePreferences(autoSelect, keepLocal, modelId, preferredDevice);
+    savePreferences(autoSelect, modelId, preferredDevice);
     
     // Update device and dtype based on selected model
     const model = AVAILABLE_MODELS.find(m => m.id === modelId);
@@ -341,22 +329,7 @@ const ModelSelector: FC<ModelSelectorProps> = ({
         </div>
       </div>
 
-      {/* Local storage toggle */}
-      <div className="flex items-center justify-between">
-        <label className="flex items-center gap-2 text-sm font-medium text-slate-200">
-          <input
-            type="checkbox"
-            checked={keepLocal}
-            onChange={handleKeepLocalChange}
-            disabled={disabled}
-            className="w-4 h-4 text-blue-600 bg-slate-700 border-slate-600 rounded focus:ring-blue-500 focus:ring-2"
-          />
-          💾 Keep models downloaded
-        </label>
-        <span className="text-xs text-slate-400">
-          {keepLocal ? 'Saved' : 'Not saved'}
-        </span>
-      </div>
+
 
       {/* Device selection */}
       <div className="space-y-2">
@@ -469,22 +442,38 @@ const ModelSelector: FC<ModelSelectorProps> = ({
                       </span>
                     </div>
                     <p className="text-xs text-slate-400 mb-1">{model.description}</p>
-                    <div className="flex items-center gap-4 text-xs text-slate-500">
-                      <span>📦 {model.size}</span>
-                      <span>🎯 {model.dtype.toUpperCase()}</span>
-                    </div>
+                                      <div className="flex items-center gap-4 text-xs text-slate-500">
+                    <span>📦 {model.size}</span>
+                    <span>🎯 {model.dtype.toUpperCase()}</span>
                   </div>
-                  <div className="ml-3">
-                    <input
-                      type="radio"
-                      name="model-selection"
-                      value={model.id}
-                      checked={selectedModel === model.id}
-                      onChange={() => !autoSelect && !disabled && handleModelChange(model.id)}
-                      disabled={autoSelect || disabled}
-                      className="w-4 h-4 text-blue-600 bg-slate-700 border-slate-600 focus:ring-blue-500 focus:ring-2"
-                    />
+                  {/* Individual keep local checkbox */}
+                  <div className="flex items-center gap-2 mt-2">
+                    <label className="flex items-center gap-2 text-xs text-slate-400">
+                      <input
+                        type="checkbox"
+                        checked={modelKeepLocal[model.id] ?? false}
+                        onChange={(e) => onModelKeepLocalChange?.(model.id, e.target.checked)}
+                        disabled={disabled}
+                        className="w-3 h-3 text-blue-600 bg-slate-700 border-slate-600 rounded focus:ring-blue-500 focus:ring-1"
+                      />
+                      💾 Keep downloaded
+                    </label>
+                    <span className="text-xs text-slate-500">
+                      {modelKeepLocal[model.id] ? 'Saved' : 'Not saved'}
+                    </span>
                   </div>
+                </div>
+                <div className="ml-3">
+                  <input
+                    type="radio"
+                    name="model-selection"
+                    value={model.id}
+                    checked={selectedModel === model.id}
+                    onChange={() => !autoSelect && !disabled && handleModelChange(model.id)}
+                    disabled={autoSelect || disabled}
+                    className="w-4 h-4 text-blue-600 bg-slate-700 border-slate-600 focus:ring-blue-500 focus:ring-2"
+                  />
+                </div>
                 </div>
               </div>
             ))}
@@ -525,6 +514,22 @@ const ModelSelector: FC<ModelSelectorProps> = ({
                   <div className="flex items-center gap-4 text-xs text-slate-500">
                     <span>📦 {model.size}</span>
                     <span>🎯 {model.dtype.toUpperCase()}</span>
+                  </div>
+                  {/* Individual keep local checkbox */}
+                  <div className="flex items-center gap-2 mt-2">
+                    <label className="flex items-center gap-2 text-xs text-slate-400">
+                      <input
+                        type="checkbox"
+                        checked={modelKeepLocal[model.id] ?? false}
+                        onChange={(e) => onModelKeepLocalChange?.(model.id, e.target.checked)}
+                        disabled={disabled}
+                        className="w-3 h-3 text-blue-600 bg-slate-700 border-slate-600 rounded focus:ring-blue-500 focus:ring-1"
+                      />
+                      💾 Keep downloaded
+                    </label>
+                    <span className="text-xs text-slate-500">
+                      {modelKeepLocal[model.id] ? 'Saved' : 'Not saved'}
+                    </span>
                   </div>
                 </div>
                 <div className="ml-3">

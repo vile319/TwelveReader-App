@@ -46,6 +46,7 @@ export interface ModelState {
   preferredDtype: 'fp32' | 'fp16' | 'q8' | 'q4' | 'q4f16';
   autoSelect: boolean;
   keepLocal: boolean;
+  modelKeepLocal: Record<string, boolean>; // Per-model local storage preferences
 }
 
 export interface TextSet {
@@ -136,6 +137,7 @@ export interface AppContextType {
     setPreferredDtype: (dtype: 'fp32' | 'fp16' | 'q8' | 'q4' | 'q4f16') => void;
     setAutoSelect: (enabled: boolean) => void;
     setKeepLocal: (enabled: boolean) => void;
+    setModelKeepLocal: (modelId: string, keepLocal: boolean) => void;
     
     // UI actions
     setError: (error: AppError | null) => void;

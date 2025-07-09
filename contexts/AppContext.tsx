@@ -59,6 +59,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
   const [preferredDtype, setPreferredDtype] = useState<'fp32' | 'fp16' | 'q8' | 'q4' | 'q4f16'>('fp32');
   const [autoSelect, setAutoSelect] = useState(true);
   const [keepLocal, setKeepLocal] = useState(true);
+  const [modelKeepLocal, setModelKeepLocal] = useState<Record<string, boolean>>({});
 
   // Store pending read request during model download
   const [pendingRead, setPendingRead] = useState<{ text: string; voice: string } | null>(null);
@@ -450,6 +451,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       preferredDtype,
       autoSelect,
       keepLocal,
+      modelKeepLocal,
     },
     selectedVoice,
     error,
@@ -490,6 +492,9 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       setPreferredDtype: handleDtypeChange,
       setAutoSelect,
       setKeepLocal,
+      setModelKeepLocal: (modelId: string, keepLocal: boolean) => {
+        setModelKeepLocal((prev: Record<string, boolean>) => ({ ...prev, [modelId]: keepLocal }));
+      },
       setError,
       setIsSeekingHover,
       setHoverTime,
