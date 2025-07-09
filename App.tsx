@@ -10,7 +10,7 @@ import { addBook, getBooks, getBook, SavedBook, deleteBook } from './utils/bookL
 const App: React.FC = () => {
   const [selectedVoice, setSelectedVoice] = useState('af_heart');
   const [error, setError] = useState<AppError | null>(null);
-  const [inputText, setInputText] = useState<string>('');
+  const [inputText, setInputText] = useState<string>('Hello! This is a quick test of the text-to-speech system. How does it sound?');
   const [isReading, setIsReading] = useState(false);
   const [currentSentence, setCurrentSentence] = useState('');
   const [uploadedPDF, setUploadedPDF] = useState<File | null>(null);
@@ -68,6 +68,9 @@ const App: React.FC = () => {
     playbackSpeed,
     setPlaybackSpeed,
     loadAudioFromBlob,
+    currentDevice,
+    forceWasmMode,
+    toggleForceWasm,
   } = useKokoroWebWorkerTts({
     onError: setError,
     enabled: modelAccepted
@@ -435,33 +438,6 @@ const App: React.FC = () => {
           </select>
         </div>
 
-        {/* Keep Model Cached Toggle */}
-        <div style={{ marginBottom: '24px' }}>
-          <label style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '12px',
-            fontSize: '14px',
-            fontWeight: '600',
-            color: '#e5e5e5'
-          }}>
-            <input
-              type="checkbox"
-              checked={keepModelCached}
-              onChange={async (e) => {
-                const checked = e.target.checked;
-                setKeepModelCached(checked);
-                localStorage.setItem('keepModelCached', checked ? 'true' : 'false');
-                if (!checked) {
-                  // Clear caches so model is not persisted
-                  await clearModel();
-                }
-              }}
-            />
-            Keep Model Cached
-          </label>
-        </div>
-
         {/* PDF Upload */}
         <div style={{ marginBottom: '24px' }}>
           <label style={{
@@ -534,33 +510,208 @@ const App: React.FC = () => {
            '▶️ Generate Audio'}
         </button>
 
-        {/* Reset Model Button */}
+        {/* Help & FAQ Button */}
         <button
-          onClick={async () => {
-            await clearModel();
-            setInputText('');
-            setUploadedPDF(null);
-          }}
+          onClick={() => window.open('https://github.com/vile319/TwelveReader-App#readme', '_blank')}
           style={{
             width: '100%',
             padding: '12px',
             borderRadius: '8px',
-            border: '1px solid #dc2626',
+            border: '1px solid #4a90e2',
             backgroundColor: 'transparent',
-            color: '#dc2626',
+            color: '#4a90e2',
             cursor: 'pointer',
             fontSize: '14px',
             fontWeight: '600',
-            marginBottom: '8px',
+            marginBottom: '16px',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             gap: '8px'
           }}
-          title="Clear and reload the AI model (fixes stuck states)"
+          title="View help documentation and FAQ"
         >
-          🔄 Reset Model
+          ❓ Help & FAQ
         </button>
+
+        {/* Model Selection */}
+        <div style={{ marginBottom: '24px' }}>
+          <label style={{
+            display: 'block',
+            marginBottom: '12px',
+            fontSize: '14px',
+            fontWeight: '600',
+            color: '#e5e5e5'
+          }}>
+            🤖 AI Model Configuration
+          </label>
+          
+          {/* Current Model Info */}
+          <div style={{
+            backgroundColor: '#2d3748',
+            padding: '12px',
+            borderRadius: '8px',
+            marginBottom: '12px',
+            fontSize: '13px',
+            color: '#e5e5e5'
+          }}>
+            <div style={{ marginBottom: '4px' }}>
+              <strong>Current:</strong> {currentDevice === 'webgpu' ? '⚡ GPU-Accelerated' : '🖥️ CPU-Optimized'}
+            </div>
+            <div style={{ fontSize: '11px', color: '#a0a0a0' }}>
+              {currentDevice === 'webgpu' 
+                ? 'Using WebGPU with FP32 precision for best quality'
+                : 'Using WebAssembly with Q8 quantization for compatibility'
+              }
+            </div>
+          </div>
+
+          {/* Model Options */}
+          <div style={{
+            backgroundColor: '#1a1e26',
+            border: '1px solid #4a5568',
+            borderRadius: '8px',
+            padding: '12px'
+          }}>
+            <div style={{ fontSize: '12px', color: '#a0a0a0', marginBottom: '8px' }}>
+              Available Models:
+            </div>
+            
+            {/* GPU Model */}
+            <div style={{
+              backgroundColor: currentDevice === 'webgpu' ? '#2d4a2d' : '#2d3748',
+              border: currentDevice === 'webgpu' ? '1px solid #4ade80' : '1px solid #4a5568',
+              borderRadius: '6px',
+              padding: '8px',
+              marginBottom: '8px',
+              fontSize: '12px'
+            }}>
+              <div style={{ fontWeight: '600', color: '#e5e5e5', marginBottom: '2px' }}>
+                ⚡ GPU-Accelerated (WebGPU)
+              </div>
+              <div style={{ color: '#a0a0a0', fontSize: '11px' }}>
+                High quality • FP32 precision • Requires modern GPU
+              </div>
+            </div>
+
+            {/* CPU Model */}
+            <div style={{
+              backgroundColor: currentDevice === 'wasm' ? '#2d4a2d' : '#2d3748',
+              border: currentDevice === 'wasm' ? '1px solid #4ade80' : '1px solid #4a5568',
+              borderRadius: '6px',
+              padding: '8px',
+              fontSize: '12px'
+            }}>
+              <div style={{ fontWeight: '600', color: '#e5e5e5', marginBottom: '2px' }}>
+                🖥️ CPU-Optimized (WebAssembly)
+              </div>
+              <div style={{ color: '#a0a0a0', fontSize: '11px' }}>
+                Good quality • Q8 quantized • Works on all devices
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Advanced Options */}
+        <details style={{ marginBottom: '24px' }}>
+          <summary style={{
+            cursor: 'pointer',
+            fontSize: '14px',
+            fontWeight: '600',
+            color: '#e5e5e5',
+            marginBottom: '12px',
+            userSelect: 'none'
+          }}>
+            ⚙️ Advanced Options
+          </summary>
+          
+          {/* Keep Model Cached Toggle */}
+          <div style={{ marginBottom: '16px', marginLeft: '16px' }}>
+            <label style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '12px',
+              fontSize: '14px',
+              fontWeight: '600',
+              color: '#e5e5e5'
+            }}>
+              <input
+                type="checkbox"
+                checked={keepModelCached}
+                onChange={async (e) => {
+                  const checked = e.target.checked;
+                  setKeepModelCached(checked);
+                  localStorage.setItem('keepModelCached', checked ? 'true' : 'false');
+                  if (!checked) {
+                    // Clear caches so model is not persisted
+                    await clearModel();
+                  }
+                }}
+              />
+              Keep Model Cached
+            </label>
+          </div>
+
+          {/* Force CPU Mode Toggle */}
+          <div style={{ marginBottom: '16px', marginLeft: '16px' }}>
+            <label style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '12px',
+              fontSize: '14px',
+              fontWeight: '600',
+              color: '#e5e5e5'
+            }}>
+              <input
+                type="checkbox"
+                checked={forceWasmMode}
+                onChange={async () => {
+                  toggleForceWasm();
+                  // Clear model to force reload with new device
+                  await clearModel();
+                }}
+              />
+              Force CPU Mode
+            </label>
+            <div style={{
+              fontSize: '11px',
+              color: '#a0a0a0',
+              marginLeft: '28px',
+              marginTop: '4px'
+            }}>
+              Enable if GPU mode has issues
+            </div>
+          </div>
+
+          {/* Reset Model Button */}
+          <button
+            onClick={async () => {
+              await clearModel();
+              setInputText('');
+              setUploadedPDF(null);
+            }}
+            style={{
+              padding: '12px',
+              borderRadius: '8px',
+              border: '1px solid #dc2626',
+              backgroundColor: 'transparent',
+              color: '#dc2626',
+              cursor: 'pointer',
+              fontSize: '14px',
+              fontWeight: '600',
+              marginBottom: '8px',
+              marginLeft: '16px',
+              width: 'calc(100% - 16px)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '8px'
+            }}
+            title="Clear and reload the AI model (fixes stuck states)"
+          >
+            🔄 Reset Model
+          </button>
+        </details>
         
         {/* Saved Books Library */}
         {savedBooks.length > 0 && (

@@ -791,23 +791,11 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true }: UseKokoroWebWorkerTt
     while (currentIndex < text.length) {
       let endIndex = Math.min(currentIndex + maxChunkSize, text.length);
       
-      if (endIndex < text.length) {
-        // 1) Prefer breaking at sentence-ending punctuation inside the chunk
-        const sentenceEnd = text.lastIndexOf('.', endIndex);
-        const exclamationEnd = text.lastIndexOf('!', endIndex);
-        const questionEnd = text.lastIndexOf('?', endIndex);
-        const bestEnd = Math.max(sentenceEnd, exclamationEnd, questionEnd);
-
-        if (bestEnd > currentIndex + maxChunkSize * 0.5) {
-          endIndex = bestEnd + 1; // include the punctuation
-        } else {
-          // 2) Otherwise, back up to the previous whitespace so we don't split a word
-          if (/\S/.test(text[endIndex])) {
-            const lastSpace = text.lastIndexOf(' ', endIndex);
-            if (lastSpace > currentIndex + 20) {
-              endIndex = lastSpace;
-            }
-          }
+      // Ensure we do not split inside a word
+      if (endIndex < text.length && /\S/.test(text[endIndex])) {
+        const lastSpace = text.lastIndexOf(' ', endIndex);
+        if (lastSpace > currentIndex + 20) { // keep reasonable chunk size
+          endIndex = lastSpace;
         }
       }
 
