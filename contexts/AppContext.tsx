@@ -4,6 +4,7 @@ import { BRAND_NAME } from '../utils/branding';
 import { AppContextType, AppState, AppError, SampleText, TextSet } from '../types';
 import { driveHelpers } from '../utils/googleDrive';
 import { modelManager } from '../utils/modelManager';
+import JSZip from 'jszip';
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
@@ -208,14 +209,73 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     handleStopReading();
 
     const file = event.target.files?.[0];
-    if (file && file.type === 'application/pdf') {
+    if (!file) return;
+
+    const isPDF = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+    const isEPUB = file.type === 'application/epub+zip' || file.name.toLowerCase().endsWith('.epub');
+
+    if (isPDF) {
       setUploadedPDF(file);
       setIsExtractingPDF(true);
       setError(null);
+    } else if (isEPUB) {
+      setIsExtractingPDF(true);
+      setError(null);
+      extractEpubText(file);
     } else {
-      setError({ title: 'Invalid File', message: 'Please upload a PDF file.' });
+      setError({ title: 'Invalid File', message: 'Please upload a PDF or EPUB file.' });
     }
   };
+
+  // Extract text from an EPUB file (basic implementation)
+  async function extractEpubText(file: File) {
+    try {
+      console.log('📚 Starting EPUB text extraction...');
+      const arrayBuffer = await file.arrayBuffer();
+      const zip = await JSZip.loadAsync(arrayBuffer);
+
+      // Collect XHTML/HTML files (typical for EPUB content)
+      const htmlFileNames = Object.keys(zip.files).filter(name => /\.x?html?$/.test(name));
+      htmlFileNames.sort(); // Basic ordering
+
+      let allText = '';
+      for (const name of htmlFileNames) {
+        try {
+          const content = await zip.files[name].async('string');
+          const parser = new DOMParser();
+          const doc = parser.parseFromString(content, 'text/html');
+          const text = doc.body?.textContent || '';
+          if (text.trim()) {
+            allText += text.trim() + ' ';
+          }
+        } catch (pageError) {
+          console.warn(`⚠️ Failed to extract ${name}:`, pageError);
+          continue;
+        }
+      }
+
+      // Clean up final text similar to PDF processing
+      const finalText = allText
+        .replace(/\s+/g, ' ')
+        .replace(/([.!?])\s*([A-Z])/g, '$1 $2')
+        .replace(/([a-z])([A-Z])/g, '$1. $2')
+        .trim();
+
+      if (finalText && finalText.length > 50 && finalText.length < 1000000) {
+        console.log(`🎯 EPUB extraction complete: ${finalText.length} characters`);
+        setInputText(finalText);
+        // Auto-start reading like PDF behavior
+        handleStartReading(finalText);
+      } else {
+        throw new Error('Could not extract readable text from this EPUB');
+      }
+    } catch (error) {
+      console.error('❌ EPUB extraction failed:', error);
+      setError({ title: 'EPUB Error', message: 'Unable to extract text from this EPUB. It might be protected or contain unsupported formatting.' });
+    } finally {
+      setIsExtractingPDF(false);
+    }
+  }
 
   const handlePDFTextExtracted = (text: string) => {
     if (text.trim()) {

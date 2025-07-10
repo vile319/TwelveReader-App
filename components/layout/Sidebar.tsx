@@ -53,21 +53,21 @@ const Sidebar: FC = () => {
         </select>
       </div>
 
-      {/* PDF Upload */}
+      {/* File Upload (PDF / EPUB) */}
       <div className="mb-6">
         <label className="block mb-3 text-sm font-semibold text-slate-200">
-          📄 PDF Upload
+          📄 File Upload (PDF / EPUB)
         </label>
         <input
           type="file"
-          accept=".pdf"
+          accept=".pdf,.epub"
           onChange={actions.handleFileUpload}
           className="w-full p-3 rounded-lg bg-slate-700 border border-slate-600 text-sm text-slate-200 cursor-pointer file:cursor-pointer"
         />
         {state.isExtractingPDF && (
           <div className="flex items-center gap-2 text-xs text-blue-400 mt-2">
             <div className="w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
-            Extracting text from PDF...
+            Extracting text from file...
           </div>
         )}
       </div>
