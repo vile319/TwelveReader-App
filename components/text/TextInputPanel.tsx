@@ -75,7 +75,7 @@ const TextInputPanel: FC = () => {
       <textarea
         value={state.inputText}
         onChange={(e: ChangeEvent<HTMLTextAreaElement>) => actions.setInputText(e.target.value)}
-        placeholder="Quick Text: Hello! This is a quick test of the text-to-speech system. How does it sound?"
+        placeholder="Enter or paste text here..."
         className={cn(
           'w-full min-h-[120px] resize-y rounded-lg border border-slate-700 bg-slate-800 p-3 mb-4',
           'text-sm text-slate-200 placeholder-slate-500 font-sans',
@@ -83,8 +83,8 @@ const TextInputPanel: FC = () => {
         )}
       />
 
-      {/* Generate Buttons */}
-      <div className="flex justify-center gap-3 mb-4">
+      {/* Generate / Stop Button */}
+      <div className="flex justify-center mb-4">
         <button
           onClick={() => {
             if (state.isReading) {
@@ -105,23 +105,6 @@ const TextInputPanel: FC = () => {
            state.audio.canScrub ? '🔄 Regenerate' :
            '▶️ Generate Audio'}
         </button>
-        
-        {!state.inputText.trim() && (
-          <button
-            onClick={() => {
-              const quickText = "Hello! This is a quick test of the text-to-speech system. How does it sound?";
-              actions.setInputText(quickText);
-              actions.handleStartReading(quickText);
-            }}
-            disabled={state.audio.isLoading}
-            className={cn(
-              'px-6 py-3 rounded-lg font-semibold text-white transition-colors bg-green-600 hover:bg-green-700',
-              state.audio.isLoading && 'opacity-50 cursor-not-allowed'
-            )}
-          >
-            ⚡ Quick Test
-          </button>
-        )}
       </div>
       
       {/* Content Display */}

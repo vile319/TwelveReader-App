@@ -44,7 +44,8 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
   // Core state
   const [selectedVoice, setSelectedVoice] = useState('af_heart');
   const [error, setError] = useState<AppError | null>(null);
-  const [inputText, setInputText] = useState<string>('');
+  // Pre-populate with the first sample text so the user can generate audio right away
+  const [inputText, setInputText] = useState<string>(() => sampleTexts[0].text);
   const [isReading, setIsReading] = useState(false);
   const [currentSentence, setCurrentSentence] = useState('');
   const [uploadedPDF, setUploadedPDF] = useState<File | null>(null);
