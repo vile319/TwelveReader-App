@@ -51,22 +51,19 @@ const HighlightedText: FC<HighlightedTextProps> = memo(({
   const parts = useMemo(() => text.split(/(\s+)/), [text]);
 
   const highlightedContent = useMemo(() => {
-    let wordIndex = 0;
-    return parts.map((part, i) => {
-      // Whitespace parts are returned as-is to preserve formatting.
-      if (part.trim() === '') {
-        return <Fragment key={i}>{part}</Fragment>;
-      }
+    // If text is small, render everything (fast enough).
+    const LARGE_THRESHOLD = 5000; // number of words
 
-      // It's a word, so apply highlighting logic.
+    // Helper to create a span for a word
+    const createSpan = (part: string, idx: number, wordIndex: number) => {
       const isCurrentWord = wordTimings.length > 0 && wordIndex === currentWordIndex;
       const isPastWord = wordTimings.length > 0 && wordIndex < currentWordIndex;
       const currentWordTiming = wordTimings[wordIndex];
       const canClick = onWordClick && currentWordTiming;
 
-      const span = (
+      return (
         <span
-          key={i}
+          key={idx}
           onClick={() => canClick && onWordClick(currentWordTiming.start)}
           style={{
             backgroundColor: isCurrentWord ? 'rgba(74, 144, 226, 0.5)' : isPastWord ? 'rgba(144, 238, 144, 0.15)' : 'transparent',
@@ -81,10 +78,59 @@ const HighlightedText: FC<HighlightedTextProps> = memo(({
           {part}
         </span>
       );
+    };
 
-      wordIndex++;
-      return span;
+    // Fast path for short text
+    if (parts.length <= LARGE_THRESHOLD) {
+      let wordIndex = 0;
+      return parts.map((part, i) => {
+        if (part.trim() === '') return <Fragment key={i}>{part}</Fragment>;
+        const span = createSpan(part, i, wordIndex);
+        wordIndex++;
+        return span;
+      });
+    }
+
+    // For large texts, only render a sliding window of words around the current index.
+    const WINDOW_SIZE = 800; // words before/after current word
+    const windowStart = Math.max(0, currentWordIndex - WINDOW_SIZE);
+    const windowEnd = Math.min(wordTimings.length, currentWordIndex + WINDOW_SIZE);
+
+    let wordIndex = 0;
+    const elements: React.ReactNode[] = [];
+    if (windowStart > 0) {
+      elements.push(
+        <span key="ellipsis-start" style={{ color: '#888' }}>
+          …
+        </span>
+      );
+    }
+
+    parts.forEach((part, i) => {
+      // Decide whether this part is within the window. We only track wordIndex for word parts.
+      const isWord = part.trim() !== '';
+      if (isWord) {
+        if (wordIndex >= windowStart && wordIndex <= windowEnd) {
+          elements.push(createSpan(part, i, wordIndex));
+        }
+        wordIndex++;
+      } else {
+        // Always include whitespace within the window but skip outside.
+        if (wordIndex >= windowStart && wordIndex <= windowEnd) {
+          elements.push(<Fragment key={i}>{part}</Fragment>);
+        }
+      }
     });
+
+    if (windowEnd < wordTimings.length - 1) {
+      elements.push(
+        <span key="ellipsis-end" style={{ color: '#888' }}>
+          …
+        </span>
+      );
+    }
+
+    return elements;
   }, [parts, currentWordIndex, wordTimings, onWordClick]);
 
   // Use highlighted content if timings are available, otherwise plain text.

@@ -29,11 +29,12 @@ const TextInputPanel: FC = () => {
         className="flex-1 bg-slate-800 border border-slate-700 rounded-lg p-5 min-h-[200px] overflow-auto"
       >
         {state.inputText.length > 0 ? (
-          <HighlightedText 
-            text={state.inputText} 
+          <HighlightedText
+            text={state.inputText}
             wordTimings={state.audio.wordTimings}
             currentWordIndex={state.audio.currentWordIndex}
             onWordClick={actions.handleWordClick}
+            style={{ overflowY: 'visible' }}
           />
         ) : (
           <div className="flex flex-col items-center justify-center text-center text-slate-500 text-sm py-10">
