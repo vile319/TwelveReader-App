@@ -1,4 +1,5 @@
 import { type FC, useMemo, memo, Fragment } from 'react';
+import React from 'react'; // Needed for JSX when linter requires React in scope
 
 interface HighlightedTextProps {
   text: string;
@@ -22,11 +23,32 @@ const HighlightedText: FC<HighlightedTextProps> = memo(({
     currentWordIndex
   });
 
+  // Fast path: if no timings, render plain text immediately to avoid
+  // splitting the entire document into thousands of <span> nodes.
+  if (wordTimings.length === 0) {
+    return (
+      <div style={{
+        padding: '16px',
+        backgroundColor: '#0f1419',
+        border: '1px solid #2d3748',
+        borderRadius: '8px',
+        color: '#e5e5e5',
+        fontSize: '16px',
+        fontFamily: 'inherit',
+        lineHeight: '1.6',
+        whiteSpace: 'pre-wrap',
+        overflowY: 'auto',
+        wordBreak: 'break-word',
+        ...style,
+      }}>
+        {text}
+      </div>
+    );
+  }
+
   // Memoize the splitting to preserve formatting. This regex splits the text by whitespace,
   // but keeps the whitespace delimiters in the resulting array.
-  const parts = useMemo(() => {
-    return text.split(/(\s+)/);
-  }, [text]);
+  const parts = useMemo(() => text.split(/(\s+)/), [text]);
 
   const highlightedContent = useMemo(() => {
     let wordIndex = 0;
