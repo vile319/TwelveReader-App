@@ -1,4 +1,4 @@
-import { type FC, useState, useEffect, type ChangeEvent, useCallback } from 'react';
+import React, { type FC, useState, useEffect, type ChangeEvent, useCallback } from 'react';
 import { modelManager } from '../utils/modelManager';
 
 export interface ModelConfig {
@@ -164,7 +164,7 @@ const ModelSelector: FC<ModelSelectorProps> = ({
   }, [onModelChange]);
 
   // Save preferences using model manager
-  const savePreferences = useCallback((newAutoSelect: boolean, newSelectedModel: string, newPreferredDevice: string) => {
+  const savePreferences = useCallback((newAutoSelect: boolean, newSelectedModel: string, newPreferredDevice: 'webgpu' | 'wasm' | 'cpu') => {
     modelManager.savePreferences({
       autoSelect: newAutoSelect,
       selectedModel: newSelectedModel,
@@ -216,7 +216,7 @@ const ModelSelector: FC<ModelSelectorProps> = ({
       case 'wasm':
         return AVAILABLE_MODELS.find(m => m.dtype === 'q8') || AVAILABLE_MODELS[2];
       case 'cpu':
-        return AVAILABLE_MODELS.find(m => m.dtype === 'q4') || AVAILABLE_MODELS[3];
+        return AVAILABLE_MODELS.find(m => m.dtype === 'q8') || AVAILABLE_MODELS[2];
       default:
         return AVAILABLE_MODELS[0];
     }
@@ -257,6 +257,19 @@ const ModelSelector: FC<ModelSelectorProps> = ({
   }, []);
 
   const currentRecommendedModels = getRecommendedModelsForDevice(preferredDevice);
+
+  // After the useEffect for loading preferences, add this new useEffect for device fallback
+  useEffect(() => {
+    if (!gpuAvailable && preferredDevice === 'webgpu') {
+      const newDevice = 'wasm';
+      setPreferredDevice(newDevice);
+      savePreferences(autoSelect, selectedModel, newDevice);
+      if (autoSelect) {
+        const bestModel = getBestModelForDevice(newDevice);
+        onModelChange(bestModel.id);
+      }
+    }
+  }, [gpuAvailable, preferredDevice, autoSelect, selectedModel, savePreferences, onModelChange, getBestModelForDevice]);
 
   return (
     <div className="space-y-4">
