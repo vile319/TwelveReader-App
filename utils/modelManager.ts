@@ -6,7 +6,6 @@ const MODEL_KEEP_LOCAL_KEY = 'twelvereader-model-keep-local';
 const MODEL_CACHE_STATUS_KEY = 'twelvereader-model-cache-status';
 
 export interface ModelPreferences {
-  autoSelect: boolean;
   selectedModel: string;
   preferredDevice: 'webgpu' | 'wasm' | 'cpu';
   lastUpdated: number;
@@ -50,7 +49,6 @@ export class ModelManager {
       if (saved) {
         const parsed = JSON.parse(saved);
         return {
-          autoSelect: parsed.autoSelect ?? true,
           selectedModel: parsed.selectedModel ?? 'kokoro-82m-fp32',
           preferredDevice: parsed.preferredDevice ?? 'webgpu',
           lastUpdated: parsed.lastUpdated ?? Date.now()
@@ -61,7 +59,6 @@ export class ModelManager {
     }
     
     return {
-      autoSelect: true,
       selectedModel: 'kokoro-82m-fp32',
       preferredDevice: 'webgpu',
       lastUpdated: Date.now()

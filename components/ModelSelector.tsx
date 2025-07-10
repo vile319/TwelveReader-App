@@ -116,11 +116,11 @@ const ModelSelector: FC<ModelSelectorProps> = ({
   modelKeepLocal = {},
   onModelKeepLocalChange
 }: ModelSelectorProps) => {
-  const [autoSelect, setAutoSelect] = useState(true);
   const [preferredDevice, setPreferredDevice] = useState<'webgpu' | 'wasm' | 'cpu'>('webgpu');
   const [gpuAvailable, setGpuAvailable] = useState(false);
   const [downloadedModels, setDownloadedModels] = useState<Set<string>>(new Set());
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [isChangingFromModel, setIsChangingFromModel] = useState(false);
 
   // Check GPU availability on mount
   useEffect(() => {
@@ -154,60 +154,21 @@ const ModelSelector: FC<ModelSelectorProps> = ({
   // Load preferences from model manager on mount
   useEffect(() => {
     const preferences = modelManager.getPreferences();
-    setAutoSelect(preferences.autoSelect);
     setPreferredDevice(preferences.preferredDevice as 'webgpu' | 'wasm' | 'cpu');
     
-    // If auto-select is enabled and we have a saved model, use it
-    if (preferences.autoSelect && preferences.selectedModel) {
+    // Use the saved model if exists
+    if (preferences.selectedModel) {
       onModelChange(preferences.selectedModel);
     }
   }, [onModelChange]);
 
   // Save preferences using model manager
-  const savePreferences = useCallback((newAutoSelect: boolean, newSelectedModel: string, newPreferredDevice: 'webgpu' | 'wasm' | 'cpu') => {
+  const savePreferences = useCallback((newSelectedModel: string, newPreferredDevice: 'webgpu' | 'wasm' | 'cpu') => {
     modelManager.savePreferences({
-      autoSelect: newAutoSelect,
       selectedModel: newSelectedModel,
       preferredDevice: newPreferredDevice
     });
   }, []);
-
-  const handleAutoSelectChange = useCallback((e: ChangeEvent<HTMLInputElement>) => {
-    const checked = e.target.checked;
-    setAutoSelect(checked);
-    savePreferences(checked, selectedModel, preferredDevice);
-    
-    // If enabling auto-select, use the best model for the device
-    if (checked) {
-      const bestModel = getBestModelForDevice(preferredDevice);
-      onModelChange(bestModel.id);
-    }
-  }, [selectedModel, preferredDevice, savePreferences, onModelChange]);
-
-  const handleDeviceChange = useCallback((e: ChangeEvent<HTMLSelectElement>) => {
-    const device = e.target.value as 'webgpu' | 'wasm' | 'cpu';
-    setPreferredDevice(device);
-    savePreferences(autoSelect, selectedModel, device);
-    onDeviceChange?.(device);
-    
-    // If auto-select is enabled, update to best model for new device
-    if (autoSelect) {
-      const bestModel = getBestModelForDevice(device);
-      onModelChange(bestModel.id);
-    }
-  }, [autoSelect, selectedModel, savePreferences, onDeviceChange, onModelChange]);
-
-  const handleModelChange = useCallback((modelId: string) => {
-    onModelChange(modelId);
-    savePreferences(autoSelect, modelId, preferredDevice);
-    
-    // Update device and dtype based on selected model
-    const model = AVAILABLE_MODELS.find(m => m.id === modelId);
-    if (model) {
-      onDeviceChange?.(model.device);
-      onDtypeChange?.(model.dtype);
-    }
-  }, [autoSelect, preferredDevice, savePreferences, onModelChange, onDeviceChange, onDtypeChange]);
 
   const getBestModelForDevice = useCallback((device: string): ModelConfig => {
     switch (device) {
@@ -221,6 +182,36 @@ const ModelSelector: FC<ModelSelectorProps> = ({
         return AVAILABLE_MODELS[0];
     }
   }, []);
+
+  const handleDeviceChange = useCallback((e: ChangeEvent<HTMLSelectElement>) => {
+    const device = e.target.value as 'webgpu' | 'wasm' | 'cpu';
+    if (isChangingFromModel) {
+      return;
+    }
+    setPreferredDevice(device);
+    const bestModel = getBestModelForDevice(device);
+    onModelChange(bestModel.id);
+    savePreferences(bestModel.id, device);
+    onDeviceChange?.(device);
+  }, [savePreferences, onDeviceChange, onModelChange, getBestModelForDevice, isChangingFromModel]);
+
+  const handleModelChange = useCallback((modelId: string) => {
+    onModelChange(modelId);
+    const model = AVAILABLE_MODELS.find(m => m.id === modelId);
+    if (model) {
+      onDtypeChange?.(model.dtype);
+      if (model.device !== preferredDevice) {
+        setIsChangingFromModel(true);
+        onDeviceChange?.(model.device);
+        setTimeout(() => {
+          setIsChangingFromModel(false);
+          savePreferences(modelId, model.device);
+        }, 0);
+        return;
+      }
+    }
+    savePreferences(modelId, preferredDevice);
+  }, [preferredDevice, savePreferences, onModelChange, onDeviceChange, onDtypeChange]);
 
   const getQualityColor = useCallback((quality: string) => {
     switch (quality) {
@@ -263,62 +254,14 @@ const ModelSelector: FC<ModelSelectorProps> = ({
     if (!gpuAvailable && preferredDevice === 'webgpu') {
       const newDevice = 'wasm';
       setPreferredDevice(newDevice);
-      savePreferences(autoSelect, selectedModel, newDevice);
-      if (autoSelect) {
-        const bestModel = getBestModelForDevice(newDevice);
-        onModelChange(bestModel.id);
-      }
+      const bestModel = getBestModelForDevice(newDevice);
+      onModelChange(bestModel.id);
+      savePreferences(bestModel.id, newDevice);
     }
-  }, [gpuAvailable, preferredDevice, autoSelect, selectedModel, savePreferences, onModelChange, getBestModelForDevice]);
+  }, [gpuAvailable, preferredDevice, selectedModel, savePreferences, onModelChange, getBestModelForDevice]);
 
   return (
     <div className="space-y-4">
-      {/* Smart Selection Mode */}
-      <div className="mb-4">
-        <h4 className="text-xs font-semibold text-purple-400 mb-2 flex items-center gap-1">
-          🤖 Smart Selection
-        </h4>
-        <div
-          className={`p-3 rounded-lg border cursor-pointer transition-all duration-200 ${
-            autoSelect
-              ? 'border-purple-500 bg-purple-500/10 shadow-lg'
-              : 'border-slate-600 bg-slate-700 hover:border-slate-500 hover:bg-slate-600'
-          } ${disabled ? 'cursor-not-allowed opacity-50' : ''}`}
-          onClick={() => !disabled && handleAutoSelectChange({ target: { checked: !autoSelect } } as ChangeEvent<HTMLInputElement>)}
-        >
-          <div className="flex items-start justify-between">
-            <div className="flex-1">
-              <div className="flex items-center gap-2 mb-1">
-                <span className="font-medium text-slate-200">🤖 Smart Model Selection</span>
-                {autoSelect && (
-                  <span className="px-2 py-0.5 text-xs bg-purple-500 text-white rounded-full">Active</span>
-                )}
-              </div>
-              <p className="text-xs text-slate-400 mb-2">
-                Automatically chooses the best model for your device and performance needs
-              </p>
-              {autoSelect && (
-                <div className="flex items-center gap-2 text-xs text-purple-300">
-                  <span>🎯 Current: {getModelInfo(selectedModel)?.name}</span>
-                  <span>•</span>
-                  <span>{getDeviceIcon(preferredDevice)} {preferredDevice.toUpperCase()}</span>
-                </div>
-              )}
-            </div>
-            <div className="ml-3">
-              <input
-                type="radio"
-                name="model-selection"
-                checked={autoSelect}
-                onChange={() => !disabled && handleAutoSelectChange({ target: { checked: !autoSelect } } as ChangeEvent<HTMLInputElement>)}
-                disabled={disabled}
-                className="w-4 h-4 text-purple-600 bg-slate-700 border-slate-600 focus:ring-purple-500 focus:ring-2"
-              />
-            </div>
-          </div>
-        </div>
-      </div>
-
       {/* Device Selection */}
       <div className="space-y-2">
         <label className="block text-sm font-semibold text-slate-200">
@@ -327,9 +270,9 @@ const ModelSelector: FC<ModelSelectorProps> = ({
         <select
           value={preferredDevice}
           onChange={handleDeviceChange}
-          disabled={disabled || autoSelect}
+          disabled={disabled}
           className={`w-full p-2 bg-slate-700 border border-slate-600 rounded text-slate-200 text-sm transition-colors ${
-            disabled || autoSelect ? 'opacity-50 cursor-not-allowed' : 'hover:border-slate-500 focus:border-purple-500 focus:ring-1 focus:ring-purple-500'
+            disabled ? 'opacity-50 cursor-not-allowed' : 'hover:border-slate-500 focus:border-purple-500 focus:ring-1 focus:ring-purple-500'
           }`}
         >
           <option value="webgpu" disabled={!gpuAvailable}>
@@ -349,61 +292,42 @@ const ModelSelector: FC<ModelSelectorProps> = ({
         )}
       </div>
 
-      {/* Manual Selection Mode */}
+      {/* Recommended Models */}
       <div className="mb-4">
-        <h4 className="text-xs font-semibold text-blue-400 mb-2 flex items-center gap-1">
-          🎛️ Manual Selection
+        <h4 className="text-xs font-semibold text-green-400 mb-2 flex items-center gap-1">
+          ⭐ Recommended Models ({currentRecommendedModels.length})
         </h4>
-        <div
-          className={`p-3 rounded-lg border cursor-pointer transition-all duration-200 ${
-            !autoSelect
-              ? 'border-blue-500 bg-blue-500/10 shadow-lg'
-              : 'border-slate-600 bg-slate-700 hover:border-slate-500 hover:bg-slate-600'
-          } ${disabled ? 'cursor-not-allowed opacity-50' : ''}`}
-          onClick={() => !disabled && handleAutoSelectChange({ target: { checked: false } } as ChangeEvent<HTMLInputElement>)}
-        >
-          <div className="flex items-start justify-between">
-            <div className="flex-1">
-              <div className="flex items-center gap-2 mb-1">
-                <span className="font-medium text-slate-200">🎛️ Manual Model Selection</span>
-                {!autoSelect && (
-                  <span className="px-2 py-0.5 text-xs bg-blue-500 text-white rounded-full">Active</span>
-                )}
-              </div>
-              <p className="text-xs text-slate-400 mb-2">
-                Choose a specific model for more control over quality and performance
-              </p>
-              {!autoSelect && (
-                <div className="flex items-center gap-2 text-xs text-blue-300">
-                  <span>� Selected: {getModelInfo(selectedModel)?.name}</span>
-                  <span>•</span>
-                  <span>📦 {getModelInfo(selectedModel)?.size}</span>
-                </div>
-              )}
-            </div>
-            <div className="ml-3">
-              <input
-                type="radio"
-                name="model-selection"
-                checked={!autoSelect}
-                onChange={() => !disabled && handleAutoSelectChange({ target: { checked: false } } as ChangeEvent<HTMLInputElement>)}
-                disabled={disabled}
-                className="w-4 h-4 text-blue-600 bg-slate-700 border-slate-600 focus:ring-blue-500 focus:ring-2"
-              />
-            </div>
-          </div>
+        <div className="space-y-2">
+          {currentRecommendedModels.map((model) => (
+            <ModelCard
+              key={model.id}
+              model={model}
+              isSelected={selectedModel === model.id}
+              isDownloaded={downloadedModels.has(model.id)}
+              isKeepLocal={modelKeepLocal[model.id] ?? false}
+              onSelect={() => handleModelChange(model.id)}
+              onKeepLocalChange={(keepLocal) => onModelKeepLocalChange?.(model.id, keepLocal)}
+              disabled={disabled}
+              getQualityColor={getQualityColor}
+              getQualityIcon={getQualityIcon}
+              getDeviceIcon={getDeviceIcon}
+            />
+          ))}
         </div>
       </div>
 
-      {/* Manual Model Selection (disabled when auto-select is on) */}
-      <div className={`transition-all duration-300 ${autoSelect ? 'opacity-50 max-h-0 overflow-hidden' : 'opacity-100 max-h-screen'}`}>
-        {/* Recommended Models */}
-        <div className="mb-4">
-          <h4 className="text-xs font-semibold text-green-400 mb-2 flex items-center gap-1">
-            ⭐ Recommended Models ({currentRecommendedModels.length})
-          </h4>
-          <div className="space-y-2">
-            {currentRecommendedModels.map((model) => (
+      {/* All Models (Advanced) */}
+      <div className="mb-4">
+        <button
+          onClick={() => setShowAdvanced(!showAdvanced)}
+          className="w-full py-2 text-xs text-slate-400 hover:text-slate-200 transition-colors flex items-center justify-center gap-1"
+        >
+          {showAdvanced ? '▼' : '▶'} Show All Models ({AVAILABLE_MODELS.length})
+        </button>
+        
+        {showAdvanced && (
+          <div className="space-y-2 mt-2">
+            {AVAILABLE_MODELS.filter(model => !model.recommended).map((model) => (
               <ModelCard
                 key={model.id}
                 model={model}
@@ -419,37 +343,7 @@ const ModelSelector: FC<ModelSelectorProps> = ({
               />
             ))}
           </div>
-        </div>
-
-        {/* All Models (Advanced) */}
-        <div className="mb-4">
-          <button
-            onClick={() => setShowAdvanced(!showAdvanced)}
-            className="w-full py-2 text-xs text-slate-400 hover:text-slate-200 transition-colors flex items-center justify-center gap-1"
-          >
-            {showAdvanced ? '▼' : '▶'} Show All Models ({AVAILABLE_MODELS.length})
-          </button>
-          
-          {showAdvanced && (
-            <div className="space-y-2 mt-2">
-              {AVAILABLE_MODELS.filter(model => !model.recommended).map((model) => (
-                <ModelCard
-                  key={model.id}
-                  model={model}
-                  isSelected={selectedModel === model.id}
-                  isDownloaded={downloadedModels.has(model.id)}
-                  isKeepLocal={modelKeepLocal[model.id] ?? false}
-                  onSelect={() => handleModelChange(model.id)}
-                  onKeepLocalChange={(keepLocal) => onModelKeepLocalChange?.(model.id, keepLocal)}
-                  disabled={disabled}
-                  getQualityColor={getQualityColor}
-                  getQualityIcon={getQualityIcon}
-                  getDeviceIcon={getDeviceIcon}
-                />
-              ))}
-            </div>
-          )}
-        </div>
+        )}
       </div>
 
       {/* Info Panel */}
@@ -457,15 +351,15 @@ const ModelSelector: FC<ModelSelectorProps> = ({
         <div className="space-y-1">
           <p className="flex items-center gap-1">
             <span className="text-purple-400">🤖</span>
-            <strong>Smart Selection:</strong> Automatically chooses the best model for your device
+            <strong>Device Change:</strong> Automatically selects best model
           </p>
           <p className="flex items-center gap-1">
             <span className="text-blue-400">🎛️</span>
-            <strong>Manual Selection:</strong> Choose specific models for custom control
+            <strong>Manual Selection:</strong> Choose any model
           </p>
           <p className="flex items-center gap-1">
             <span className="text-green-400">💾</span>
-            <strong>Keep Downloaded:</strong> Only saves models you explicitly choose to keep
+            <strong>Keep Downloaded:</strong> Saves models between refreshes
           </p>
           <p className="flex items-center gap-1">
             <span className="text-yellow-400">📊</span>
@@ -547,11 +441,8 @@ const ModelCard: FC<ModelCardProps> = ({
                 className="w-3 h-3 text-blue-600 bg-slate-700 border-slate-600 rounded focus:ring-blue-500 focus:ring-1"
                 onClick={(e) => e.stopPropagation()}
               />
-              💾 Keep downloaded
+              Keep downloaded between refreshes
             </label>
-            <span className="text-xs text-slate-500">
-              {isKeepLocal ? 'Saved' : 'Not saved'}
-            </span>
           </div>
         </div>
         <div className="ml-3">
