@@ -5,7 +5,7 @@ import TextInputPanel from '../text/TextInputPanel';
 
 const MainContent: FC = () => {
   return (
-    <div className="main-content flex flex-col p-6 md:ml-80">
+    <div className="main-content flex-1 w-full flex flex-col p-6 md:ml-80">
       {/* Top Banner Ad */}
       <AdSenseBanner 
         adSlot="1234567890" 
