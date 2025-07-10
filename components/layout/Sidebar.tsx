@@ -70,6 +70,18 @@ const Sidebar: FC = () => {
             Extracting text from file...
           </div>
         )}
+        {state.error && (
+          <div className="bg-red-200 text-red-700 text-xs rounded-lg p-3 mt-2 border border-red-400">
+            <div className="font-semibold mb-1">{state.error.title}</div>
+            <div className="leading-snug">{state.error.message}</div>
+            <button
+              onClick={() => actions.setError(null)}
+              className="mt-2 px-2 py-0.5 rounded border border-red-700 text-red-700 text-xs font-medium hover:bg-red-700 hover:text-white transition-colors"
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
       </div>
 
 
@@ -192,20 +204,8 @@ const Sidebar: FC = () => {
           </div>
         )}
       </div>
-
-      {/* Error Display */}
-      {state.error && (
-        <div className="bg-red-200 text-red-700 text-sm rounded-lg p-3 mb-6 border border-red-400">
-          <div className="font-semibold mb-1">{state.error.title}</div>
-          <div className="mb-2 leading-snug">{state.error.message}</div>
-          <button
-            onClick={() => actions.setError(null)}
-            className="px-2 py-1 rounded border border-red-700 text-red-700 text-xs font-medium hover:bg-red-700 hover:text-white transition-colors"
-          >
-            Dismiss
-          </button>
-        </div>
-      )}
+      
+      {/* Spacer where error used to be */}
       
       {/* Donation Button */}
       <div className="mt-auto flex flex-col items-center gap-4">
