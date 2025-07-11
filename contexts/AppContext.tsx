@@ -264,8 +264,8 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       if (finalText && finalText.length > 50 && finalText.length < 1000000) {
         console.log(`🎯 EPUB extraction complete: ${finalText.length} characters`);
         setInputText(finalText);
-        // Auto-start reading like PDF behavior
-        handleStartReading(finalText);
+        setIsExtractingPDF(false);
+        console.log('Text extracted - press Play to start TTS');
       } else {
         throw new Error('Could not extract readable text from this EPUB');
       }
@@ -281,8 +281,9 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     if (text.trim()) {
       setInputText(text);
       setError(null);
-      // Automatically start reading the newly extracted text using the freshly extracted text
-      handleStartReading(text);
+      setIsExtractingPDF(false);
+      setUploadedPDF(null);
+      console.log('PDF text extracted - press Play to start TTS');
     } else {
       setError({ title: 'PDF Error', message: 'Unable to extract text from this PDF. It might be a scanned PDF or password-protected.' });
     }
