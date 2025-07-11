@@ -55,7 +55,18 @@ const RenderLine = memo(({ index, style: rowStyle, data }: ListChildComponentPro
     localWordIndex++;
   });
 
-  return <div style={rowStyle}>{elements}</div>;
+  return (
+    <div style={{
+      ...rowStyle,
+      color: '#e5e5e5',
+      fontSize: '16px',
+      lineHeight: '1.6',
+      fontFamily: 'inherit',
+      padding: '0 16px'
+    }}>
+      {elements}
+    </div>
+  );
 });
 
 RenderLine.displayName = 'RenderLine';
@@ -86,36 +97,61 @@ const HighlightedText: FC<HighlightedTextProps> = memo((props) => {
   // For no timings, virtualize plain lines
   if (props.wordTimings.length === 0) {
     return (
-      <FixedSizeList
-        height={400} // Adjust to container height
-        itemCount={textLines.length}
-        itemSize={24} // Approximate line height
-        width='100%'
-        ref={listRef}
-      >
-        {({ index, style }) => <div style={style}>{textLines[index]}</div>}
-      </FixedSizeList>
+      <div style={{
+        backgroundColor: '#0f1419',
+        border: '1px solid #2d3748',
+        borderRadius: '8px',
+        ...props.style
+      }}>
+        <FixedSizeList
+          height={400} // Adjust to container height
+          itemCount={textLines.length}
+          itemSize={24} // Approximate line height
+          width='100%'
+          ref={listRef}
+        >
+          {({ index, style }) => (
+            <div style={{
+              ...style,
+              color: '#e5e5e5',
+              fontSize: '16px',
+              lineHeight: '1.6',
+              fontFamily: 'inherit',
+              padding: '0 16px'
+            }}>
+              {textLines[index]}
+            </div>
+          )}
+        </FixedSizeList>
+      </div>
     );
   }
 
   // For highlighted, pass data to RenderLine
   return (
-    <FixedSizeList
-      height={400}
-      itemCount={textLines.length}
-      itemSize={24}
-      width='100%'
-      itemData={{ 
-        textLines, 
-        lineWordRanges, 
-        currentWordIndex: props.currentWordIndex, 
-        wordTimings: props.wordTimings, 
-        onWordClick: props.onWordClick 
-      }}
-      ref={listRef}
-    >
-      {RenderLine}
-    </FixedSizeList>
+    <div style={{
+      backgroundColor: '#0f1419',
+      border: '1px solid #2d3748',
+      borderRadius: '8px',
+      ...props.style
+    }}>
+      <FixedSizeList
+        height={400}
+        itemCount={textLines.length}
+        itemSize={24}
+        width='100%'
+        itemData={{ 
+          textLines, 
+          lineWordRanges, 
+          currentWordIndex: props.currentWordIndex, 
+          wordTimings: props.wordTimings, 
+          onWordClick: props.onWordClick 
+        }}
+        ref={listRef}
+      >
+        {RenderLine}
+      </FixedSizeList>
+    </div>
   );
 });
 
