@@ -11,11 +11,13 @@
     "deploy": "npm run build"
   },
   "dependencies": {
+    "@types/react-window": "^1.8.8",
     "jszip": "^3.10.1",
     "kokoro-js": "^1.2.1",
     "pdfjs-dist": "^4.10.38",
     "react": "19.1.0",
-    "react-dom": "19.1.0"
+    "react-dom": "19.1.0",
+    "react-window": "^1.8.11"
   },
   "devDependencies": {
     "@types/node": "^24.0.10",
