@@ -23,6 +23,23 @@ const HighlightedText: FC<HighlightedTextProps> = memo(({
     currentWordIndex
   });
 
+  // Compute word positions once
+  const wordPositions = useMemo(() => {
+    const positions: {start: number, end: number}[] = [];
+    let i = 0;
+    while (i < text.length) {
+      // Skip whitespace
+      while (i < text.length && /\s/.test(text[i])) i++;
+      const start = i;
+      // Take word
+      while (i < text.length && !/\s/.test(text[i])) i++;
+      if (start < i) {
+        positions.push({start, end: i});
+      }
+    }
+    return positions;
+  }, [text]);
+
   // Fast path: if no timings, render plain text immediately to avoid
   // splitting the entire document into thousands of <span> nodes.
   if (wordTimings.length === 0) {
@@ -46,42 +63,39 @@ const HighlightedText: FC<HighlightedTextProps> = memo(({
     );
   }
 
-  // Memoize the splitting to preserve formatting. This regex splits the text by whitespace,
-  // but keeps the whitespace delimiters in the resulting array.
-  const parts = useMemo(() => text.split(/(\s+)/), [text]);
+  // Helper to create a span for a word
+  const createSpan = (part: string, idx: number, wordIndex: number) => {
+    const isCurrentWord = wordTimings.length > 0 && wordIndex === currentWordIndex;
+    const isPastWord = wordTimings.length > 0 && wordIndex < currentWordIndex;
+    const currentWordTiming = wordTimings[wordIndex];
+    const canClick = onWordClick && currentWordTiming;
+
+    return (
+      <span
+        key={idx}
+        onClick={() => canClick && onWordClick(currentWordTiming.start)}
+        style={{
+          backgroundColor: isCurrentWord ? 'rgba(74, 144, 226, 0.5)' : isPastWord ? 'rgba(144, 238, 144, 0.15)' : 'transparent',
+          color: isCurrentWord ? 'white' : isPastWord ? '#90ee90' : '#e5e5e5',
+          padding: '2px 1px',
+          borderRadius: '4px',
+          transition: 'background-color 0.1s ease, color 0.1s ease',
+          fontWeight: isCurrentWord ? '600' : 'normal',
+          cursor: canClick ? 'pointer' : 'default',
+        }}
+      >
+        {part}
+      </span>
+    );
+  };
 
   const highlightedContent = useMemo(() => {
     // If text is small, render everything (fast enough).
     const LARGE_THRESHOLD = 5000; // number of words
 
-    // Helper to create a span for a word
-    const createSpan = (part: string, idx: number, wordIndex: number) => {
-      const isCurrentWord = wordTimings.length > 0 && wordIndex === currentWordIndex;
-      const isPastWord = wordTimings.length > 0 && wordIndex < currentWordIndex;
-      const currentWordTiming = wordTimings[wordIndex];
-      const canClick = onWordClick && currentWordTiming;
-
-      return (
-        <span
-          key={idx}
-          onClick={() => canClick && onWordClick(currentWordTiming.start)}
-          style={{
-            backgroundColor: isCurrentWord ? 'rgba(74, 144, 226, 0.5)' : isPastWord ? 'rgba(144, 238, 144, 0.15)' : 'transparent',
-            color: isCurrentWord ? 'white' : isPastWord ? '#90ee90' : '#e5e5e5',
-            padding: '2px 1px',
-            borderRadius: '4px',
-            transition: 'background-color 0.1s ease, color 0.1s ease',
-            fontWeight: isCurrentWord ? '600' : 'normal',
-            cursor: canClick ? 'pointer' : 'default',
-          }}
-        >
-          {part}
-        </span>
-      );
-    };
-
     // Fast path for short text
-    if (parts.length <= LARGE_THRESHOLD) {
+    if (wordPositions.length <= LARGE_THRESHOLD) {
+      const parts = text.split(/(\s+)/);
       let wordIndex = 0;
       return parts.map((part, i) => {
         if (part.trim() === '') return <Fragment key={i}>{part}</Fragment>;
@@ -94,10 +108,16 @@ const HighlightedText: FC<HighlightedTextProps> = memo(({
     // For large texts, only render a sliding window of words around the current index.
     const WINDOW_SIZE = 800; // words before/after current word
     const windowStart = Math.max(0, currentWordIndex - WINDOW_SIZE);
-    const windowEnd = Math.min(wordTimings.length, currentWordIndex + WINDOW_SIZE);
+    const windowEnd = Math.min(wordPositions.length - 1, currentWordIndex + WINDOW_SIZE);
 
-    let wordIndex = 0;
+    const startChar = wordPositions[windowStart].start;
+    const endChar = wordPositions[windowEnd].end;
+    const windowText = text.slice(startChar, endChar);
+
+    const localParts = windowText.split(/(\s+)/);
+
     const elements: React.ReactNode[] = [];
+
     if (windowStart > 0) {
       elements.push(
         <span key="ellipsis-start" style={{ color: '#888' }}>
@@ -106,23 +126,18 @@ const HighlightedText: FC<HighlightedTextProps> = memo(({
       );
     }
 
-    parts.forEach((part, i) => {
-      // Decide whether this part is within the window. We only track wordIndex for word parts.
-      const isWord = part.trim() !== '';
-      if (isWord) {
-        if (wordIndex >= windowStart && wordIndex <= windowEnd) {
-          elements.push(createSpan(part, i, wordIndex));
-        }
-        wordIndex++;
-      } else {
-        // Always include whitespace within the window but skip outside.
-        if (wordIndex >= windowStart && wordIndex <= windowEnd) {
-          elements.push(<Fragment key={i}>{part}</Fragment>);
-        }
+    let localWordIndex = 0;
+    localParts.forEach((part, i) => {
+      if (part.trim() === '') {
+        elements.push(<Fragment key={i}>{part}</Fragment>);
+        return;
       }
+      const globalWordIndex = windowStart + localWordIndex;
+      elements.push(createSpan(part, i, globalWordIndex));
+      localWordIndex++;
     });
 
-    if (windowEnd < wordTimings.length - 1) {
+    if (windowEnd < wordPositions.length - 1) {
       elements.push(
         <span key="ellipsis-end" style={{ color: '#888' }}>
           …
@@ -131,7 +146,7 @@ const HighlightedText: FC<HighlightedTextProps> = memo(({
     }
 
     return elements;
-  }, [parts, currentWordIndex, wordTimings, onWordClick]);
+  }, [text, wordPositions, currentWordIndex, wordTimings, onWordClick]);
 
   // Use highlighted content if timings are available, otherwise plain text.
   const content = wordTimings.length > 0 ? highlightedContent : text;
