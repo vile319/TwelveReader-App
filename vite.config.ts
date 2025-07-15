@@ -14,6 +14,7 @@ export default defineConfig(({ mode }) => {
       exclude: ['pdfjs-dist']
     },
     server: {
+      host: true, // Allow access from iPhone on local network
       headers: {
         'Cross-Origin-Embedder-Policy': 'credentialless',
         'Cross-Origin-Opener-Policy': 'same-origin'

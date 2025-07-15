@@ -14,6 +14,7 @@
     "@types/react-window": "^1.8.8",
     "jszip": "^3.10.1",
     "kokoro-js": "^1.2.1",
+    "onnxruntime-web": "1.17.3",
     "pdfjs-dist": "^4.10.38",
     "react": "19.1.0",
     "react-dom": "19.1.0",

@@ -4,6 +4,7 @@ import React, { useState, useCallback, useRef, useEffect } from 'react';
 void React;
 import { KokoroTTS } from 'kokoro-js';
 import { AppError } from '../types';
+import { configureOnnxRuntimeForIOS, getIosOptimizedSettings } from '../utils/onnxIosConfig';
 
 // Force enable caching for transformers.js
 if (typeof window !== 'undefined') {
@@ -691,10 +692,27 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
     setIsLoading(true);
     setStatus('Initializing model...');
 
-    // All device and dtype decision logic is now consolidated in detectWebGPU.
-    const { device, dtype } = await detectWebGPU();
+    // Configure ONNX Runtime for iOS compatibility before any model loading
+    try {
+      await configureOnnxRuntimeForIOS();
+    } catch (error) {
+      console.warn('⚠️ iOS configuration failed, continuing with defaults:', error);
+    }
 
-    console.log(`🚀 Initializing Kokoro TTS with ${device} and ${dtype}...`);
+    // All device and dtype decision logic is now consolidated in detectWebGPU.
+    // Use iOS-optimized settings if available
+    const iosSettings = getIosOptimizedSettings();
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+    
+    const { device, dtype } = isIOS ? 
+      { device: iosSettings.device, dtype: iosSettings.dtype } : 
+      await detectWebGPU();
+
+    if (isIOS) {
+      console.log(`📱 iOS detected - using optimized settings: ${device} with ${dtype} (for iPhone compatibility)`);
+    } else {
+      console.log(`🚀 Initializing Kokoro TTS with ${device} and ${dtype}...`);
+    }
 
     try {
       // Check if cache is available

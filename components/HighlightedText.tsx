@@ -94,7 +94,8 @@ const HighlightedText: FC<HighlightedTextProps> = memo((props) => {
     return ranges;
   }, [textLines]);
 
-  // For no timings, virtualize plain lines
+  // Change the condition to always show plain text when no timings available
+  // This prevents text disappearing during TTS generation startup
   if (props.wordTimings.length === 0) {
     return (
       <div style={{
@@ -104,9 +105,9 @@ const HighlightedText: FC<HighlightedTextProps> = memo((props) => {
         ...props.style
       }}>
         <FixedSizeList
-          height={400} // Adjust to container height
+          height={400}
           itemCount={textLines.length}
-          itemSize={24} // Approximate line height
+          itemSize={24}
           width='100%'
           ref={listRef}
         >
