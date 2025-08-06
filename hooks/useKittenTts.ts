@@ -197,6 +197,7 @@ export default function useKittenTts() {
     synthesisComplete: true,
     getAudioBlob: noBlob,
     isReady,
+    playbackRate: 1,
     setPlaybackRate: (_r: number) => {},
   } as const;
 }
