@@ -14,7 +14,7 @@ const MODEL_URL =
 const ALTERNATIVE_URLS = [
   'https://huggingface.co/KittenML/kitten-tts-nano-0.1/resolve/main/kitten_tts_nano_v0_1.onnx',
   'https://huggingface.co/KittenML/kitten-tts-nano-0.1/blob/main/kitten_tts_nano_v0_1.onnx?raw=true',
-  // Try with different CDN or proxy if needed
+  // Remove invalid CDN URL and add download parameter
   'https://huggingface.co/KittenML/kitten-tts-nano-0.1/resolve/main/kitten_tts_nano_v0_1.onnx?download=true',
 ];
 
@@ -58,18 +58,6 @@ export default function useKittenTts() {
         try {
           console.log('🐱 Loading KittenTTS model from:', url);
           
-          // First, test if the URL is accessible
-          try {
-            const response = await fetch(url, { method: 'HEAD' });
-            if (!response.ok) {
-              console.warn(`URL ${url} returned status ${response.status}`);
-              continue;
-            }
-          } catch (fetchError) {
-            console.warn(`Failed to fetch ${url}:`, fetchError);
-            continue;
-          }
-          
           // Try loading directly first
           try {
             const session = await ort.InferenceSession.create(url, {
@@ -94,11 +82,39 @@ export default function useKittenTts() {
             return; // Success, exit the loop
           } catch (directError) {
             console.warn(`Direct loading failed for ${url}:`, directError);
+            console.warn('Error details:', {
+              message: directError?.message,
+              code: directError?.code,
+              stack: directError?.stack,
+              name: directError?.name
+            });
+            
+            // Try with minimal options
+            try {
+              console.log(`Trying with minimal session options for ${url}...`);
+              const session = await ort.InferenceSession.create(url, {
+                executionProviders: ['wasm'],
+              });
+              
+              if (!isMounted) return;
+              
+              sessionRef.current = session;
+              setStatus('KittenTTS ready');
+              setIsReady(true);
+              setIsLoading(false);
+              setError(null);
+              return; // Success, exit the loop
+            } catch (minimalError) {
+              console.warn('Minimal options also failed:', minimalError);
+            }
             
             // Try downloading as blob and then loading
             try {
               console.log(`Attempting to download ${url} as blob...`);
-              const response = await fetch(url);
+              const response = await fetch(url, {
+                mode: 'cors',
+                credentials: 'omit'
+              });
               if (!response.ok) {
                 throw new Error(`HTTP ${response.status}: ${response.statusText}`);
               }
@@ -123,15 +139,32 @@ export default function useKittenTts() {
             } catch (blobError) {
               console.warn(`Blob loading also failed for ${url}:`, blobError);
               lastError = directError instanceof Error ? directError : new Error(String(directError));
+              
+              // Check for specific error codes
+              const errorString = String(blobError);
+              if (errorString.includes('58712104')) {
+                lastError = new Error('Network error loading model. This may be due to CORS restrictions or network connectivity issues.');
+              }
             }
           }
       }
       
       // If we get here, all URLs failed
-      console.error('KittenTTS model failed to load from all URLs', lastError);
+      console.error('KittenTTS model failed to load', lastError);
       const errorMessage = lastError?.message || 'Unknown error';
+      
+      // Check for specific error types
+      if (errorMessage.includes('58712104') || errorMessage.includes('network')) {
+        setError('Network error loading KittenTTS model. Please check your internet connection and try refreshing the page. If using an ad blocker or privacy extensions, try disabling them temporarily.');
+      } else if (errorMessage.includes('CORS')) {
+        setError('CORS error loading KittenTTS model. The model may be temporarily unavailable. Please try again later or use a different TTS model.');
+      } else if (errorMessage.includes('Failed to fetch')) {
+        setError('Failed to download KittenTTS model. This may be due to network restrictions or Hugging Face being temporarily unavailable. Please try again later.');
+      } else {
+        setError(`Failed to load KittenTTS model: ${errorMessage}`);
+      }
+      
       setStatus('KittenTTS unavailable');
-      setError(`Failed to load KittenTTS model: ${errorMessage}`);
       setIsLoading(false);
     };
 
@@ -143,6 +176,16 @@ export default function useKittenTts() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Add retry function
+  const retry = useCallback(() => {
+    if (!isLoading) {
+      setError(null);
+      setIsLoading(true);
+      setStatus('Retrying KittenTTS model load...');
+      loadModel();
+    }
+  }, [isLoading]);
 
   // ────────────────────────────────────────────────
   // Helpers
@@ -332,5 +375,6 @@ export default function useKittenTts() {
     isReady,
     playbackRate: 1,
     setPlaybackRate: (_r: number) => {},
+    retry, // Add retry to the returned object
   } as const;
 }

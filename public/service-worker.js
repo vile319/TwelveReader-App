@@ -7,7 +7,7 @@ const CACHE_NAME = 'models';
 
 // Match large model files and tokenizer data from HuggingFace
 // Adjust extensions if additional files should be cached.
-const MODEL_FILE_REGEX = /\/Kokoro-82M.*\.(onnx|bin|json|params|safetensors)$/i;
+const MODEL_FILE_REGEX = /\/(Kokoro-82M|kitten-tts|KittenML).*\.(onnx|bin|json|params|safetensors)$/i;
 
 self.addEventListener('install', (event) => {
   // Activate immediately after installation
