@@ -8,7 +8,7 @@ import * as ort from 'onnxruntime-web';
  * Any advanced features that KittenTTS does not provide are stubbed.
  */
 const MODEL_URL =
-  'https://huggingface.co/KittenML/kitten-tts-nano-0.1/resolve/main/model.onnx';
+  'https://huggingface.co/KittenML/kitten-tts-nano-0.1/resolve/main/kitten_tts_nano_v0_1.onnx';
 
 // Inject a default wasm path for ONNX Runtime so that the runtime can locate the
 // WebAssembly binaries even when the project is bundled. This mirrors the path

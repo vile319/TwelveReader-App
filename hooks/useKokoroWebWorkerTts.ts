@@ -61,6 +61,7 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
   const [isPlaying, setIsPlaying] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [status, setStatus] = useState('Ready to generate audio');
+  const [error, setError] = useState<string | null>(null);
   const [currentDevice, setCurrentDevice] = useState<'webgpu' | 'wasm' | 'cpu' | null>(null);
   const [debugMode, setDebugMode] = useState(false);
   const [storedChunks, setStoredChunks] = useState<AudioChunk[]>([]);
@@ -755,6 +756,7 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
       ttsRef.current = tts;
       setIsReady(true);
       setCurrentDevice(device);
+      setError(null); // Clear any previous errors
       const deviceEmoji = device === 'webgpu' ? '⚡' : '🖥️';
       const deviceLabel = device === 'webgpu' ? 'GPU-accelerated' : 'CPU-optimized';
       setStatus(`${deviceEmoji} Kokoro AI ready - ${deviceLabel} with all international voices!`);
@@ -782,20 +784,25 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
           ttsRef.current = tts;
           setIsReady(true);
           setCurrentDevice('wasm');
+          setError(null); // Clear any previous errors
           setStatus('🔄 CPU fallback successful - Kokoro AI ready with all voices!');
           return tts;
         } catch (fallbackError: any) {
           console.error('CPU fallback also failed:', fallbackError);
+          const errorMessage = `Both GPU and CPU loading failed: ${fallbackError.message}`;
+          setError(errorMessage);
           onError({
             title: 'Model Loading Error',
-            message: `Both GPU and CPU loading failed: ${fallbackError.message}`
+            message: errorMessage
           });
           throw fallbackError;
         }
       } else {
+        const errorMessage = `Failed to load Kokoro model: ${error.message}`;
+        setError(errorMessage);
         onError({
           title: 'Model Loading Error',
-          message: `Failed to load Kokoro model: ${error.message}`
+          message: errorMessage
         });
         throw error;
       }
@@ -1602,6 +1609,7 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
     isPlaying,
     isLoading,
     status,
+    error,
     voices,
     currentDevice,
     debugMode,
