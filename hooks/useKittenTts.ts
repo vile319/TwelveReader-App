@@ -10,6 +10,14 @@ import * as ort from 'onnxruntime-web';
 const MODEL_URL =
   'https://huggingface.co/KittenML/kitten-tts-nano-0.1/resolve/main/kitten_tts_nano_v0_1.onnx';
 
+// Alternative URLs in case of CORS issues
+const ALTERNATIVE_URLS = [
+  'https://huggingface.co/KittenML/kitten-tts-nano-0.1/resolve/main/kitten_tts_nano_v0_1.onnx',
+  'https://huggingface.co/KittenML/kitten-tts-nano-0.1/blob/main/kitten_tts_nano_v0_1.onnx?raw=true',
+  // Try with different CDN or proxy if needed
+  'https://huggingface.co/KittenML/kitten-tts-nano-0.1/resolve/main/kitten_tts_nano_v0_1.onnx?download=true',
+];
+
 // Inject a default wasm path for ONNX Runtime so that the runtime can locate the
 // WebAssembly binaries even when the project is bundled. This mirrors the path
 // used elsewhere in the app (see `utils/onnxIosConfig.ts`).
@@ -43,33 +51,88 @@ export default function useKittenTts() {
     const loadModel = async () => {
       if (!isMounted) return;
       
-      try {
-        console.log('🐱 Loading KittenTTS model from:', MODEL_URL);
-        
-        const session = await ort.InferenceSession.create(MODEL_URL, {
-          executionProviders: ['wasm'],
-          graphOptimizationLevel: 'all',
-        });
+      let lastError: Error | null = null;
+      
+      // Try each URL until one works
+      for (const url of ALTERNATIVE_URLS) {
+        try {
+          console.log('🐱 Loading KittenTTS model from:', url);
+          
+          // First, test if the URL is accessible
+          try {
+            const response = await fetch(url, { method: 'HEAD' });
+            if (!response.ok) {
+              console.warn(`URL ${url} returned status ${response.status}`);
+              continue;
+            }
+          } catch (fetchError) {
+            console.warn(`Failed to fetch ${url}:`, fetchError);
+            continue;
+          }
+          
+          // Try loading directly first
+          try {
+            const session = await ort.InferenceSession.create(url, {
+            executionProviders: ['wasm'],
+            graphOptimizationLevel: 'all',
+            enableCpuMemArena: false, // Disable CPU memory arena to avoid potential issues
+            enableMemPattern: false,   // Disable memory pattern to avoid potential issues
+          });
 
-        if (!isMounted) return;
+          if (!isMounted) return;
 
-        // Log model information
-        console.log('🐱 KittenTTS model loaded successfully');
-        console.log('Model input names:', session.inputNames);
-        console.log('Model output names:', session.outputNames);
+          // Log model information
+          console.log('🐱 KittenTTS model loaded successfully');
+          console.log('Model input names:', session.inputNames);
+          console.log('Model output names:', session.outputNames);
 
-        sessionRef.current = session;
-        setStatus('KittenTTS ready');
-        setIsReady(true);
-        setIsLoading(false);
-        setError(null);
-      } catch (e) {
-        console.error('KittenTTS model failed to load', e);
-        const errorMessage = e instanceof Error ? e.message : 'Unknown error';
-        setStatus('KittenTTS unavailable');
-        setError(`Failed to load KittenTTS model: ${errorMessage}`);
-        setIsLoading(false);
+                      sessionRef.current = session;
+            setStatus('KittenTTS ready');
+            setIsReady(true);
+            setIsLoading(false);
+            setError(null);
+            return; // Success, exit the loop
+          } catch (directError) {
+            console.warn(`Direct loading failed for ${url}:`, directError);
+            
+            // Try downloading as blob and then loading
+            try {
+              console.log(`Attempting to download ${url} as blob...`);
+              const response = await fetch(url);
+              if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+              }
+              
+              const blob = await response.blob();
+              const arrayBuffer = await blob.arrayBuffer();
+              
+              console.log(`Downloaded ${arrayBuffer.byteLength} bytes, loading as buffer...`);
+              const session = await ort.InferenceSession.create(arrayBuffer, {
+                executionProviders: ['wasm'],
+                graphOptimizationLevel: 'all',
+                enableCpuMemArena: false,
+                enableMemPattern: false,
+              });
+              
+              sessionRef.current = session;
+              setStatus('KittenTTS ready');
+              setIsReady(true);
+              setIsLoading(false);
+              setError(null);
+              return; // Success, exit the loop
+            } catch (blobError) {
+              console.warn(`Blob loading also failed for ${url}:`, blobError);
+              lastError = directError instanceof Error ? directError : new Error(String(directError));
+            }
+          }
       }
+      
+      // If we get here, all URLs failed
+      console.error('KittenTTS model failed to load from all URLs', lastError);
+      const errorMessage = lastError?.message || 'Unknown error';
+      setStatus('KittenTTS unavailable');
+      setError(`Failed to load KittenTTS model: ${errorMessage}`);
+      setIsLoading(false);
     };
 
     loadModel();
