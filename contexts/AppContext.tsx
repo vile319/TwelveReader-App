@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import useKokoroWebWorkerTts from '../hooks/useKokoroWebWorkerTts';
+import useKittenTts from '../hooks/useKittenTts';
 import { BRAND_NAME } from '../utils/branding';
 import { AppContextType, AppState, AppError, SampleText, TextSet } from '../types';
 import { driveHelpers } from '../utils/googleDrive';
@@ -122,13 +123,16 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
   const [showHelp, setShowHelp] = useState(false);
 
   // Initialize TTS hook
-  const tts = useKokoroWebWorkerTts({
-    onError: setError,
-    enabled: modelAccepted,
-    selectedModel,
-    preferredDevice,
-    preferredDtype
-  });
+  // Dynamically pick the implementation based on selectedModel
+  const tts = selectedModel.startsWith('kitten')
+    ? useKittenTts()
+    : useKokoroWebWorkerTts({
+        onError: setError,
+        enabled: modelAccepted,
+        selectedModel,
+        preferredDevice,
+        preferredDtype,
+      });
 
   // Action handlers
   const handleStartReading = async (providedText?: string) => {

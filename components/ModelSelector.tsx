@@ -87,6 +87,18 @@ const AVAILABLE_MODELS: ModelConfig[] = [
     device: 'wasm',
     filename: 'model_q4f16.onnx'
   },
+  {
+    id: 'kitten-nano',
+    name: 'Kitten-Nano',
+    description: '25 MB, English-only (preview)',
+    size: '25MB',
+    quality: 'fast',
+    url: 'KittenML/kitten-tts-nano-0.1',
+    dtype: 'fp32',
+    device: 'wasm',
+    filename: 'model.onnx',
+    recommended: true,
+  },
 ];
 
 // Helper function to get model information
