@@ -152,10 +152,20 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     // Stop any previous audio before starting anew
     tts.stop();
 
-    // If model not accepted yet, show warning and remember intention
     if (!modelAccepted) {
-      setPendingRead({ text: textToRead, voice: selectedVoice });
       setShowModelWarning(true);
+      setPendingRead({ text: textToRead, voice: selectedVoice });
+      return;
+    }
+
+    // Check if the selected TTS has an error
+    if (tts.error) {
+      setError({ 
+        title: 'TTS Model Error', 
+        message: selectedModel.startsWith('kitten') 
+          ? 'KittenTTS model is currently unavailable. Please select a different model from the sidebar.'
+          : 'Failed to load the TTS model. Please try refreshing the page or selecting a different model.'
+      });
       return;
     }
 
@@ -525,6 +535,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     model: {
       isReady: tts.isReady,
       status: tts.status,
+      error: tts.error,
       modelAccepted,
       showModelWarning,
       normalizeAudio: tts.normalizeAudio,

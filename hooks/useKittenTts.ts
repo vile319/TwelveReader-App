@@ -10,10 +10,6 @@ import * as ort from 'onnxruntime-web';
 const MODEL_URL =
   'https://huggingface.co/KittenML/kitten-tts-nano-0.1/resolve/main/model.onnx';
 
-// Alternative model URL in case the primary fails
-const FALLBACK_MODEL_URL = 
-  'https://huggingface.co/onnx-community/Kokoro-82M-v1.0-ONNX/resolve/main/model_q4.onnx';
-
 // Inject a default wasm path for ONNX Runtime so that the runtime can locate the
 // WebAssembly binaries even when the project is bundled. This mirrors the path
 // used elsewhere in the app (see `utils/onnxIosConfig.ts`).
@@ -50,42 +46,28 @@ export default function useKittenTts() {
       try {
         console.log('🐱 Loading KittenTTS model from:', MODEL_URL);
         
-        // Try to create session with primary URL
-        let session: ort.InferenceSession | null = null;
-        let modelUsed = 'KittenTTS';
-        
-        try {
-          session = await ort.InferenceSession.create(MODEL_URL, {
-            executionProviders: ['wasm'],
-          });
-        } catch (primaryError) {
-          console.warn('Failed to load primary KittenTTS model, trying fallback...', primaryError);
-          
-          // Try fallback model
-          try {
-            session = await ort.InferenceSession.create(FALLBACK_MODEL_URL, {
-              executionProviders: ['wasm'],
-            });
-            modelUsed = 'Kokoro (Fallback)';
-            console.log('✅ Loaded fallback model successfully');
-          } catch (fallbackError) {
-            throw new Error('Failed to load both primary and fallback models');
-          }
-        }
+        const session = await ort.InferenceSession.create(MODEL_URL, {
+          executionProviders: ['wasm'],
+          graphOptimizationLevel: 'all',
+        });
 
-        if (!isMounted || !session) return;
+        if (!isMounted) return;
+
+        // Log model information
+        console.log('🐱 KittenTTS model loaded successfully');
+        console.log('Model input names:', session.inputNames);
+        console.log('Model output names:', session.outputNames);
 
         sessionRef.current = session;
-        console.log(`🐱 ${modelUsed} model loaded successfully`);
-        
+        setStatus('KittenTTS ready');
         setIsReady(true);
         setIsLoading(false);
-        setStatus(`${modelUsed} ready`);
         setError(null);
       } catch (e) {
         console.error('KittenTTS model failed to load', e);
-        setStatus('Failed to load TTS model');
-        setError(e instanceof Error ? e.message : 'Unknown error');
+        const errorMessage = e instanceof Error ? e.message : 'Unknown error';
+        setStatus('KittenTTS unavailable');
+        setError(`Failed to load KittenTTS model: ${errorMessage}`);
         setIsLoading(false);
       }
     };
@@ -94,7 +76,9 @@ export default function useKittenTts() {
 
     return () => {
       isMounted = false;
+      stop();
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // ────────────────────────────────────────────────
