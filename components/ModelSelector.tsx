@@ -96,7 +96,7 @@ const AVAILABLE_MODELS: ModelConfig[] = [
     url: 'KittenML/kitten-tts-nano-0.1',
     dtype: 'fp32',
     device: 'wasm',
-    filename: 'model.onnx',
+    filename: 'kitten_tts_nano_v0_1.onnx',
     recommended: true,
   },
 ];

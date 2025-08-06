@@ -38,6 +38,7 @@ export interface AudioState {
 export interface ModelState {
   isReady: boolean;
   status: string;
+  error: string | null;
   modelAccepted: boolean;
   showModelWarning: boolean;
   normalizeAudio: boolean;

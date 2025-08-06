@@ -8,7 +8,8 @@ import * as ort from 'onnxruntime-web';
  * Any advanced features that KittenTTS does not provide are stubbed.
  */
 const MODEL_URL =
-  'https://huggingface.co/KittenML/kitten-tts-nano-0.1/resolve/main/model.onnx';
+  'https://huggingface.co/KittenML/kitten-tts-nano-0.1/resolve/main/kitten_tts_nano_v0_1.onnx';
+
 // Inject a default wasm path for ONNX Runtime so that the runtime can locate the
 // WebAssembly binaries even when the project is bundled. This mirrors the path
 // used elsewhere in the app (see `utils/onnxIosConfig.ts`).
@@ -24,6 +25,7 @@ export default function useKittenTts() {
   const [isLoading, setIsLoading] = useState(true);
   const [isPlaying, setIsPlaying] = useState(false);
   const [status, setStatus] = useState('Loading KittenTTS model…');
+  const [error, setError] = useState<string | null>(null);
 
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -34,32 +36,46 @@ export default function useKittenTts() {
   const timerRef = useRef<number | null>(null);
 
   // ────────────────────────────────────────────────
-  // Model lazy-load
+  // Model loading
   useEffect(() => {
-    (async () => {
+    let isMounted = true;
+
+    const loadModel = async () => {
+      if (!isMounted) return;
+      
       try {
         console.log('🐱 Loading KittenTTS model from:', MODEL_URL);
+        
         const session = await ort.InferenceSession.create(MODEL_URL, {
           executionProviders: ['wasm'],
           graphOptimizationLevel: 'all',
         });
-        
+
+        if (!isMounted) return;
+
         // Log model information
         console.log('🐱 KittenTTS model loaded successfully');
         console.log('Model input names:', session.inputNames);
         console.log('Model output names:', session.outputNames);
-        
+
         sessionRef.current = session;
         setStatus('KittenTTS ready');
         setIsReady(true);
+        setIsLoading(false);
+        setError(null);
       } catch (e) {
         console.error('KittenTTS model failed to load', e);
-        setStatus('Failed to load KittenTTS');
-      } finally {
+        const errorMessage = e instanceof Error ? e.message : 'Unknown error';
+        setStatus('KittenTTS unavailable');
+        setError(`Failed to load KittenTTS model: ${errorMessage}`);
         setIsLoading(false);
       }
-    })();
+    };
+
+    loadModel();
+
     return () => {
+      isMounted = false;
       stop();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -231,6 +247,7 @@ export default function useKittenTts() {
     isPlaying,
     isLoading,
     status,
+    error,
     canScrub: false,
     currentTime,
     duration,
