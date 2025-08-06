@@ -30,11 +30,35 @@ self.addEventListener('fetch', (event) => {
         if (cached) {
           return cached;
         }
-        const response = await fetch(request);
-        if (response.ok) {
-          cache.put(request, response.clone());
+        
+        // Try to fetch with CORS mode and retry logic
+        let lastError;
+        for (let attempt = 0; attempt < 3; attempt++) {
+          try {
+            const response = await fetch(request, {
+              mode: 'cors',
+              credentials: 'omit',
+              cache: 'default'
+            });
+            
+            if (response.ok) {
+              // Clone response before caching
+              cache.put(request, response.clone());
+              return response;
+            } else {
+              lastError = new Error(`HTTP ${response.status}`);
+            }
+          } catch (error) {
+            lastError = error;
+            // Wait before retry (exponential backoff)
+            if (attempt < 2) {
+              await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, attempt)));
+            }
+          }
         }
-        return response;
+        
+        // If all attempts failed, throw the last error
+        throw lastError || new Error('Failed to fetch model file');
       }),
     );
   }

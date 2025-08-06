@@ -19,8 +19,12 @@ if (typeof window !== 'undefined') {
       const keepCached = localStorage.getItem('keepModelCached') !== 'false';
       env.useBrowserCache = keepCached;
       
-      // Optional: Also enable file system cache if available
+      // Configure ONNX runtime to use single thread to avoid crossOriginIsolated requirement
       if (env.backends && env.backends.onnx) {
+        env.backends.onnx.wasm = {
+          ...env.backends.onnx.wasm,
+          numThreads: 1,
+        };
         env.backends.onnx.useBrowserCache = keepCached;
       }
       
