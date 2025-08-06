@@ -9,6 +9,12 @@ import * as ort from 'onnxruntime-web';
  */
 const MODEL_URL =
   'https://huggingface.co/KittenML/kitten-tts-nano-0.1/resolve/main/model.onnx';
+// Inject a default wasm path for ONNX Runtime so that the runtime can locate the
+// WebAssembly binaries even when the project is bundled. This mirrors the path
+// used elsewhere in the app (see `utils/onnxIosConfig.ts`).
+if (!ort.env.wasm.wasmPaths) {
+  ort.env.wasm.wasmPaths = 'https://cdnjs.cloudflare.com/ajax/libs/onnxruntime-web/1.17.3/';
+}
 const SAMPLE_RATE = 24_000;
 
 export default function useKittenTts() {
@@ -74,7 +80,7 @@ export default function useKittenTts() {
     clearTimer();
   }, []);
 
-  const speak = useCallback(async (text: string, _voice = 'expr-voice-2-f') => {
+  const speak = useCallback(async (text: string, _voice = 'expr-voice-2-f', onProgress?: (p: number) => void) => {
     if (!sessionRef.current || !isReady) {
       console.warn('KittenTTS not ready');
       return;
@@ -82,13 +88,15 @@ export default function useKittenTts() {
     stop();
     setStatus('Synthesising…');
     setIsLoading(true);
+    onProgress?.(0);
 
     try {
       // Prepare inputs (KittenTTS expects ids + maybe speaker – we only feed ids for now).
       const ids = asciiTokenizer(text);
       const feeds: Record<string, ort.Tensor> = {
         input: new ort.Tensor('int32', ids, [1, ids.length]),
-        sid: new ort.Tensor('int64', BigInt(0), []), // default speaker
+        // Pass speaker-id as a proper BigInt64Array – using plain BigInt crashes in browsers.
+        sid: new ort.Tensor('int64', new BigInt64Array([0n]), []), // default speaker
       };
 
       const result = await sessionRef.current.run(feeds);
@@ -110,6 +118,7 @@ export default function useKittenTts() {
       setCurrentTime(0);
       setIsPlaying(true);
       setStatus('Playing');
+      onProgress?.(100); // 100% once audio is ready
 
       // simple progress timer
       clearTimer();

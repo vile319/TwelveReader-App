@@ -187,7 +187,7 @@ export interface AppContextType {
   // TTS hook data
   tts: {
     voices: Voice[];
-    speak: (text: string, voice: string) => Promise<void>;
+    speak: (text: string, voice: string, onProgress?: (percent: number) => void) => Promise<void>;
     stop: () => void;
     isPlaying: boolean;
     isLoading: boolean;
