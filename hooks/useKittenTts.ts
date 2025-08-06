@@ -7,23 +7,25 @@ import * as ort from 'onnxruntime-web';
  * (play / pause, basic timing, ready/loading flags, etc.).
  * Any advanced features that KittenTTS does not provide are stubbed.
  */
+
+// Configure ONNX Runtime before any model loading
+// Set consistent configuration to avoid threading issues
+ort.env.wasm.numThreads = 1; // Single thread to avoid crossOriginIsolated requirement
+ort.env.wasm.simd = true; // Enable SIMD if available
+ort.env.wasm.wasmPaths = 'https://cdnjs.cloudflare.com/ajax/libs/onnxruntime-web/1.17.3/';
+ort.env.logLevel = 'warning'; // Reduce log verbosity
+
 const MODEL_URL =
   'https://huggingface.co/KittenML/kitten-tts-nano-0.1/resolve/main/kitten_tts_nano_v0_1.onnx';
 
 // Alternative URLs in case of CORS issues
 const ALTERNATIVE_URLS = [
   'https://huggingface.co/KittenML/kitten-tts-nano-0.1/resolve/main/kitten_tts_nano_v0_1.onnx',
-  'https://huggingface.co/KittenML/kitten-tts-nano-0.1/blob/main/kitten_tts_nano_v0_1.onnx?raw=true',
-  // Remove invalid CDN URL and add download parameter
   'https://huggingface.co/KittenML/kitten-tts-nano-0.1/resolve/main/kitten_tts_nano_v0_1.onnx?download=true',
+  // Try with a CORS proxy as last resort
+  'https://cors-anywhere.herokuapp.com/https://huggingface.co/KittenML/kitten-tts-nano-0.1/resolve/main/kitten_tts_nano_v0_1.onnx',
 ];
 
-// Inject a default wasm path for ONNX Runtime so that the runtime can locate the
-// WebAssembly binaries even when the project is bundled. This mirrors the path
-// used elsewhere in the app (see `utils/onnxIosConfig.ts`).
-if (!ort.env.wasm.wasmPaths) {
-  ort.env.wasm.wasmPaths = 'https://cdnjs.cloudflare.com/ajax/libs/onnxruntime-web/1.17.3/';
-}
 const SAMPLE_RATE = 24_000;
 
 export default function useKittenTts() {
@@ -155,7 +157,7 @@ export default function useKittenTts() {
       
       // Check for specific error types
       if (errorMessage.includes('58712104') || errorMessage.includes('network')) {
-        setError('Network error loading KittenTTS model. Please check your internet connection and try refreshing the page. If using an ad blocker or privacy extensions, try disabling them temporarily.');
+        setError('Network error loading KittenTTS model. This is often caused by browser extensions (ad blockers, privacy tools) or network restrictions. Try disabling extensions or using a different browser.');
       } else if (errorMessage.includes('CORS')) {
         setError('CORS error loading KittenTTS model. The model may be temporarily unavailable. Please try again later or use a different TTS model.');
       } else if (errorMessage.includes('Failed to fetch')) {
