@@ -87,7 +87,8 @@ const AVAILABLE_MODELS: ModelConfig[] = [
     device: 'wasm',
     filename: 'model_q4f16.onnx'
   },
-  // Temporarily disabled - KittenTTS model not available at original URL
+  // KittenTTS disabled - requires Python backend, not compatible with browser-based ONNX runtime
+  // The model uses a custom Python package (kittentts) rather than providing direct ONNX files
   // {
   //   id: 'kitten-nano',
   //   name: 'Kitten-Nano',
