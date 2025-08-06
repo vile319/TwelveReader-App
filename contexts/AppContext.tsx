@@ -122,17 +122,20 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
   const [googleDriveLinked, setGoogleDriveLinked] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
 
-  // Initialize TTS hook
-  // Dynamically pick the implementation based on selectedModel
-  const tts = selectedModel.startsWith('kitten')
-    ? useKittenTts()
-    : useKokoroWebWorkerTts({
-        onError: setError,
-        enabled: modelAccepted,
-        selectedModel,
-        preferredDevice,
-        preferredDtype,
-      });
+  // Initialize both TTS hooks unconditionally to keep React hook order stable.
+  // We then choose which implementation to expose based on the currently selected model.
+  // Kokoro hook is passed an `enabled` flag so it can avoid expensive initialization when not active.
+  const kittenTts = useKittenTts();
+
+  const kokoroTts = useKokoroWebWorkerTts({
+    onError: setError,
+    enabled: modelAccepted && !selectedModel.startsWith('kitten'), // disable when Kitten is selected
+    selectedModel,
+    preferredDevice,
+    preferredDtype,
+  });
+
+  const tts = selectedModel.startsWith('kitten') ? kittenTts : kokoroTts;
 
   // Action handlers
   const handleStartReading = async (providedText?: string) => {
