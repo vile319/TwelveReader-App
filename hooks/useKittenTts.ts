@@ -38,10 +38,17 @@ export default function useKittenTts() {
   useEffect(() => {
     (async () => {
       try {
+        console.log('🐱 Loading KittenTTS model from:', MODEL_URL);
         const session = await ort.InferenceSession.create(MODEL_URL, {
           executionProviders: ['wasm'],
           graphOptimizationLevel: 'all',
         });
+        
+        // Log model information
+        console.log('🐱 KittenTTS model loaded successfully');
+        console.log('Model input names:', session.inputNames);
+        console.log('Model output names:', session.outputNames);
+        
         sessionRef.current = session;
         setStatus('KittenTTS ready');
         setIsReady(true);
@@ -62,7 +69,16 @@ export default function useKittenTts() {
   // Helpers
   const asciiTokenizer = (text: string): Int32Array => {
     // Placeholder tokenizer: map each char → charCode (this works OK for ASCII demo).
+    if (!text || typeof text !== 'string') {
+      console.error('Invalid text input to tokenizer:', text);
+      return new Int32Array([]);
+    }
+    
     const ids = text.split('').map((c) => c.charCodeAt(0));
+    if (ids.length === 0) {
+      console.warn('Tokenizer produced empty result for text:', text);
+    }
+    
     return new Int32Array(ids);
   };
 
@@ -85,6 +101,13 @@ export default function useKittenTts() {
       console.warn('KittenTTS not ready');
       return;
     }
+    
+    // Validate input text
+    if (!text || typeof text !== 'string' || text.trim().length === 0) {
+      console.error('Invalid input text:', text);
+      throw new Error('Text input is empty or invalid');
+    }
+    
     stop();
     setStatus('Synthesising…');
     setIsLoading(true);
@@ -92,16 +115,46 @@ export default function useKittenTts() {
 
     try {
       // Prepare inputs (KittenTTS expects ids + maybe speaker – we only feed ids for now).
-      const ids = asciiTokenizer(text);
+      const ids = asciiTokenizer(text.trim());
+      console.log('Tokenized input:', { textLength: text.length, idsLength: ids.length, firstFewIds: Array.from(ids.slice(0, 10)) });
+      
       const feeds: Record<string, ort.Tensor> = {
         input: new ort.Tensor('int32', ids, [1, ids.length]),
         // Pass speaker-id as a proper BigInt64Array – using plain BigInt crashes in browsers.
         sid: new ort.Tensor('int64', new BigInt64Array([0n]), []), // default speaker
       };
 
+      console.log('Running model inference with feeds:', Object.keys(feeds));
       const result = await sessionRef.current.run(feeds);
       // Model outputs a single float32 buffer named 'audio'
-      const audio = result.audio.data as Float32Array;
+      // Add error handling for undefined result or audio property
+      if (!result) {
+        throw new Error('KittenTTS model returned no result');
+      }
+      
+      // Check if result has an 'audio' property, if not, try common alternatives
+      let audioTensor = result.audio;
+      if (!audioTensor) {
+        // Try common alternative output names
+        const possibleNames = ['output', 'output_0', 'wav', 'waveform', 'speech'];
+        for (const name of possibleNames) {
+          if (result[name]) {
+            audioTensor = result[name];
+            console.log(`Found audio output under name: ${name}`);
+            break;
+          }
+        }
+        
+        if (!audioTensor) {
+          console.error('Available output keys:', Object.keys(result));
+          throw new Error('KittenTTS model output does not contain expected audio tensor');
+        }
+      }
+      
+      const audio = audioTensor.data as Float32Array;
+      if (!audio || audio.length === 0) {
+        throw new Error('KittenTTS model returned empty or invalid audio data');
+      }
 
       // WebAudio
       const ctx = (ctxRef.current ||= new AudioContext({ sampleRate: SAMPLE_RATE }));
