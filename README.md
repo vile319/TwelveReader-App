@@ -12,6 +12,7 @@ A simple, privacy-focused text-to-speech web application powered by AI voices.
 
 ## 🚀 Quick Start
 
+### For Development
 ```bash
 # Install dependencies
 npm install
@@ -22,6 +23,14 @@ npm run dev
 # Build for production
 npm run build
 ```
+
+### GitHub Pages Deployment
+This app is configured to automatically deploy to GitHub Pages:
+1. Push changes to the `main` branch
+2. GitHub Actions will automatically build and deploy
+3. Your app will be live at: `https://yourusername.github.io/TwelveReader-App/`
+
+No additional configuration needed!
 
 ## 🎯 Usage
 

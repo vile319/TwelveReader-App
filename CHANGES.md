@@ -63,6 +63,7 @@ This is a **complete rewrite** of the text-to-speech application, reduced to a m
 3. **Clear Purpose** - Focused on core TTS functionality
 4. **Modern Stack** - Latest React, Vite, TypeScript
 5. **No Bloat** - No ads, no tracking, no unnecessary features
+6. **GitHub Pages Ready** - Still auto-deploys on push to main branch
 
 ## Next Steps
 

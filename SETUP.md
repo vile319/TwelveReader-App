@@ -33,6 +33,22 @@ The built files will be in the `dist` directory.
 npm run preview
 ```
 
+## GitHub Pages Deployment
+
+**The app is already configured for automatic deployment!**
+
+### How it works:
+1. Push your code to the `main` branch
+2. GitHub Actions automatically runs the build
+3. The built app is deployed to GitHub Pages
+4. Access your live app at: `https://yourusername.github.io/TwelveReader-App/`
+
+### Configuration files:
+- `.github/workflows/deploy.yml` - GitHub Actions workflow
+- `vite.config.ts` - Contains `base: '/TwelveReader-App/'` for proper asset paths
+
+**No manual deployment steps needed!** Just push to main and it deploys automatically.
+
 ## Features
 
 - Simple text input with sample texts
