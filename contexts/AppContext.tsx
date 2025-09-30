@@ -5,6 +5,7 @@ import { BRAND_NAME } from '../utils/branding';
 import { AppContextType, AppState, AppError, SampleText, TextSet } from '../types';
 import { driveHelpers } from '../utils/googleDrive';
 import { modelManager } from '../utils/modelManager';
+import { detectDeviceCapabilities, getModelIdFromRecommendation, getDeviceDescription } from '../utils/deviceDetection';
 import JSZip from 'jszip';
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -57,24 +58,61 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
   const [showModelWarning, setShowModelWarning] = useState(false);
   const [modelAccepted, setModelAccepted] = useState(false);
   
-  // Model selection state - initialized from model manager
-  const [selectedModel, setSelectedModel] = useState(() => {
-    const preferences = modelManager.getPreferences();
-    return preferences.selectedModel;
-  });
-  const [preferredDevice, setPreferredDevice] = useState<'webgpu' | 'wasm' | 'cpu'>(() => {
-    const preferences = modelManager.getPreferences();
-    return preferences.preferredDevice;
-  });
+  // Device detection and auto-model selection
+  const [deviceDetected, setDeviceDetected] = useState(false);
+  
+  // Model selection state - will be initialized after device detection
+  const [selectedModel, setSelectedModel] = useState<string>('kokoro-82m-fp32');
+  const [preferredDevice, setPreferredDevice] = useState<'webgpu' | 'wasm' | 'cpu'>('webgpu');
   const [preferredDtype, setPreferredDtype] = useState<'fp32' | 'fp16' | 'q8' | 'q4' | 'q4f16'>('fp32');
   const [autoSelect, setAutoSelect] = useState(() => {
     const preferences = modelManager.getPreferences();
-    return preferences.autoSelect;
+    return preferences.autoSelect ?? true; // Default to auto-select
   });
   const [keepLocal, setKeepLocal] = useState(true);
   const [modelKeepLocal, setModelKeepLocal] = useState<Record<string, boolean>>(() => {
     return modelManager.getAllKeepLocalSettings();
   });
+  
+  // Detect device and set optimal model on mount
+  useEffect(() => {
+    const initializeDevice = async () => {
+      console.log('🔍 Detecting device capabilities...');
+      const capabilities = await detectDeviceCapabilities();
+      
+      console.log('📱 Device detected:', getDeviceDescription(capabilities));
+      console.log('🎯 Recommended model:', capabilities.recommendedModel);
+      console.log('🖥️ Recommended device:', capabilities.recommendedDevice);
+      
+      // Check if user has manually selected a model before
+      const preferences = modelManager.getPreferences();
+      const hasManualSelection = preferences.selectedModel && preferences.lastUpdated;
+      
+      // If auto-select is enabled OR no previous selection, use recommended model
+      if (autoSelect || !hasManualSelection) {
+        const recommendedModelId = getModelIdFromRecommendation(capabilities.recommendedModel);
+        console.log(`✨ Auto-selecting model: ${recommendedModelId}`);
+        
+        setSelectedModel(recommendedModelId);
+        setPreferredDevice(capabilities.recommendedDevice);
+        
+        // Save the recommendation
+        modelManager.savePreferences({
+          selectedModel: recommendedModelId,
+          preferredDevice: capabilities.recommendedDevice,
+        });
+      } else {
+        // Use saved preferences
+        console.log(`👤 Using saved preferences: ${preferences.selectedModel}`);
+        setSelectedModel(preferences.selectedModel);
+        setPreferredDevice(preferences.preferredDevice);
+      }
+      
+      setDeviceDetected(true);
+    };
+    
+    initializeDevice();
+  }, []); // Only run once on mount
 
   // Store pending read request during model download
   const [pendingRead, setPendingRead] = useState<{ text: string; voice: string } | null>(null);
