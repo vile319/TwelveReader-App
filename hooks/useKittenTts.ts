@@ -46,14 +46,12 @@ export default function useKittenTts() {
   const timerRef = useRef<number | null>(null);
 
   // ────────────────────────────────────────────────
-  // Model loading
-  useEffect(() => {
-    let isMounted = true;
-
-    const loadModel = async () => {
-      if (!isMounted) return;
-      
+  // Model loading function (moved outside useEffect for retry capability)
+  const loadModel = useCallback(async () => {
       let lastError: Error | null = null;
+      
+      setIsLoading(true);
+      setError(null);
       
       // Try each URL until one works
       for (const url of ALTERNATIVE_URLS) {
@@ -68,8 +66,6 @@ export default function useKittenTts() {
               enableCpuMemArena: false, // Disable CPU memory arena to avoid potential issues
               enableMemPattern: false,   // Disable memory pattern to avoid potential issues
             });
-
-            if (!isMounted) return;
 
             // Log model information
             console.log('🐱 KittenTTS model loaded successfully');
@@ -97,8 +93,6 @@ export default function useKittenTts() {
               const session = await ort.InferenceSession.create(url, {
                 executionProviders: ['wasm'],
               });
-              
-              if (!isMounted) return;
               
               sessionRef.current = session;
               setStatus('KittenTTS ready');
@@ -172,12 +166,14 @@ export default function useKittenTts() {
       
       setStatus('KittenTTS unavailable');
       setIsLoading(false);
-    };
+    }, []); // Empty deps array for useCallback
 
+  // ────────────────────────────────────────────────
+  // Initialize model on mount
+  useEffect(() => {
     loadModel();
 
     return () => {
-      isMounted = false;
       stop();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -186,30 +182,13 @@ export default function useKittenTts() {
   // Add retry function
   const retry = useCallback(() => {
     if (!isLoading) {
-      setError(null);
-      setIsLoading(true);
       setStatus('Retrying KittenTTS model load...');
       loadModel();
     }
-  }, [isLoading]);
+  }, [isLoading, loadModel]);
 
   // ────────────────────────────────────────────────
   // Helpers
-  const asciiTokenizer = (text: string): Int32Array => {
-    // Placeholder tokenizer: map each char → charCode (this works OK for ASCII demo).
-    if (!text || typeof text !== 'string') {
-      console.error('Invalid text input to tokenizer:', text);
-      return new Int32Array([]);
-    }
-    
-    const ids = text.split('').map((c) => c.charCodeAt(0));
-    if (ids.length === 0) {
-      console.warn('Tokenizer produced empty result for text:', text);
-    }
-    
-    return new Int32Array(ids);
-  };
-
   const clearTimer = () => {
     if (timerRef.current) {
       clearInterval(timerRef.current);
@@ -243,11 +222,13 @@ export default function useKittenTts() {
 
     try {
       // Prepare inputs (KittenTTS expects ids + maybe speaker – we only feed ids for now).
-      const ids = asciiTokenizer(text.trim());
-      console.log('Tokenized input:', { textLength: text.length, idsLength: ids.length, firstFewIds: Array.from(ids.slice(0, 10)) });
+      const trimmedText = text.trim();
+      const ids = trimmedText.split('').map((c) => c.charCodeAt(0));
+      const idsArray = new Int32Array(ids);
+      console.log('Tokenized input:', { textLength: trimmedText.length, idsLength: idsArray.length, firstFewIds: Array.from(idsArray.slice(0, 10)) });
       
       const feeds: Record<string, ort.Tensor> = {
-        input: new ort.Tensor('int32', ids, [1, ids.length]),
+        input: new ort.Tensor('int32', idsArray, [1, idsArray.length]),
         // Pass speaker-id as a proper BigInt64Array – using plain BigInt crashes in browsers.
         sid: new ort.Tensor('int64', new BigInt64Array([0n]), []), // default speaker
       };
@@ -304,7 +285,7 @@ export default function useKittenTts() {
       // simple progress timer
       clearTimer();
       timerRef.current = window.setInterval(() => {
-        setCurrentTime((t) => {
+        setCurrentTime((t: number) => {
           const next = Math.min(buf.duration, t + 0.2);
           if (next >= buf.duration) clearTimer();
           return next;
@@ -320,7 +301,7 @@ export default function useKittenTts() {
     } finally {
       setIsLoading(false);
     }
-  }, [asciiTokenizer, isReady, stop]);
+  }, [isReady, stop]);
 
   const togglePlayPause = () => {
     if (!ctxRef.current) return;

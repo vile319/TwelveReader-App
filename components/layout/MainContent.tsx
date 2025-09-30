@@ -5,12 +5,12 @@ import TextInputPanel from '../text/TextInputPanel';
 
 const MainContent: FC = () => {
   return (
-    <div className="main-content flex-1 w-full flex flex-col p-6 md:ml-80 bg-[#0e0e0f]">
+    <div className="main-content flex-1 w-full flex flex-col p-8 md:ml-80 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 min-h-screen">
       {/* Top Banner Ad */}
       <AdSenseBanner 
         adSlot="1234567890" 
         adFormat="horizontal"
-        style={{ marginBottom: '16px' }}
+        style={{ marginBottom: '24px' }}
       />
       
       {/* Audio Player */}
@@ -23,7 +23,7 @@ const MainContent: FC = () => {
       <AdSenseBanner 
         adSlot="0987654321" 
         adFormat="horizontal"
-        style={{ marginTop: '16px' }}
+        style={{ marginTop: '24px' }}
       />
     </div>
   );

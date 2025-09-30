@@ -21,36 +21,47 @@ const Sidebar: FC = () => {
   const voices: Voice[] = tts.voices as Voice[];
 
   return (
-    <div className="sidebar overflow-auto bg-gradient-to-b from-[#1a1a1d] to-[#0e0e0f] border-r border-slate-800/50 p-6 flex flex-col w-full md:w-80 md:fixed md:left-0 md:top-0 md:h-screen">
-      {/* Logo */}
-      <div className="mb-8">
-        <div className="flex items-baseline gap-2">
-          <h1 className="text-2xl font-bold bg-gradient-to-r from-[#ff8500] via-[#ffa940] to-[#d4af37] bg-clip-text text-transparent">
+    <div className="sidebar overflow-auto bg-gradient-to-br from-slate-900/95 via-slate-800/95 to-slate-900/95 backdrop-blur-xl border-r border-slate-700/50 p-8 flex flex-col w-full md:w-80 md:fixed md:left-0 md:top-0 md:h-screen shadow-2xl">
+      {/* Logo with animated gradient */}
+      <div className="mb-10">
+        <div className="flex items-baseline gap-3">
+          <h1 className="text-3xl font-extrabold bg-gradient-to-r from-violet-400 via-purple-400 to-cyan-400 bg-clip-text text-transparent animate-gradient">
             {BRAND_NAME}
           </h1>
-          <span className="text-xs font-medium text-slate-500 bg-slate-800/50 px-2 py-0.5 rounded-full border border-slate-700/50">
+          <span className="text-xs font-semibold text-slate-400 bg-slate-700/50 px-2.5 py-1 rounded-full border border-slate-600/50 shadow-sm">
             v{VERSION}
           </span>
         </div>
-        <p className="text-sm text-slate-400 m-0 mt-1">Your personal audiobook library</p>
+        <p className="text-sm text-slate-400 m-0 mt-2 font-medium">AI-powered audiobook experience</p>
       </div>
 
-      {/* Status */}
-      <div className="bg-gradient-to-br from-slate-800/80 to-slate-900/80 text-slate-200 text-sm rounded-xl p-4 mb-6 border border-slate-700/50 shadow-lg">
-        {state.model.isReady ? '✅ Ready to generate audio' : 
-         state.model.error ? '❌ Model unavailable - please select another' :
-         state.model.status}
+      {/* Status Card */}
+      <div className="bg-gradient-to-br from-slate-800/90 to-slate-900/90 backdrop-blur-sm text-slate-100 text-sm rounded-2xl p-5 mb-8 border border-slate-700/50 shadow-xl">
+        <div className="flex items-center gap-3">
+          <div className={cn(
+            "w-2.5 h-2.5 rounded-full",
+            state.model.isReady ? "bg-emerald-400 shadow-lg shadow-emerald-400/50 animate-pulse" :
+            state.model.error ? "bg-red-400 shadow-lg shadow-red-400/50" :
+            "bg-amber-400 shadow-lg shadow-amber-400/50 animate-pulse"
+          )} />
+          <span className="font-medium">
+            {state.model.isReady ? '✓ Ready to synthesize' : 
+             state.model.error ? '⚠ Model error' :
+             state.model.status}
+          </span>
+        </div>
       </div>
 
       {/* Voice Selection */}
-      <div className="mb-6">
-        <label className="block mb-3 text-sm font-semibold text-slate-200">
-          🎭 Voice ({tts.voices.length} available)
+      <div className="mb-8">
+        <label className="block mb-3 text-sm font-bold text-slate-200 uppercase tracking-wide flex items-center gap-2">
+          <span className="text-lg">🎭</span>
+          Voice Selection
         </label>
         <select
           value={state.selectedVoice}
           onChange={(e: React.ChangeEvent<HTMLSelectElement>) => actions.setSelectedVoice(e.target.value)}
-          className="w-full p-3 rounded-xl bg-slate-800/80 border border-slate-700/50 text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-[#ff8500] shadow-sm"
+          className="w-full p-4 rounded-xl bg-slate-800/80 backdrop-blur-sm border border-slate-700/50 text-sm text-slate-100 font-medium focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent shadow-lg hover:bg-slate-700/80 cursor-pointer"
         >
           {voices.map((voice) => (
             <option key={voice.name} value={voice.name}>
@@ -58,32 +69,36 @@ const Sidebar: FC = () => {
             </option>
           ))}
         </select>
+        <div className="mt-2 text-xs text-slate-400 font-medium">
+          {tts.voices.length} voices available
+        </div>
       </div>
 
       {/* File Upload (PDF / EPUB) */}
-      <div className="mb-6">
-        <label className="block mb-3 text-sm font-semibold text-slate-200">
-          📄 File Upload (PDF / EPUB)
+      <div className="mb-8">
+        <label className="block mb-3 text-sm font-bold text-slate-200 uppercase tracking-wide flex items-center gap-2">
+          <span className="text-lg">📚</span>
+          Upload Document
         </label>
         <input
           type="file"
           accept=".pdf,.epub"
           onChange={actions.handleFileUpload}
-          className="w-full p-3 rounded-xl bg-slate-800/80 border border-slate-700/50 text-sm text-slate-200 cursor-pointer file:cursor-pointer shadow-sm file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-[#ff8500] file:text-white file:font-semibold hover:file:bg-[#ffa940] file:transition-colors"
+          className="w-full p-4 rounded-xl bg-slate-800/80 backdrop-blur-sm border border-slate-700/50 text-sm text-slate-100 cursor-pointer shadow-lg hover:bg-slate-700/80 file:cursor-pointer file:mr-4 file:py-2.5 file:px-5 file:rounded-lg file:border-0 file:bg-gradient-to-r file:from-violet-600 file:to-purple-600 file:text-white file:font-bold file:text-xs file:uppercase file:tracking-wide hover:file:from-violet-500 hover:file:to-purple-500 file:shadow-lg file:shadow-violet-500/30"
         />
         {state.isExtractingPDF && (
-          <div className="flex items-center gap-2 text-xs text-blue-400 mt-2">
-            <div className="w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
-            Extracting text from file...
+          <div className="flex items-center gap-3 text-xs text-cyan-400 mt-3 bg-cyan-400/10 rounded-lg p-3 border border-cyan-400/30">
+            <div className="w-4 h-4 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin" />
+            <span className="font-semibold">Extracting text...</span>
           </div>
         )}
         {state.error && (
-          <div className="bg-red-200 text-red-700 text-xs rounded-lg p-3 mt-2 border border-red-400">
-            <div className="font-semibold mb-1">{state.error.title}</div>
-            <div className="leading-snug">{state.error.message}</div>
+          <div className="bg-red-500/10 border border-red-500/30 text-red-300 text-xs rounded-xl p-4 mt-3 shadow-lg">
+            <div className="font-bold mb-2 text-red-200">{state.error.title}</div>
+            <div className="leading-relaxed mb-3">{state.error.message}</div>
             <button
               onClick={() => actions.setError(null)}
-              className="mt-2 px-2 py-0.5 rounded border border-red-700 text-red-700 text-xs font-medium hover:bg-red-700 hover:text-white transition-colors"
+              className="px-3 py-1.5 rounded-lg bg-red-500/20 border border-red-500/50 text-red-200 text-xs font-bold uppercase tracking-wide hover:bg-red-500/30 transition-all"
             >
               Dismiss
             </button>
@@ -91,19 +106,18 @@ const Sidebar: FC = () => {
         )}
       </div>
 
-
-
       {/* Help Button */}
       <button
         onClick={actions.handleShowHelp}
-        className="w-full py-3 rounded-xl border border-[#ff8500]/50 bg-[#ff8500]/10 text-[#ff8500] font-semibold flex items-center justify-center gap-2 mb-6 hover:bg-[#ff8500]/20 transition-colors shadow-sm"
+        className="w-full py-4 rounded-xl border-2 border-violet-500/50 bg-gradient-to-r from-violet-500/10 to-purple-500/10 text-violet-300 font-bold text-sm uppercase tracking-wide flex items-center justify-center gap-3 mb-8 hover:from-violet-500/20 hover:to-purple-500/20 hover:scale-[1.02] transition-all shadow-lg hover:shadow-violet-500/20"
         title="Get help and view tutorial"
       >
-        ❓ Help & FAQ
+        <span className="text-xl">❓</span>
+        Help & FAQ
       </button>
 
       {/* Model Selection */}
-      <div className="mb-6">
+      <div className="mb-8">
         <ModelSelector
           selectedModel={state.model.selectedModel}
           onModelChange={actions.setSelectedModel}
@@ -114,29 +128,30 @@ const Sidebar: FC = () => {
       </div>
 
       {/* Advanced Options (collapsed by default) */}
-      <div className="mb-6">
+      <div className="mb-8">
         {/* Toggle */}
         <button
-          onClick={() => setShowAdvanced((prev) => !prev)}
-          className="w-full py-3 rounded-lg border border-slate-600 text-slate-200 font-semibold flex items-center justify-center gap-2 hover:bg-slate-600/10 transition-colors"
+          onClick={() => setShowAdvanced((prev: boolean) => !prev)}
+          className="w-full py-3 rounded-xl border-2 border-slate-600/50 bg-slate-800/50 backdrop-blur-sm text-slate-200 font-bold text-sm uppercase tracking-wide flex items-center justify-center gap-3 hover:bg-slate-700/50 hover:border-slate-500/50 transition-all shadow-lg"
           title="Technical and troubleshooting controls"
         >
-          ⚙️ {showAdvanced ? 'Hide' : 'Show'} Advanced Options
+          <span className="text-lg">⚙️</span>
+          {showAdvanced ? 'Hide' : 'Show'} Advanced
         </button>
 
         {/* Collapsible content */}
         {showAdvanced && (
-          <div className="pt-4 space-y-2">
+          <div className="pt-4 space-y-3 animate-in fade-in slide-in-from-top-2 duration-300">
             {/* Model Management */}
-            <div className="space-y-2">
+            <div className="space-y-3 p-4 bg-slate-800/50 rounded-xl border border-slate-700/50">
               <button
                 onClick={async () => {
                   await actions.cleanupUnwantedModels();
                   alert('🧹 Cleaned up unwanted models. Only models you chose to keep are now cached.');
                 }}
-                className="w-full py-2 rounded-lg border border-green-600 text-green-600 text-xs font-semibold flex items-center justify-center gap-2 hover:bg-green-600/10 transition-colors"
+                className="w-full py-2.5 rounded-lg border-2 border-emerald-500/50 bg-emerald-500/10 text-emerald-300 text-xs font-bold uppercase tracking-wide flex items-center justify-center gap-2 hover:bg-emerald-500/20 transition-all shadow-md hover:shadow-emerald-500/20"
               >
-                🧹 Cleanup Models
+                <span>🧹</span> Cleanup Models
               </button>
 
               <button
@@ -144,9 +159,9 @@ const Sidebar: FC = () => {
                   const cacheInfo = await actions.getModelCacheSize();
                   alert(`Cache Status:\n📦 Total Size: ${cacheInfo.sizeFormatted}\n📁 Files: ${cacheInfo.fileCount}\n\nModels kept: ${Object.keys(state.model.modelKeepLocal).filter(id => state.model.modelKeepLocal[id]).length}`);
                 }}
-                className="w-full py-2 rounded-lg border border-slate-500 text-slate-500 text-xs font-medium flex items-center justify-center gap-1 hover:bg-slate-500/10 transition-colors"
+                className="w-full py-2.5 rounded-lg border-2 border-cyan-500/50 bg-cyan-500/10 text-cyan-300 text-xs font-bold uppercase tracking-wide flex items-center justify-center gap-2 hover:bg-cyan-500/20 transition-all shadow-md hover:shadow-cyan-500/20"
               >
-                📊 Cache Info
+                <span>📊</span> Cache Info
               </button>
 
               <button
@@ -158,9 +173,9 @@ const Sidebar: FC = () => {
                     alert('🔄 All model data has been reset.');
                   }
                 }}
-                className="w-full py-2 rounded-lg border border-red-600 text-red-600 text-xs font-semibold flex items-center justify-center gap-2 hover:bg-red-600/10 transition-colors"
+                className="w-full py-2.5 rounded-lg border-2 border-red-500/50 bg-red-500/10 text-red-300 text-xs font-bold uppercase tracking-wide flex items-center justify-center gap-2 hover:bg-red-500/20 transition-all shadow-md hover:shadow-red-500/20"
               >
-                🔄 Reset All Models
+                <span>🔄</span> Reset All Models
               </button>
             </div>
 
@@ -183,19 +198,19 @@ const Sidebar: FC = () => {
                 message += `Check console (F12) for detailed logs.`;
                 alert(message);
               }}
-              className="w-full py-2 rounded-lg border border-amber-500 text-amber-500 text-xs font-medium flex items-center justify-center gap-1 hover:bg-amber-500/10 transition-colors"
+              className="w-full py-2.5 rounded-lg border-2 border-amber-500/50 bg-amber-500/10 text-amber-300 text-xs font-bold uppercase tracking-wide flex items-center justify-center gap-2 hover:bg-amber-500/20 transition-all shadow-md hover:shadow-amber-500/20"
             >
-              🔍 Debug Audio
+              <span>🔍</span> Debug Audio
             </button>
 
             {/* Audio Normalization */}
             <button
               onClick={actions.toggleNormalizeAudio}
               className={cn(
-                'w-full py-2 rounded-lg text-xs font-medium flex items-center justify-center gap-1 transition-colors',
+                'w-full py-2.5 rounded-lg text-xs font-bold uppercase tracking-wide flex items-center justify-center gap-2 transition-all shadow-md',
                 state.model.normalizeAudio
-                  ? 'border-emerald-500 text-emerald-500 bg-emerald-500/10'
-                  : 'border-slate-500 text-slate-500 hover:bg-slate-500/10'
+                  ? 'border-2 border-emerald-500/50 text-emerald-300 bg-emerald-500/20 hover:shadow-emerald-500/20'
+                  : 'border-2 border-slate-500/50 text-slate-400 bg-slate-500/10 hover:bg-slate-500/20'
               )}
             >
               {state.model.normalizeAudio ? '✅' : '📢'} Audio Fix: {state.model.normalizeAudio ? 'ON' : 'OFF'}
@@ -204,18 +219,16 @@ const Sidebar: FC = () => {
             {/* Google Drive Sync */}
             <button
               onClick={actions.linkGoogleDrive}
-              className="w-full py-2 rounded-lg border border-sky-500 text-sky-500 text-xs font-medium flex items-center justify-center gap-1 hover:bg-sky-500/10 transition-colors"
+              className="w-full py-2.5 rounded-lg border-2 border-sky-500/50 bg-sky-500/10 text-sky-300 text-xs font-bold uppercase tracking-wide flex items-center justify-center gap-2 hover:bg-sky-500/20 transition-all shadow-md hover:shadow-sky-500/20"
             >
-              {state.googleDriveLinked ? '☁️ Google Drive: Linked' : '☁️ Link Google Drive'}
+              <span>☁️</span> {state.googleDriveLinked ? 'Google Drive: Linked' : 'Link Google Drive'}
             </button>
           </div>
         )}
       </div>
       
-      {/* Spacer where error used to be */}
-      
       {/* Donation Button */}
-      <div className="mt-auto flex flex-col items-center gap-4">
+      <div className="mt-auto flex flex-col items-center gap-6 pt-6 border-t border-slate-700/50">
         {/* Ko-fi donation button */}
         <KoFiButton username="Oronto" />
 
