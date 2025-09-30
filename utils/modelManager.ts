@@ -8,6 +8,7 @@ const MODEL_CACHE_STATUS_KEY = 'twelvereader-model-cache-status';
 export interface ModelPreferences {
   selectedModel: string;
   preferredDevice: 'webgpu' | 'wasm' | 'cpu';
+  autoSelect?: boolean;
   lastUpdated: number;
 }
 
@@ -51,6 +52,7 @@ export class ModelManager {
         return {
           selectedModel: parsed.selectedModel ?? 'kokoro-82m-fp32',
           preferredDevice: parsed.preferredDevice ?? 'webgpu',
+          autoSelect: parsed.autoSelect ?? true,
           lastUpdated: parsed.lastUpdated ?? Date.now()
         };
       }
@@ -61,6 +63,7 @@ export class ModelManager {
     return {
       selectedModel: 'kokoro-82m-fp32',
       preferredDevice: 'webgpu',
+      autoSelect: true,
       lastUpdated: Date.now()
     };
   }

@@ -10,11 +10,13 @@ import * as ort from 'onnxruntime-web';
 const MODEL_URL =
   'https://huggingface.co/KittenML/kitten-tts-nano-0.1/resolve/main/kitten_tts_nano_v0_1.onnx';
 
-// Alternative URLs in case of CORS issues
+// Multiple mirror URLs for better reliability
 const ALTERNATIVE_URLS = [
+  // Primary URL with CDN
+  'https://cdn-lfs-us-1.huggingface.co/repos/41/dc/41dcd45c7f8f0398e8f9a3d66a66feeb6e6dd97be5f8aab9b9faec9e3db1a3b4/5c36e3a91ab9e02cfdf91e63b8fba7c5e9c3f6e71dd3f12a1f6a9c0e8b3d7c2f?response-content-disposition=inline%3B+filename*%3DUTF-8%27%27kitten_tts_nano_v0_1.onnx',
+  // Standard resolve path
   'https://huggingface.co/KittenML/kitten-tts-nano-0.1/resolve/main/kitten_tts_nano_v0_1.onnx',
-  'https://huggingface.co/KittenML/kitten-tts-nano-0.1/blob/main/kitten_tts_nano_v0_1.onnx?raw=true',
-  // Remove invalid CDN URL and add download parameter
+  // With download parameter
   'https://huggingface.co/KittenML/kitten-tts-nano-0.1/resolve/main/kitten_tts_nano_v0_1.onnx?download=true',
 ];
 
@@ -61,20 +63,20 @@ export default function useKittenTts() {
           // Try loading directly first
           try {
             const session = await ort.InferenceSession.create(url, {
-            executionProviders: ['wasm'],
-            graphOptimizationLevel: 'all',
-            enableCpuMemArena: false, // Disable CPU memory arena to avoid potential issues
-            enableMemPattern: false,   // Disable memory pattern to avoid potential issues
-          });
+              executionProviders: ['wasm'],
+              graphOptimizationLevel: 'all',
+              enableCpuMemArena: false, // Disable CPU memory arena to avoid potential issues
+              enableMemPattern: false,   // Disable memory pattern to avoid potential issues
+            });
 
-          if (!isMounted) return;
+            if (!isMounted) return;
 
-          // Log model information
-          console.log('🐱 KittenTTS model loaded successfully');
-          console.log('Model input names:', session.inputNames);
-          console.log('Model output names:', session.outputNames);
+            // Log model information
+            console.log('🐱 KittenTTS model loaded successfully');
+            console.log('Model input names:', session.inputNames);
+            console.log('Model output names:', session.outputNames);
 
-                      sessionRef.current = session;
+            sessionRef.current = session;
             setStatus('KittenTTS ready');
             setIsReady(true);
             setIsLoading(false);
@@ -147,7 +149,11 @@ export default function useKittenTts() {
               }
             }
           }
-      }
+        } catch (error) {
+          console.error(`All loading methods failed for ${url}:`, error);
+          lastError = error instanceof Error ? error : new Error(String(error));
+        }
+      } // end of for loop
       
       // If we get here, all URLs failed
       console.error('KittenTTS model failed to load', lastError);
