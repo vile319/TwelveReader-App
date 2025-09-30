@@ -3,7 +3,7 @@ import { useAppContext } from '../../contexts/AppContext';
 import AdSenseBanner from '../AdSenseBanner';
 import KoFiButton from '../KoFiButton';
 import ModelSelector from '../ModelSelector';
-import { BRAND_NAME } from '../../utils/branding';
+import { BRAND_NAME, VERSION } from '../../utils/branding';
 
 // Small helper – joins classes conditionally
 const cn = (...classes: (string | false | null | undefined)[]) => classes.filter(Boolean).join(' ');
@@ -21,17 +21,22 @@ const Sidebar: FC = () => {
   const voices: Voice[] = tts.voices as Voice[];
 
   return (
-    <div className="sidebar overflow-auto bg-slate-900 border-r border-slate-800 p-6 flex flex-col w-full md:w-80 md:fixed md:left-0 md:top-0 md:h-screen">
+    <div className="sidebar overflow-auto bg-gradient-to-b from-[#1a1a1d] to-[#0e0e0f] border-r border-slate-800/50 p-6 flex flex-col w-full md:w-80 md:fixed md:left-0 md:top-0 md:h-screen">
       {/* Logo */}
       <div className="mb-8">
-        <h1 className="text-2xl font-bold mb-1 bg-gradient-to-r from-indigo-400 to-purple-500 bg-clip-text text-transparent">
-          {BRAND_NAME}
-        </h1>
-        <p className="text-sm text-gray-400 m-0">AI-powered reading</p>
+        <div className="flex items-baseline gap-2">
+          <h1 className="text-2xl font-bold bg-gradient-to-r from-[#ff8500] via-[#ffa940] to-[#d4af37] bg-clip-text text-transparent">
+            {BRAND_NAME}
+          </h1>
+          <span className="text-xs font-medium text-slate-500 bg-slate-800/50 px-2 py-0.5 rounded-full border border-slate-700/50">
+            v{VERSION}
+          </span>
+        </div>
+        <p className="text-sm text-slate-400 m-0 mt-1">Your personal audiobook library</p>
       </div>
 
       {/* Status */}
-      <div className="bg-slate-700 text-slate-200 text-sm rounded-lg p-3 mb-6">
+      <div className="bg-gradient-to-br from-slate-800/80 to-slate-900/80 text-slate-200 text-sm rounded-xl p-4 mb-6 border border-slate-700/50 shadow-lg">
         {state.model.isReady ? '✅ Ready to generate audio' : 
          state.model.error ? '❌ Model unavailable - please select another' :
          state.model.status}
@@ -45,7 +50,7 @@ const Sidebar: FC = () => {
         <select
           value={state.selectedVoice}
           onChange={(e: React.ChangeEvent<HTMLSelectElement>) => actions.setSelectedVoice(e.target.value)}
-          className="w-full p-3 rounded-lg bg-slate-700 border border-slate-600 text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          className="w-full p-3 rounded-xl bg-slate-800/80 border border-slate-700/50 text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-[#ff8500] shadow-sm"
         >
           {voices.map((voice) => (
             <option key={voice.name} value={voice.name}>
@@ -64,7 +69,7 @@ const Sidebar: FC = () => {
           type="file"
           accept=".pdf,.epub"
           onChange={actions.handleFileUpload}
-          className="w-full p-3 rounded-lg bg-slate-700 border border-slate-600 text-sm text-slate-200 cursor-pointer file:cursor-pointer"
+          className="w-full p-3 rounded-xl bg-slate-800/80 border border-slate-700/50 text-sm text-slate-200 cursor-pointer file:cursor-pointer shadow-sm file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-[#ff8500] file:text-white file:font-semibold hover:file:bg-[#ffa940] file:transition-colors"
         />
         {state.isExtractingPDF && (
           <div className="flex items-center gap-2 text-xs text-blue-400 mt-2">
@@ -91,7 +96,7 @@ const Sidebar: FC = () => {
       {/* Help Button */}
       <button
         onClick={actions.handleShowHelp}
-        className="w-full py-3 rounded-lg border border-blue-500 bg-blue-500/10 text-blue-500 font-semibold flex items-center justify-center gap-2 mb-6 hover:bg-blue-500/20 transition-colors"
+        className="w-full py-3 rounded-xl border border-[#ff8500]/50 bg-[#ff8500]/10 text-[#ff8500] font-semibold flex items-center justify-center gap-2 mb-6 hover:bg-[#ff8500]/20 transition-colors shadow-sm"
         title="Get help and view tutorial"
       >
         ❓ Help & FAQ

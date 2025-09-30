@@ -11,7 +11,7 @@ const AudioPlayer: FC = () => {
   return (
     <div
       className={cn(
-        'bg-slate-900 border border-slate-800 rounded-2xl p-6 mb-6 transition-opacity',
+        'bg-gradient-to-br from-slate-900/80 to-slate-950/80 border border-slate-800/50 rounded-2xl p-6 mb-6 transition-opacity shadow-xl',
         disabled && 'opacity-50 pointer-events-none'
       )}
     >
@@ -20,7 +20,7 @@ const AudioPlayer: FC = () => {
         {/* Skip Back */}
         <button
           onClick={actions.skipBackward}
-          className="w-12 h-12 rounded-full bg-slate-700 text-slate-200 text-sm font-semibold flex items-center justify-center hover:bg-slate-600 hover:scale-105 transition-transform"
+          className="w-12 h-12 rounded-full bg-slate-800/80 border border-slate-700/50 text-slate-200 text-sm font-semibold flex items-center justify-center hover:bg-slate-700 hover:border-[#ff8500]/50 hover:scale-105 transition-all"
         >
           -15s
         </button>
@@ -28,7 +28,7 @@ const AudioPlayer: FC = () => {
         {/* Play/Pause */}
         <button
           onClick={actions.togglePlayPause}
-          className="w-16 h-16 rounded-full bg-blue-500 text-white text-2xl flex items-center justify-center shadow-lg hover:bg-blue-600 hover:scale-105 transition-transform"
+          className="w-16 h-16 rounded-full bg-gradient-to-br from-[#ff8500] to-[#ea580c] text-white text-2xl flex items-center justify-center shadow-lg hover:shadow-[#ff8500]/50 hover:scale-105 transition-all"
         >
           {state.audio.isPlaying ? '⏸️' : '▶️'}
         </button>
@@ -36,7 +36,7 @@ const AudioPlayer: FC = () => {
         {/* Skip Forward */}
         <button
           onClick={actions.skipForward}
-          className="w-12 h-12 rounded-full bg-slate-700 text-slate-200 text-sm font-semibold flex items-center justify-center hover:bg-slate-600 hover:scale-105 transition-transform"
+          className="w-12 h-12 rounded-full bg-slate-800/80 border border-slate-700/50 text-slate-200 text-sm font-semibold flex items-center justify-center hover:bg-slate-700 hover:border-[#ff8500]/50 hover:scale-105 transition-all"
         >
           +15s
         </button>
@@ -47,7 +47,7 @@ const AudioPlayer: FC = () => {
             {actions.formatTime(state.audio.currentTime)} / {actions.formatTime(state.audio.duration || state.audio.currentTime)}
           </div>
           {state.isReading && (
-            <div className="text-xs text-blue-400">
+            <div className="text-xs text-[#ff8500]">
               Generating audio...
             </div>
           )}
@@ -86,7 +86,7 @@ const AudioPlayer: FC = () => {
       >
         {/* Progress Fill */}
         <div
-          className="h-full bg-blue-500 rounded-md transition-[width] duration-100 ease-out"
+          className="h-full bg-gradient-to-r from-[#ff8500] to-[#ffa940] rounded-md transition-[width] duration-100 ease-out shadow-sm"
           style={{
             width: `${((state.audio.duration || 0) > 0 ? (state.audio.currentTime / (state.audio.duration || 1)) * 100 : 0)}%`,
           }}
