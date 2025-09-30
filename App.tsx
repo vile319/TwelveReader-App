@@ -14,7 +14,7 @@ const AppContent: FC = () => {
   const { state, actions } = useAppContext();
 
   return (
-    <div className="app-container flex flex-col md:flex-row min-h-screen bg-slate-950 text-slate-200 font-inter">
+    <div className="app-container flex flex-col md:flex-row min-h-screen bg-[#0e0e0f] text-slate-200 font-inter">
       {/* Global keyframes (other layout handled by Tailwind classes) */}
       <style>{`
         @keyframes spin {
