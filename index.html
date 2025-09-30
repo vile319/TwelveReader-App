@@ -30,17 +30,19 @@
         theme: {
           extend: {
             colors: {
-              'brand-primary': '#ff8500',
-              'brand-secondary': '#ffa940',
-              'brand-light': '#ffedd5',
-              'brand-dark': '#ea580c',
-              'audible-orange': '#ff8500',
-              'audible-gold': '#d4af37',
-              'base-100': '#ffffff',
-              'base-200': '#f3f4f6',
-              'base-300': '#e5e7eb',
-              'content-primary': '#111827',
-              'content-secondary': '#4b5563',
+              'brand-primary': '#8b5cf6',
+              'brand-secondary': '#a78bfa',
+              'brand-accent': '#06b6d4',
+              'brand-light': '#ddd6fe',
+              'brand-dark': '#7c3aed',
+              'base-100': '#0f172a',
+              'base-200': '#1e293b',
+              'base-300': '#334155',
+              'content-primary': '#f1f5f9',
+              'content-secondary': '#cbd5e1',
+              'success': '#10b981',
+              'warning': '#f59e0b',
+              'error': '#ef4444',
             }
           }
         }
@@ -62,12 +64,54 @@
 }
 </script>
     <!-- Inter font for modern typography -->
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
     <style>
       .font-inter { font-family: 'Inter', system-ui, -apple-system, sans-serif; }
+      
+      /* Custom scrollbar */
+      ::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+      }
+      
+      ::-webkit-scrollbar-track {
+        background: #1e293b;
+        border-radius: 10px;
+      }
+      
+      ::-webkit-scrollbar-thumb {
+        background: #475569;
+        border-radius: 10px;
+      }
+      
+      ::-webkit-scrollbar-thumb:hover {
+        background: #64748b;
+      }
+      
+      /* Smooth transitions */
+      * {
+        transition-property: color, background-color, border-color, text-decoration-color, fill, stroke, opacity, box-shadow, transform, filter, backdrop-filter;
+        transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+        transition-duration: 150ms;
+      }
+      
+      /* Animated gradient background */
+      @keyframes gradientShift {
+        0%, 100% {
+          background-position: 0% 50%;
+        }
+        50% {
+          background-position: 100% 50%;
+        }
+      }
+      
+      .animate-gradient {
+        background-size: 200% 200%;
+        animation: gradientShift 10s ease infinite;
+      }
     </style>
   </head>
-  <body class="bg-[#0e0e0f] text-slate-200 font-inter">
+  <body class="bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-slate-100 font-inter antialiased">
     <div id="root"></div>
     
     <!-- This loads and runs the main React application -->

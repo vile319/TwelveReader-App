@@ -26,7 +26,7 @@ const TextInputPanel: FC = () => {
       <div
         ref={contentRef}
         onScroll={(e: React.UIEvent<HTMLDivElement>) => actions.updateScrollPosition((e.currentTarget).scrollTop)}
-        className="flex-1 bg-slate-800/80 border border-slate-700/50 rounded-xl p-5 min-h-[200px] overflow-auto shadow-inner"
+        className="flex-1 bg-slate-800/50 backdrop-blur-sm border-2 border-slate-700/50 rounded-2xl p-6 min-h-[200px] overflow-auto shadow-inner"
       >
         {state.inputText.length > 0 ? (
           <HighlightedText
@@ -37,10 +37,10 @@ const TextInputPanel: FC = () => {
             style={{ overflowY: 'visible' }}
           />
         ) : (
-          <div className="flex flex-col items-center justify-center text-center text-slate-500 text-sm py-10">
-            <div className="text-3xl mb-4">📝</div>
-            <p className="mb-1">Enter text above or upload a PDF to get started</p>
-            <p className="text-xs text-slate-600">Your text will appear here with synchronized highlighting during playback</p>
+          <div className="flex flex-col items-center justify-center text-center text-slate-400 text-sm py-16">
+            <div className="text-6xl mb-6 opacity-50">📝</div>
+            <p className="text-lg font-semibold mb-2 text-slate-300">No text yet</p>
+            <p className="text-xs text-slate-500 max-w-md">Enter text in the field above, upload a PDF document, or select a sample text to get started</p>
           </div>
         )}
       </div>
@@ -48,15 +48,19 @@ const TextInputPanel: FC = () => {
   };
 
   return (
-    <div className="flex flex-col bg-gradient-to-br from-slate-900/80 to-slate-950/80 border border-slate-800/50 rounded-2xl p-6 flex-1 shadow-xl">
+    <div className="flex flex-col bg-gradient-to-br from-slate-800/90 via-slate-900/90 to-slate-800/90 backdrop-blur-xl border-2 border-slate-700/50 rounded-3xl p-8 flex-1 shadow-2xl shadow-violet-500/10">
       {/* Header */}
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-lg font-semibold text-slate-200 m-0">Text Input</h2>
-        <div className="flex items-center gap-3">
-          <div className="text-sm text-slate-400 flex items-center gap-2">
-            <span>{state.inputText.length.toLocaleString()} characters</span>
+      <div className="flex items-center justify-between mb-6">
+        <h2 className="text-2xl font-bold bg-gradient-to-r from-violet-400 to-cyan-400 bg-clip-text text-transparent m-0">
+          Text Input
+        </h2>
+        <div className="flex items-center gap-4">
+          <div className="text-sm text-slate-400 flex items-center gap-3">
+            <span className="font-semibold">{state.inputText.length.toLocaleString()} characters</span>
             {state.inputText.length > 0 && (
-              <span className="text-xs px-2 py-0.5 rounded bg-[#ff8500]/20 text-[#ff8500] font-medium">Ready</span>
+              <span className="text-xs px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-300 font-bold uppercase tracking-wide border border-emerald-500/30">
+                Ready
+              </span>
             )}
           </div>
           {/* Save Button */}
@@ -64,7 +68,7 @@ const TextInputPanel: FC = () => {
             <button
               onClick={() => actions.saveCurrentTextSet()}
               title="Save this text for later"
-              className="px-3 py-1.5 rounded-lg bg-gradient-to-r from-emerald-600 to-emerald-700 text-white text-xs font-semibold hover:shadow-lg hover:scale-105 transition-all"
+              className="px-5 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 text-white text-xs font-bold uppercase tracking-wide hover:from-emerald-500 hover:to-teal-500 hover:scale-105 transition-all shadow-lg shadow-emerald-500/30 hover:shadow-emerald-500/50 border border-emerald-400/30"
             >
               💾 Save
             </button>
@@ -76,16 +80,16 @@ const TextInputPanel: FC = () => {
       <textarea
         value={state.inputText}
         onChange={(e: ChangeEvent<HTMLTextAreaElement>) => actions.setInputText(e.target.value)}
-        placeholder="Enter or paste text here..."
+        placeholder="Enter or paste your text here to convert it to speech..."
         className={cn(
-          'w-full min-h-[120px] resize-y rounded-xl border border-slate-700/50 bg-slate-800/80 p-3 mb-4',
-          'text-sm text-slate-200 placeholder-slate-500 font-sans',
-          'focus:outline-none focus:ring-2 focus:ring-[#ff8500] shadow-sm'
+          'w-full min-h-[140px] resize-y rounded-2xl border-2 border-slate-700/50 bg-slate-800/50 backdrop-blur-sm p-5 mb-6',
+          'text-sm text-slate-100 placeholder-slate-500 font-sans leading-relaxed',
+          'focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent shadow-lg'
         )}
       />
 
       {/* Generate / Stop Button */}
-      <div className="flex justify-center mb-4">
+      <div className="flex justify-center mb-6">
         <button
           onClick={() => {
             if (state.isReading) {
@@ -96,15 +100,33 @@ const TextInputPanel: FC = () => {
           }}
           disabled={!state.inputText.trim() || state.audio.isLoading}
           className={cn(
-            'px-8 py-3 rounded-xl font-semibold text-white transition-all shadow-lg',
-            state.isReading ? 'bg-gradient-to-r from-red-600 to-red-700 hover:shadow-red-500/50' : 'bg-gradient-to-r from-[#ff8500] to-[#ea580c] hover:shadow-[#ff8500]/50 hover:scale-105',
-            (!state.inputText.trim() || state.audio.isLoading) && 'opacity-50 cursor-not-allowed'
+            'px-12 py-4 rounded-2xl font-bold text-white text-base uppercase tracking-wide transition-all shadow-2xl border-2',
+            state.isReading 
+              ? 'bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 border-red-400/30 shadow-red-500/40 hover:shadow-red-500/60' 
+              : 'bg-gradient-to-r from-violet-600 via-purple-600 to-violet-700 hover:from-violet-500 hover:via-purple-500 hover:to-violet-600 border-violet-400/30 shadow-violet-500/40 hover:shadow-violet-500/60 hover:scale-105',
+            (!state.inputText.trim() || state.audio.isLoading) && 'opacity-50 cursor-not-allowed hover:scale-100'
           )}
         >
-          {state.audio.isLoading ? '⏳ Loading Model...' :
-           state.isReading ? `⏹️ Stop (${state.generationProgress}%)` :
-           state.audio.canScrub ? '🔄 Regenerate' :
-           '▶️ Generate Audio'}
+          {state.audio.isLoading ? (
+            <span className="flex items-center gap-3">
+              <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              Loading Model...
+            </span>
+          ) :
+           state.isReading ? (
+            <span className="flex items-center gap-3">
+              ⏹️ Stop ({state.generationProgress}%)
+            </span>
+           ) :
+           state.audio.canScrub ? (
+            <span className="flex items-center gap-3">
+              🔄 Regenerate Audio
+            </span>
+           ) : (
+            <span className="flex items-center gap-3">
+              ▶️ Generate Audio
+            </span>
+           )}
         </button>
       </div>
       
@@ -112,14 +134,17 @@ const TextInputPanel: FC = () => {
       {renderContent()}
       
       {/* Sample Texts */}
-      <div className="mt-4">
-        <div className="text-sm font-semibold text-slate-200 mb-3">📚 Sample Texts</div>
-        <div className="grid grid-cols-[repeat(auto-fit,minmax(120px,1fr))] gap-2">
+      <div className="mt-8">
+        <div className="text-sm font-bold text-slate-200 mb-4 uppercase tracking-wide flex items-center gap-2">
+          <span className="text-lg">📚</span>
+          Sample Texts
+        </div>
+        <div className="grid grid-cols-[repeat(auto-fit,minmax(140px,1fr))] gap-3">
           {sampleTexts.map((sample, index) => (
             <button
               key={index}
               onClick={() => actions.setInputText(sample.text)}
-              className="text-left text-xs font-medium px-3 py-2 rounded-lg border border-slate-700/50 bg-slate-800/80 text-slate-200 hover:bg-slate-700 hover:border-[#ff8500]/50 transition-all hover:-translate-y-0.5"
+              className="text-left text-sm font-semibold px-5 py-3 rounded-xl border-2 border-slate-700/50 bg-slate-800/50 backdrop-blur-sm text-slate-200 hover:bg-slate-700/50 hover:border-violet-500/50 hover:text-violet-300 transition-all hover:scale-105 hover:shadow-lg hover:shadow-violet-500/20"
             >
               {sample.title}
             </button>
@@ -129,27 +154,30 @@ const TextInputPanel: FC = () => {
 
       {/* Saved Texts */}
       {state.savedTextSets.length > 0 && (
-        <div className="mt-6">
-          <div className="text-sm font-semibold text-slate-200 mb-3">💾 Your Saved Texts</div>
-          <div className="flex flex-col gap-2">
+        <div className="mt-8">
+          <div className="text-sm font-bold text-slate-200 mb-4 uppercase tracking-wide flex items-center gap-2">
+            <span className="text-lg">💾</span>
+            Your Saved Texts
+          </div>
+          <div className="flex flex-col gap-3">
             {state.savedTextSets.map((set: TextSet) => (
-              <div key={set.id} className="flex items-center justify-between bg-slate-800/80 border border-slate-700/50 rounded-lg p-2 text-xs hover:border-[#ff8500]/50 transition-colors">
+              <div key={set.id} className="flex items-center justify-between bg-slate-800/50 backdrop-blur-sm border-2 border-slate-700/50 rounded-xl p-4 text-sm hover:border-violet-500/50 hover:bg-slate-700/50 transition-all group">
                 <button
                   onClick={() => actions.loadTextSet(set.id)}
-                  className="text-left flex-1 truncate hover:text-[#ff8500] flex items-center gap-2 transition-colors"
+                  className="text-left flex-1 truncate hover:text-violet-300 flex items-center gap-3 transition-colors font-medium"
                 >
                   {/* Indicator for audio availability */}
                   {set.audioGenerated ? (
-                    <span title="Audio generated" className="text-emerald-400">🔊</span>
+                    <span title="Audio generated" className="text-emerald-400 text-lg">🔊</span>
                   ) : (
-                    <span title="No audio yet" className="text-slate-500">📝</span>
+                    <span title="No audio yet" className="text-slate-500 text-lg">📝</span>
                   )}
-                  {set.title}
+                  <span className="group-hover:text-violet-300 transition-colors">{set.title}</span>
                 </button>
                 <button
                   onClick={() => actions.deleteTextSet(set.id)}
                   title="Delete"
-                  className="text-red-500 px-2 py-0.5 hover:text-red-600"
+                  className="text-red-400 px-3 py-2 hover:text-red-300 hover:bg-red-500/10 rounded-lg transition-all"
                 >
                   🗑️
                 </button>
@@ -161,9 +189,12 @@ const TextInputPanel: FC = () => {
 
       {/* Current Reading Indicator */}
       {state.currentSentence && (
-        <div className="mt-4 bg-[#ff8500]/10 border border-[#ff8500]/30 rounded-xl p-4">
-          <div className="text-xs text-[#ff8500] font-semibold mb-2">🎧 Currently Reading:</div>
-          <div className="text-sm italic text-slate-200 leading-relaxed">
+        <div className="mt-8 bg-gradient-to-r from-violet-500/10 via-purple-500/10 to-violet-500/10 border-2 border-violet-500/30 rounded-2xl p-6 shadow-xl shadow-violet-500/10">
+          <div className="text-xs text-violet-400 font-bold mb-3 uppercase tracking-wide flex items-center gap-2">
+            <div className="w-2 h-2 bg-violet-400 rounded-full animate-pulse" />
+            Currently Reading:
+          </div>
+          <div className="text-sm italic text-slate-200 leading-relaxed font-medium">
             {state.currentSentence.length > 200 ? state.currentSentence.substring(0, 200) + '…' : state.currentSentence}
           </div>
         </div>
