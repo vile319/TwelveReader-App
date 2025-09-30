@@ -1,36 +1,17 @@
-import path from 'path';
-import { defineConfig, loadEnv } from 'vite';
+import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
-export default defineConfig(({ mode }) => {
-  const env = loadEnv(mode, '.', '');
-  return {
-    base: '/',
-    plugins: [react()],
-    build: {
-      target: 'esnext',
-    },
-    optimizeDeps: {
-      exclude: ['pdfjs-dist']
-    },
-    server: {
-      host: true, // Allow access from iPhone on local network
-      headers: {
-        'Cross-Origin-Embedder-Policy': 'credentialless',
-        'Cross-Origin-Opener-Policy': 'same-origin'
-      }
-    },
-    worker: {
-      format: 'es'
-    },
-    define: {
-      'process.env.API_KEY': JSON.stringify(env.GEMINI_API_KEY),
-      'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY)
-    },
-    resolve: {
-      alias: {
-        '@': path.resolve(__dirname, '.'),
-      }
-    }
-  };
+export default defineConfig({
+  plugins: [react()],
+  server: {
+    port: 3000,
+    open: true
+  },
+  build: {
+    outDir: 'dist',
+    sourcemap: false
+  },
+  optimizeDeps: {
+    exclude: ['kokoro-js']
+  }
 });

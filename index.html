@@ -4,117 +4,52 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="google-adsense-account" content="ca-pub-7907977784876827">
-    <title>VerbaReader - AI-Powered Reading Assistant</title>
+    <title>TTS Reader - Simple Text to Speech</title>
     
-    <!-- Google AdSense -->
-    <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-7907977784876827"
-            crossorigin="anonymous"></script>
-    
-    <!-- Using Tailwind CDN for demo purposes - suppress production warning -->
+    <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-      // Suppress Tailwind CDN production warning for this demo
-      if (typeof console !== 'undefined' && console.warn) {
-        const originalWarn = console.warn;
-        console.warn = function(...args) {
-          if (args[0] && args[0].includes && args[0].includes('cdn.tailwindcss.com should not be used in production')) {
-            return; // Suppress this warning
-          }
-          originalWarn.apply(console, args);
-        };
-      }
-    </script>
     <script>
       tailwind.config = {
         theme: {
           extend: {
             colors: {
-              'brand-primary': '#8b5cf6',
-              'brand-secondary': '#a78bfa',
-              'brand-accent': '#06b6d4',
-              'brand-light': '#ddd6fe',
-              'brand-dark': '#7c3aed',
-              'base-100': '#0f172a',
-              'base-200': '#1e293b',
-              'base-300': '#334155',
-              'content-primary': '#f1f5f9',
-              'content-secondary': '#cbd5e1',
-              'success': '#10b981',
-              'warning': '#f59e0b',
-              'error': '#ef4444',
+              primary: '#3b82f6',
+              secondary: '#8b5cf6',
             }
           }
         }
       }
     </script>
-    <script type="importmap">
-{
-  "imports": {
-    "react": "https://esm.sh/react@19.1.0",
-    "react-dom/client": "https://esm.sh/react-dom@19.1.0/client",
-    "pdfjs-dist": "https://esm.sh/pdfjs-dist@4.4.168",
-    "@google/genai": "https://esm.sh/@google/genai@1.7.0?target=browser&bundle",
-    "react-dom/": "https://esm.sh/react-dom@19.1.0/",
-    "react/": "https://esm.sh/react@19.1.0/",
-    "buffer": "https://esm.sh/buffer@6.0.3",
-    "long": "https://esm.sh/long@5.2.3",
-    "@xenova/transformers": "https://esm.sh/@xenova/transformers@^2.17.2"
-  }
-}
-</script>
-    <!-- Inter font for modern typography -->
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    
     <style>
-      .font-inter { font-family: 'Inter', system-ui, -apple-system, sans-serif; }
+      body {
+        font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      }
       
       /* Custom scrollbar */
       ::-webkit-scrollbar {
         width: 8px;
-        height: 8px;
       }
       
       ::-webkit-scrollbar-track {
         background: #1e293b;
-        border-radius: 10px;
       }
       
       ::-webkit-scrollbar-thumb {
         background: #475569;
-        border-radius: 10px;
+        border-radius: 4px;
       }
       
       ::-webkit-scrollbar-thumb:hover {
         background: #64748b;
       }
-      
-      /* Smooth transitions */
-      * {
-        transition-property: color, background-color, border-color, text-decoration-color, fill, stroke, opacity, box-shadow, transform, filter, backdrop-filter;
-        transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
-        transition-duration: 150ms;
-      }
-      
-      /* Animated gradient background */
-      @keyframes gradientShift {
-        0%, 100% {
-          background-position: 0% 50%;
-        }
-        50% {
-          background-position: 100% 50%;
-        }
-      }
-      
-      .animate-gradient {
-        background-size: 200% 200%;
-        animation: gradientShift 10s ease infinite;
-      }
     </style>
   </head>
-  <body class="bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-slate-100 font-inter antialiased">
+  <body class="bg-slate-900 text-slate-100 antialiased">
     <div id="root"></div>
-    
-    <!-- This loads and runs the main React application -->
     <script type="module" src="/index.tsx"></script>
   </body>
 </html>
