@@ -81,6 +81,9 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
     setCurrentTime(t); // call the raw React setter, not ourselves
   }, []);
   const [duration, setDuration] = useState<number>(0);
+  // Always-fresh ref for duration so onended/rAF closures never see stale 0
+  const durationRef = useRef<number>(0);
+  const setDurationBoth = useCallback((d: number) => { durationRef.current = d; setDuration(d); }, []);
   const [synthesizedDuration, setSynthesizedDuration] = useState<number>(0);
   const [canScrub, setCanScrub] = useState<boolean>(false);
   const [isStreaming, setIsStreaming] = useState<boolean>(false);
@@ -471,7 +474,6 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
 
       const audioBuffer = audioContextRef.current.createBuffer(1, buf.length, rate);
       audioBuffer.getChannelData(0).set(buf);
-      const audioDurationSec = buf.length / rate;
 
       const source = audioContextRef.current.createBufferSource();
       source.buffer = audioBuffer;
@@ -484,28 +486,24 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
 
       const progressAnimationRef = { current: 0 };
       const updateProgress = () => {
+        // Stop the loop if the source was stopped (intentional or natural end)
         if (!completeAudioSourceRef.current || !audioContextRef.current) return;
 
         const elapsed = audioContextRef.current.currentTime - playbackStartTimeRef.current;
         const currentPos = playbackOffsetRef.current + elapsed * playbackRateRef.current;
 
-        // Always update word highlight every frame for tight sync
+        // Update word highlight every frame for tight sync
         updateCurrentWordIndex(currentPos);
 
+        // Update displayed time at ~20fps to avoid React re-render thrash
         const now = performance.now();
-        if (currentPos >= audioDurationSec && now - lastTimeUpdateRef.current > 100) {
+        if (now - lastTimeUpdateRef.current > 50) {
           lastTimeUpdateRef.current = now;
-          setIsPlaying(false);
-          setCurrentTimeBoth(duration);
-          updateCurrentWordIndex(duration);
-          completeAudioSourceRef.current = null;
-        } else {
-          if (now - lastTimeUpdateRef.current > 50) {
-            lastTimeUpdateRef.current = now;
-            setCurrentTimeBoth(currentPos);
-          }
-          progressAnimationRef.current = requestAnimationFrame(updateProgress);
+          setCurrentTimeBoth(currentPos);
         }
+
+        // Always continue the loop while source is alive; onended handles the clean end state
+        progressAnimationRef.current = requestAnimationFrame(updateProgress);
       };
 
       // Remove the setInterval backup — rAF above handles all updates.
@@ -516,11 +514,12 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
           intentionalStopRef.current = false;
           return;
         }
-        console.log('🏁 Audio ended naturally — ready to restart');
+        const finalDuration = durationRef.current;
+        console.log(`🏁 Audio ended naturally at ${finalDuration.toFixed(2)}s — ready to restart`);
         setIsPlaying(false);
-        setCurrentTimeBoth(duration);
-        updateCurrentWordIndex(duration);
-        playbackOffsetRef.current = duration;
+        setCurrentTimeBoth(finalDuration);
+        updateCurrentWordIndex(finalDuration);
+        playbackOffsetRef.current = finalDuration;
         completeAudioSourceRef.current = null;
         if (progressAnimationRef.current) {
           cancelAnimationFrame(progressAnimationRef.current);
@@ -897,7 +896,7 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
     isPlaybackActiveRef.current = false;
     setCompleteAudioBuffer(null);
     setCurrentTimeBoth(0);
-    setDuration(0);
+    setDurationBoth(0);
     setSynthesizedDuration(0);
     setCanScrub(false);
     setIsStreaming(false);
@@ -1152,7 +1151,7 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
       // ensure playCompleteAudio (called right below) sees the correct values.
       completeAudioBufferRef.current = combinedAudio;
       completeAudioSampleRateRef.current = sampleRate;
-      setDuration(combinedAudio.length / sampleRate);
+      setDurationBoth(combinedAudio.length / sampleRate);
       setSynthesizedDuration(combinedAudio.length / sampleRate);
 
       // Stop streaming playback before switching to complete mode
@@ -1259,7 +1258,7 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
     playbackPositionRef.current = 0;
     setCompleteAudioBuffer(null);
     setCurrentTimeBoth(0);
-    setDuration(0);
+    setDurationBoth(0);
     setCanScrub(false);
 
     // Reset word highlighting
