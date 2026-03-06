@@ -707,14 +707,28 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
     // Use iOS-optimized settings if available (now bypassing local WASM entirely)
     const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
 
-    // For iOS, bypass local WASM initialization entirely - use Serverless Fallback
-    if (isIOS) {
-      console.log('📱 iOS detected - Bypassing local WASM to prevent crashes. Initializing Serverless TTS logic...');
+    // === CLOUD FIRST: Use HuggingFace Space TTS by default for all devices ===
+    // This gives the best quality (full fp32 PyTorch model) and works everywhere.
+    // Local WASM is only used when explicitly requested (for offline use).
+    const wantsLocal = preferredDevice === 'wasm' || preferredDevice === 'webgpu' || preferredDevice === 'cpu';
+
+    if (!wantsLocal) {
+      // Default path: Cloud TTS via HuggingFace Space
+      console.log('☁️ Using HuggingFace Space TTS (full quality, all devices)...');
       setIsReady(true);
       setCurrentDevice('serverless');
-      setStatus('☁️ Serverless Kokoro AI ready for iOS');
-      return; // Skip heavy local loading
+      setStatus('☁️ Cloud Kokoro AI ready (best quality)');
+      setIsLoading(false);
+      return;
     }
+
+    // Local WASM path — user explicitly wants offline/local
+    if (isIOS) {
+      // Warn iOS users that local processing may crash or be very slow
+      console.warn('⚠️ iOS + Local WASM: This may not work on your device. Consider using Cloud mode.');
+      setStatus('⚠️ Local mode may not work on iPhone — Cloud mode is recommended');
+    }
+
 
     const { device, dtype } = await detectWebGPU();
 

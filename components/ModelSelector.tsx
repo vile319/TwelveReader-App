@@ -266,7 +266,7 @@ const ModelSelector: FC<ModelSelectorProps> = ({
       {/* Device Selection */}
       <div className="space-y-2">
         <label className="block text-sm font-semibold text-slate-200">
-          🔧 Processing Device
+          🔧 Processing Mode
         </label>
         <select
           value={preferredDevice}
@@ -275,22 +275,22 @@ const ModelSelector: FC<ModelSelectorProps> = ({
           className={`w-full p-2 bg-slate-700 border border-slate-600 rounded text-slate-200 text-sm transition-colors ${disabled ? 'opacity-50 cursor-not-allowed' : 'hover:border-slate-500 focus:border-purple-500 focus:ring-1 focus:ring-purple-500'
             }`}
         >
+          <option value="serverless">
+            ☁️ Cloud (Recommended — Best Quality)
+          </option>
           <option value="webgpu" disabled={!gpuAvailable}>
-            {getDeviceIcon('webgpu')} GPU (WebGPU) {!gpuAvailable && '(Not Available)'}
+            ⚡ Local GPU — WebGPU {!gpuAvailable && '(Not Available)'}
           </option>
           <option value="wasm">
-            {getDeviceIcon('wasm')} CPU (Local WASM)
+            🖥️ Local CPU — Offline ⚠️ May not work on iPhone
           </option>
           <option value="cpu">
-            {getDeviceIcon('cpu')} CPU (Native)
-          </option>
-          <option value="serverless">
-            {getDeviceIcon('serverless')} Serverless API (Cloud)
+            💻 Local CPU Native — Offline ⚠️ May not work on iPhone
           </option>
         </select>
-        {!gpuAvailable && (
-          <p className="text-xs text-orange-400 flex items-center gap-1">
-            ⚠️ GPU acceleration not available on this device
+        {(preferredDevice === 'wasm' || preferredDevice === 'cpu' || preferredDevice === 'webgpu') && (
+          <p className="text-xs text-amber-400 flex items-center gap-1">
+            ⚠️ Local mode: works offline but may crash on iPhone. Use Cloud for best experience.
           </p>
         )}
       </div>
