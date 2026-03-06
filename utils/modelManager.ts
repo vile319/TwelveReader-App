@@ -50,7 +50,7 @@ export class ModelManager {
         const parsed = JSON.parse(saved);
         return {
           selectedModel: parsed.selectedModel ?? 'kokoro-82m-fp32',
-          preferredDevice: parsed.preferredDevice ?? 'webgpu',
+          preferredDevice: parsed.preferredDevice ?? 'serverless',
           lastUpdated: parsed.lastUpdated ?? Date.now()
         };
       }
@@ -60,7 +60,7 @@ export class ModelManager {
 
     return {
       selectedModel: 'kokoro-82m-fp32',
-      preferredDevice: 'webgpu',
+      preferredDevice: 'serverless',
       lastUpdated: Date.now()
     };
   }
