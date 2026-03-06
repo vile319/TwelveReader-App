@@ -1,7 +1,7 @@
 import { ModelConfig } from '../components/ModelSelector';
 
 // Local storage keys
-const MODEL_PREFERENCES_KEY = 'twelvereader-model-preferences';
+const MODEL_PREFERENCES_KEY = 'twelvereader-model-preferences-v2'; // bumped to reset old local-mode defaults
 const MODEL_KEEP_LOCAL_KEY = 'twelvereader-model-keep-local';
 const MODEL_CACHE_STATUS_KEY = 'twelvereader-model-cache-status';
 
