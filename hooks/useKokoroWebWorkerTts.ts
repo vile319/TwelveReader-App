@@ -175,6 +175,15 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
   const seekTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const progressIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  // Ref mirrors of complete-audio state so callbacks read latest values immediately
+  // (React setState is async — closures inside speak() see stale state otherwise).
+  const completeAudioBufferRef = useRef<Float32Array | null>(null);
+  const completeAudioSampleRateRef = useRef<number>(24000);
+
+  // Set true immediately before calling source.stop() for pause/seek.
+  // onended inspects this to skip "natural end" handling when stop was intentional.
+  const intentionalStopRef = useRef<boolean>(false);
+
   // New continuous audio buffer system
   const audioBufferRef = useRef<Float32Array[]>([]);
   const sampleRateRef = useRef<number>(24000);
@@ -432,115 +441,91 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
     }
   }, []);
 
-  // Play complete audio buffer from a specific time
+  // Play complete audio buffer from a specific time.
+  // Reads from completeAudioBufferRef (always fresh) instead of React state
+  // (state may still be null when called mid-synthesis due to async React updates).
   const playCompleteAudio = useCallback(async (startTime: number = 0) => {
-    if (!completeAudioBuffer || !audioContextRef.current) return;
+    const buf = completeAudioBufferRef.current;
+    const rate = completeAudioSampleRateRef.current;
+    if (!buf || !audioContextRef.current) return;
 
     console.log(`🎵 Playing complete audio from ${startTime.toFixed(2)}s`);
     isPlaybackActiveRef.current = true;
     setIsPlaying(true);
+
+    // Stop any currently playing source before starting new one
+    if (completeAudioSourceRef.current) {
+      intentionalStopRef.current = true;
+      try { completeAudioSourceRef.current.stop(); } catch { }
+      completeAudioSourceRef.current = null;
+    }
+    if (progressIntervalRef.current) {
+      clearInterval(progressIntervalRef.current);
+      progressIntervalRef.current = null;
+    }
 
     try {
       if (audioContextRef.current.state === 'suspended') {
         await audioContextRef.current.resume();
       }
 
-      // Create audio buffer — use the AudioContext's native sample rate for the buffer
-      // so that duration math (elapsed = samples / rate) is always self-consistent.
-      // Note: createBuffer resamples internally when the buffer rate != context rate,
-      // so the actual pitch is always correct regardless.
-      const audioBuffer = audioContextRef.current.createBuffer(
-        1,
-        completeAudioBuffer.length,
-        completeAudioSampleRate
-      );
-      const channelData = audioBuffer.getChannelData(0);
-      channelData.set(completeAudioBuffer);
+      const audioBuffer = audioContextRef.current.createBuffer(1, buf.length, rate);
+      audioBuffer.getChannelData(0).set(buf);
+      const audioDurationSec = buf.length / rate;
 
-      // Use the buffer's ACTUAL sample rate (post-resample) for timing calculation.
-      // audioBuffer.sampleRate equals the AudioContext rate after createBuffer resamples.
-      const actualSampleRate = audioBuffer.sampleRate;
-
-      // Create and configure source
       const source = audioContextRef.current.createBufferSource();
       source.buffer = audioBuffer;
-      try {
-        source.playbackRate.value = playbackRateRef.current;
-      } catch { }
+      try { source.playbackRate.value = playbackRateRef.current; } catch { }
       source.connect(audioContextRef.current.destination);
 
       completeAudioSourceRef.current = source;
       playbackStartTimeRef.current = audioContextRef.current.currentTime;
       playbackOffsetRef.current = startTime;
 
-      // Start progress updates with both animation frame and interval for reliability
       const progressAnimationRef = { current: 0 };
       const updateProgress = () => {
-        // Check if we should continue updating
-        if (!completeAudioSourceRef.current) {
-          return; // Audio stopped, stop updating
-        }
+        if (!completeAudioSourceRef.current || !audioContextRef.current) return;
 
-        const elapsed = audioContextRef.current!.currentTime - playbackStartTimeRef.current;
-        // Duration in audio-time uses the buffer's actual sample rate (resolved after createBuffer)
-        const audioDurationSec = audioBuffer.length / actualSampleRate;
+        const elapsed = audioContextRef.current.currentTime - playbackStartTimeRef.current;
         const currentPos = playbackOffsetRef.current + elapsed * playbackRateRef.current;
+
+        // Always update word highlight every frame for tight sync
+        updateCurrentWordIndex(currentPos);
 
         const now = performance.now();
         if (currentPos >= audioDurationSec && now - lastTimeUpdateRef.current > 100) {
           lastTimeUpdateRef.current = now;
           setIsPlaying(false);
-          setCurrentTimeBoth(duration); // keep the state var at the user-facing duration
+          setCurrentTimeBoth(duration);
           updateCurrentWordIndex(duration);
           completeAudioSourceRef.current = null;
-          if (progressIntervalRef.current) {
-            clearInterval(progressIntervalRef.current);
-            progressIntervalRef.current = null;
-          }
         } else {
-          const nowInterval = performance.now();
-          if (currentPos < duration && nowInterval - lastTimeUpdateRef.current > 100) {
-            lastTimeUpdateRef.current = nowInterval;
+          if (now - lastTimeUpdateRef.current > 50) {
+            lastTimeUpdateRef.current = now;
             setCurrentTimeBoth(currentPos);
-            updateCurrentWordIndex(currentPos);
           }
-
-          // Continue updating regardless of isPlaying state for smooth progress
           progressAnimationRef.current = requestAnimationFrame(updateProgress);
         }
       };
 
-      // Also use an interval as backup for consistent updates
-      progressIntervalRef.current = setInterval(() => {
-        if (completeAudioSourceRef.current && audioContextRef.current) {
-          const elapsed = audioContextRef.current.currentTime - playbackStartTimeRef.current;
-          const currentPos = playbackOffsetRef.current + elapsed * playbackRateRef.current;
-
-          const nowInt = performance.now();
-          if (currentPos < duration && nowInt - lastTimeUpdateRef.current > 100) {
-            lastTimeUpdateRef.current = nowInt;
-            setCurrentTimeBoth(currentPos);
-            updateCurrentWordIndex(currentPos);
-          }
-        }
-      }, 100); // Update every 100ms
+      // Remove the setInterval backup — rAF above handles all updates.
 
       source.onended = () => {
-        console.log('🏁 Complete audio playback ended naturally');
-        // Unconditionally mark as stopped — avoids stale closure on isPlaying
+        // If stopped intentionally (pause/seek), skip end-of-audio handling.
+        if (intentionalStopRef.current) {
+          intentionalStopRef.current = false;
+          return;
+        }
+        console.log('🏁 Audio ended naturally — ready to restart');
         setIsPlaying(false);
         setCurrentTimeBoth(duration);
+        updateCurrentWordIndex(duration);
         playbackOffsetRef.current = duration;
         completeAudioSourceRef.current = null;
         if (progressAnimationRef.current) {
           cancelAnimationFrame(progressAnimationRef.current);
           progressAnimationRef.current = 0;
         }
-        if (progressIntervalRef.current) {
-          clearInterval(progressIntervalRef.current);
-          progressIntervalRef.current = null;
-        }
-        console.log('🏁 Audio completed — ready to restart');
       };
 
       // Start playing from offset
@@ -553,7 +538,8 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
       console.error('Error playing complete audio:', error);
       setIsPlaying(false);
     }
-  }, [completeAudioBuffer, completeAudioSampleRate, duration]);
+    // Note: deps intentionally omit completeAudioBuffer/Rate — we read from refs instead.
+  }, [duration, updateCurrentWordIndex]);
 
   const togglePlayPause = useCallback(() => {
     if (!canScrub) return;
@@ -588,8 +574,9 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
         progressIntervalRef.current = null;
       }
 
-      // Stop any current audio source
+      // Set flag BEFORE stop() so onended skips end-of-audio handling
       if (completeAudioSourceRef.current) {
+        intentionalStopRef.current = true;
         try {
           completeAudioSourceRef.current.stop();
         } catch (e) {
@@ -615,16 +602,14 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
       }
 
       if (isStreaming && !atEnd && currentTime < synthesizedDuration) {
-        // For streaming mode, restart streaming playback
         startStreamingFromPosition(startPosition);
-      } else if (completeAudioBuffer) {
-        // Resume (or restart) complete audio from position
+      } else if (completeAudioBufferRef.current) {
+        // Use ref (always fresh) instead of potentially-stale React state
         isPlaybackActiveRef.current = true;
         playCompleteAudio(startPosition);
-        setIsPlaying(true);
       }
     }
-  }, [canScrub, isPlaying, currentTime, isStreaming, synthesizedDuration, duration, completeAudioBuffer, startStreamingFromPosition, playCompleteAudio]);
+  }, [canScrub, isPlaying, currentTime, isStreaming, synthesizedDuration, duration, startStreamingFromPosition, playCompleteAudio]);
 
   // Don't auto-play - let user control playback
   // Audio is ready when completeAudioBuffer is set
@@ -1163,6 +1148,10 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
       // Store complete audio for scrubbing and switch from streaming to complete mode
       setCompleteAudioBuffer(combinedAudio);
       setCompleteAudioSampleRate(sampleRate);
+      // Mirror into refs immediately — React state updates are async, so these refs
+      // ensure playCompleteAudio (called right below) sees the correct values.
+      completeAudioBufferRef.current = combinedAudio;
+      completeAudioSampleRateRef.current = sampleRate;
       setDuration(combinedAudio.length / sampleRate);
       setSynthesizedDuration(combinedAudio.length / sampleRate);
 
