@@ -73,6 +73,13 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
   const [completeAudioBuffer, setCompleteAudioBuffer] = useState<Float32Array | null>(null);
   const [completeAudioSampleRate, setCompleteAudioSampleRate] = useState<number>(24000);
   const [currentTime, setCurrentTime] = useState<number>(0);
+  // Always-fresh ref mirror of currentTime — use this inside async/stale-closure contexts
+  const currentTimeRef = useRef<number>(0);
+  // Helper: update both state (for React renders) and ref (for closures) atomically
+  const setCurrentTimeBoth = useCallback((t: number) => {
+    currentTimeRef.current = t;
+    setCurrentTime(t); // call the raw React setter, not ourselves
+  }, []);
   const [duration, setDuration] = useState<number>(0);
   const [synthesizedDuration, setSynthesizedDuration] = useState<number>(0);
   const [canScrub, setCanScrub] = useState<boolean>(false);
@@ -255,7 +262,7 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
     }
 
     // Update current time immediately
-    setCurrentTime(clampedTime);
+    setCurrentTimeBoth(clampedTime);
     playbackOffsetRef.current = clampedTime;
 
     // If was playing, restart from new position with debouncing
@@ -320,7 +327,7 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
           const maxStreamTime = totalStreamingSamples / samplesPerSecond;
           // DO NOT multiply elapsed by playbackRate again — it was already applied above
           const currentPos = Math.max(0, Math.min(elapsed, maxStreamTime));
-          setCurrentTime(currentPos);
+          setCurrentTimeBoth(currentPos);
 
           // Update current word index for highlighting (un-throttled for accuracy)
           updateCurrentWordIndex(currentPos);
@@ -483,7 +490,7 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
         if (currentPos >= audioDurationSec && now - lastTimeUpdateRef.current > 100) {
           lastTimeUpdateRef.current = now;
           setIsPlaying(false);
-          setCurrentTime(duration); // keep the state var at the user-facing duration
+          setCurrentTimeBoth(duration); // keep the state var at the user-facing duration
           updateCurrentWordIndex(duration);
           completeAudioSourceRef.current = null;
           if (progressIntervalRef.current) {
@@ -494,7 +501,7 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
           const nowInterval = performance.now();
           if (currentPos < duration && nowInterval - lastTimeUpdateRef.current > 100) {
             lastTimeUpdateRef.current = nowInterval;
-            setCurrentTime(currentPos);
+            setCurrentTimeBoth(currentPos);
             updateCurrentWordIndex(currentPos);
           }
 
@@ -512,7 +519,7 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
           const nowInt = performance.now();
           if (currentPos < duration && nowInt - lastTimeUpdateRef.current > 100) {
             lastTimeUpdateRef.current = nowInt;
-            setCurrentTime(currentPos);
+            setCurrentTimeBoth(currentPos);
             updateCurrentWordIndex(currentPos);
           }
         }
@@ -522,7 +529,7 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
         console.log('🏁 Complete audio playback ended naturally');
         // Unconditionally mark as stopped — avoids stale closure on isPlaying
         setIsPlaying(false);
-        setCurrentTime(duration);
+        setCurrentTimeBoth(duration);
         playbackOffsetRef.current = duration;
         completeAudioSourceRef.current = null;
         if (progressAnimationRef.current) {
@@ -560,7 +567,7 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
         // For streaming mode, use the current time from progress tracking
         const pausedTime = Math.max(0, Math.min(currentTime, synthesizedDuration));
         console.log(`⏸️ Pausing streaming at ${pausedTime.toFixed(2)}s`);
-        setCurrentTime(pausedTime);
+        setCurrentTimeBoth(pausedTime);
         playbackOffsetRef.current = pausedTime;
       } else if (completeAudioSourceRef.current && audioContextRef.current) {
         // For complete audio mode
@@ -568,7 +575,7 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
         const currentPos = playbackOffsetRef.current + elapsed * playbackRateRef.current;
         const pausedTime = Math.max(0, Math.min(currentPos, duration));
         console.log(`⏸️ Pausing complete audio at ${pausedTime.toFixed(2)}s`);
-        setCurrentTime(pausedTime);
+        setCurrentTimeBoth(pausedTime);
         playbackOffsetRef.current = pausedTime;
       }
 
@@ -602,7 +609,7 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
       const atEnd = effectiveDuration > 0 && currentTime >= effectiveDuration - 0.3;
       const startPosition = atEnd ? 0 : currentTime;
       if (atEnd) {
-        setCurrentTime(0);
+        setCurrentTimeBoth(0);
         playbackOffsetRef.current = 0;
         console.log('🔁 At end — restarting from beginning');
       }
@@ -904,7 +911,7 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
     streamingAudioRef.current = [];
     isPlaybackActiveRef.current = false;
     setCompleteAudioBuffer(null);
-    setCurrentTime(0);
+    setCurrentTimeBoth(0);
     setDuration(0);
     setSynthesizedDuration(0);
     setCanScrub(false);
@@ -1260,7 +1267,7 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
     audioBufferRef.current = [];
     playbackPositionRef.current = 0;
     setCompleteAudioBuffer(null);
-    setCurrentTime(0);
+    setCurrentTimeBoth(0);
     setDuration(0);
     setCanScrub(false);
 
@@ -1626,7 +1633,7 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
   //     setCompleteAudioBuffer(floatData);
   //     setCompleteAudioSampleRate(audioBuffer.sampleRate);
   //     setDuration(audioBuffer.duration);
-  //     setCurrentTime(0);
+  //     setCurrentTimeBoth(0);
   //     setCanScrub(true);
   //     setIsStreaming(false);
   //     setSynthesisComplete(true);
