@@ -116,11 +116,12 @@ const ModelSelector: FC<ModelSelectorProps> = ({
   modelKeepLocal = {},
   onModelKeepLocalChange
 }: ModelSelectorProps) => {
-  const [preferredDevice, setPreferredDevice] = useState<'webgpu' | 'wasm' | 'cpu' | 'serverless'>('webgpu');
+  const [preferredDevice, setPreferredDevice] = useState<'webgpu' | 'wasm' | 'cpu' | 'serverless'>(
+    () => modelManager.getPreferences().preferredDevice as 'webgpu' | 'wasm' | 'cpu' | 'serverless'
+  );
   const [gpuAvailable, setGpuAvailable] = useState(false);
   const [downloadedModels, setDownloadedModels] = useState<Set<string>>(new Set());
   const [showAdvanced, setShowAdvanced] = useState(false);
-  const [isChangingFromModel, setIsChangingFromModel] = useState(false);
 
   // Check GPU availability on mount
   useEffect(() => {
@@ -185,33 +186,23 @@ const ModelSelector: FC<ModelSelectorProps> = ({
 
   const handleDeviceChange = useCallback((e: ChangeEvent<HTMLSelectElement>) => {
     const device = e.target.value as 'webgpu' | 'wasm' | 'cpu' | 'serverless';
-    if (isChangingFromModel) {
-      return;
-    }
     setPreferredDevice(device);
     const bestModel = getBestModelForDevice(device);
     onModelChange(bestModel.id);
     savePreferences(bestModel.id, device);
     onDeviceChange?.(device);
-  }, [savePreferences, onDeviceChange, onModelChange, getBestModelForDevice, isChangingFromModel]);
+  }, [savePreferences, onDeviceChange, onModelChange, getBestModelForDevice]);
 
   const handleModelChange = useCallback((modelId: string) => {
     onModelChange(modelId);
     const model = AVAILABLE_MODELS.find(m => m.id === modelId);
     if (model) {
       onDtypeChange?.(model.dtype);
-      if (model.device !== preferredDevice) {
-        setIsChangingFromModel(true);
-        onDeviceChange?.(model.device);
-        setTimeout(() => {
-          setIsChangingFromModel(false);
-          savePreferences(modelId, model.device);
-        }, 0);
-        return;
-      }
+      // NOTE: Do NOT force device to match model.device — let the user's chosen
+      // processing mode (cloud/local) take precedence over model hardware hints.
     }
     savePreferences(modelId, preferredDevice);
-  }, [preferredDevice, savePreferences, onModelChange, onDeviceChange, onDtypeChange]);
+  }, [preferredDevice, savePreferences, onModelChange, onDtypeChange]);
 
   const getQualityColor = useCallback((quality: string) => {
     switch (quality) {
