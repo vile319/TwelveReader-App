@@ -340,27 +340,6 @@ const ModelSelector: FC<ModelSelectorProps> = ({
         )}
       </div>
 
-      {/* Info Panel */}
-      <div className="text-xs text-slate-400 bg-slate-800/50 p-3 rounded-lg border border-slate-700">
-        <div className="space-y-1">
-          <p className="flex items-center gap-1">
-            <span className="text-purple-400">🤖</span>
-            <strong>Device Change:</strong> Automatically selects best model
-          </p>
-          <p className="flex items-center gap-1">
-            <span className="text-blue-400">🎛️</span>
-            <strong>Manual Selection:</strong> Choose any model
-          </p>
-          <p className="flex items-center gap-1">
-            <span className="text-green-400">💾</span>
-            <strong>Keep Downloaded:</strong> Saves models between refreshes
-          </p>
-          <p className="flex items-center gap-1">
-            <span className="text-yellow-400">📊</span>
-            <strong>Quality Levels:</strong> High (FP32/FP16) → Balanced (Q8) → Fast (Q4)
-          </p>
-        </div>
-      </div>
     </div>
   );
 };

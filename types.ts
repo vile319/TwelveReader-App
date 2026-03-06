@@ -155,22 +155,12 @@ export interface AppContextType {
     handleCloseHelp: () => void;
 
     // TTS functions (from hook)
-    clearModel: () => Promise<void>;
-    checkCacheStatus: () => Promise<any>;
-    debugAudioQuality: () => Promise<any>;
-    checkAudioQuality: () => Promise<any>;
-    toggleNormalizeAudio: () => void;
     seekToTime: (time: number) => void;
     togglePlayPause: () => void;
     skipForward: () => void;
     skipBackward: () => void;
     getAudioBlob: () => Blob | null;
     setPlaybackRate: (rate: number) => void;
-
-    // Model management actions
-    cleanupUnwantedModels: () => Promise<void>;
-    resetAllModelData: () => Promise<void>;
-    getModelCacheSize: () => Promise<{ totalSize: number; fileCount: number; sizeFormatted: string }>;
 
     // Library actions
     saveCurrentTextSet: (title?: string) => void;
@@ -201,15 +191,10 @@ export interface AppContextType {
     skipBackward: () => void;
     wordTimings: WordTiming[];
     currentWordIndex: number;
-    clearModel: () => Promise<void>;
-    checkCacheStatus: () => Promise<any>;
-    debugAudioQuality: () => Promise<any>;
-    checkAudioQuality: () => Promise<any>;
-    normalizeAudio: boolean;
-    toggleNormalizeAudio: () => void;
     synthesisComplete: boolean;
     getAudioBlob: () => Blob | null;
     isReady: boolean;
     setPlaybackRate: (rate: number) => void;
+    playbackRate: number;
   };
 }

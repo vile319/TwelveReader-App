@@ -519,7 +519,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       status: tts.status,
       modelAccepted,
       showModelWarning,
-      normalizeAudio: tts.normalizeAudio,
+      normalizeAudio: false,
       selectedModel,
       preferredDevice,
       preferredDtype,
@@ -579,29 +579,6 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       handleCloseOnboarding,
       handleShowHelp,
       handleCloseHelp,
-      clearModel: tts.clearModel,
-      checkCacheStatus: tts.checkCacheStatus,
-      debugAudioQuality: tts.debugAudioQuality,
-      checkAudioQuality: tts.checkAudioQuality,
-      // New model management actions
-      cleanupUnwantedModels: async () => {
-        await modelManager.cleanupUnwantedModels();
-        // Refresh the keep local settings after cleanup
-        setModelKeepLocal(modelManager.getAllKeepLocalSettings());
-      },
-      resetAllModelData: async () => {
-        await modelManager.resetAllModelData();
-        // Reset state after cleanup
-        const preferences = modelManager.getPreferences();
-        setSelectedModel(preferences.selectedModel);
-        setPreferredDevice(preferences.preferredDevice);
-        setAutoSelect(false);
-        setModelKeepLocal(modelManager.getAllKeepLocalSettings());
-      },
-      getModelCacheSize: async () => {
-        return await modelManager.getCacheSize();
-      },
-      toggleNormalizeAudio: tts.toggleNormalizeAudio,
       seekToTime: tts.seekToTime,
       togglePlayPause: tts.togglePlayPause,
       skipForward: tts.skipForward,

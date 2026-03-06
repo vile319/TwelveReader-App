@@ -1,12 +1,9 @@
-import { FC, useState } from 'react';
+import { type FC } from 'react';
 import { useAppContext } from '../../contexts/AppContext';
 import AdSenseBanner from '../AdSenseBanner';
 import KoFiButton from '../KoFiButton';
 import ModelSelector from '../ModelSelector';
 import { BRAND_NAME } from '../../utils/branding';
-
-// Small helper – joins classes conditionally
-const cn = (...classes: (string | false | null | undefined)[]) => classes.filter(Boolean).join(' ');
 
 // Voice object coming from Kokoro hook
 interface Voice {
@@ -16,8 +13,6 @@ interface Voice {
 
 const Sidebar: FC = () => {
   const { state, actions, tts } = useAppContext();
-  // Local toggle to show/hide rarely-used technical controls
-  const [showAdvanced, setShowAdvanced] = useState(false);
   const voices: Voice[] = tts.voices as Voice[];
 
   return (
@@ -84,15 +79,13 @@ const Sidebar: FC = () => {
         )}
       </div>
 
-
-
       {/* Help Button */}
       <button
         onClick={actions.handleShowHelp}
         className="w-full py-3 rounded-lg border border-blue-500 bg-blue-500/10 text-blue-500 font-semibold flex items-center justify-center gap-2 mb-6 hover:bg-blue-500/20 transition-colors"
         title="Get help and view tutorial"
       >
-        ❓ Help & FAQ
+        ❓ Help &amp; FAQ
       </button>
 
       {/* Model Selection */}
@@ -106,107 +99,16 @@ const Sidebar: FC = () => {
         />
       </div>
 
-      {/* Advanced Options (collapsed by default) */}
+      {/* Google Drive Sync */}
       <div className="mb-6">
-        {/* Toggle */}
         <button
-          onClick={() => setShowAdvanced((prev) => !prev)}
-          className="w-full py-3 rounded-lg border border-slate-600 text-slate-200 font-semibold flex items-center justify-center gap-2 hover:bg-slate-600/10 transition-colors"
-          title="Technical and troubleshooting controls"
+          onClick={actions.linkGoogleDrive}
+          className="w-full py-3 rounded-lg border border-sky-500 text-sky-500 font-semibold flex items-center justify-center gap-2 hover:bg-sky-500/10 transition-colors"
         >
-          ⚙️ {showAdvanced ? 'Hide' : 'Show'} Advanced Options
+          {state.googleDriveLinked ? '☁️ Google Drive: Linked' : '☁️ Link Google Drive'}
         </button>
-
-        {/* Collapsible content */}
-        {showAdvanced && (
-          <div className="pt-4 space-y-2">
-            {/* Model Management */}
-            <div className="space-y-2">
-              <button
-                onClick={async () => {
-                  await actions.cleanupUnwantedModels();
-                  alert('🧹 Cleaned up unwanted models. Only models you chose to keep are now cached.');
-                }}
-                className="w-full py-2 rounded-lg border border-green-600 text-green-600 text-xs font-semibold flex items-center justify-center gap-2 hover:bg-green-600/10 transition-colors"
-              >
-                🧹 Cleanup Models
-              </button>
-
-              <button
-                onClick={async () => {
-                  const cacheInfo = await actions.getModelCacheSize();
-                  alert(`Cache Status:\n📦 Total Size: ${cacheInfo.sizeFormatted}\n📁 Files: ${cacheInfo.fileCount}\n\nModels kept: ${Object.keys(state.model.modelKeepLocal).filter(id => state.model.modelKeepLocal[id]).length}`);
-                }}
-                className="w-full py-2 rounded-lg border border-slate-500 text-slate-500 text-xs font-medium flex items-center justify-center gap-1 hover:bg-slate-500/10 transition-colors"
-              >
-                📊 Cache Info
-              </button>
-
-              <button
-                onClick={async () => {
-                  if (confirm('⚠️ This will reset ALL model data and clear all caches. Are you sure?')) {
-                    await actions.resetAllModelData();
-                    actions.setInputText('');
-                    actions.setUploadedPDF(null);
-                    alert('🔄 All model data has been reset.');
-                  }
-                }}
-                className="w-full py-2 rounded-lg border border-red-600 text-red-600 text-xs font-semibold flex items-center justify-center gap-2 hover:bg-red-600/10 transition-colors"
-              >
-                🔄 Reset All Models
-              </button>
-            </div>
-
-            {/* Debug Audio */}
-            <button
-              onClick={async () => {
-                const debugInfo = await actions.debugAudioQuality();
-                const qualityTest = await actions.checkAudioQuality();
-                let message = `Audio Debug Info:\n\n`;
-                message += `🖥️ Platform: ${debugInfo.platform}\n`;
-                message += `🤖 Device: ${debugInfo.device}\n`;
-                message += `🎵 Sample Rate: ${debugInfo.sampleRate}Hz\n`;
-                message += `⚡ WebGPU: ${debugInfo.webgpuSupported ? 'Yes' : 'No'}\n\n`;
-                if (qualityTest) {
-                  message += `Test Audio Quality: ${qualityTest.quality}\n`;
-                  message += `Generation Time: ${qualityTest.generationTime}ms\n`;
-                  message += `Peak Level: ${qualityTest.peak}\n`;
-                  message += `RMS Level: ${qualityTest.rms}\n\n`;
-                }
-                message += `Check console (F12) for detailed logs.`;
-                alert(message);
-              }}
-              className="w-full py-2 rounded-lg border border-amber-500 text-amber-500 text-xs font-medium flex items-center justify-center gap-1 hover:bg-amber-500/10 transition-colors"
-            >
-              🔍 Debug Audio
-            </button>
-
-            {/* Audio Normalization */}
-            <button
-              onClick={actions.toggleNormalizeAudio}
-              className={cn(
-                'w-full py-2 rounded-lg text-xs font-medium flex items-center justify-center gap-1 transition-colors',
-                state.model.normalizeAudio
-                  ? 'border-emerald-500 text-emerald-500 bg-emerald-500/10'
-                  : 'border-slate-500 text-slate-500 hover:bg-slate-500/10'
-              )}
-            >
-              {state.model.normalizeAudio ? '✅' : '📢'} Audio Fix: {state.model.normalizeAudio ? 'ON' : 'OFF'}
-            </button>
-
-            {/* Google Drive Sync */}
-            <button
-              onClick={actions.linkGoogleDrive}
-              className="w-full py-2 rounded-lg border border-sky-500 text-sky-500 text-xs font-medium flex items-center justify-center gap-1 hover:bg-sky-500/10 transition-colors"
-            >
-              {state.googleDriveLinked ? '☁️ Google Drive: Linked' : '☁️ Link Google Drive'}
-            </button>
-          </div>
-        )}
       </div>
-      
-      {/* Spacer where error used to be */}
-      
+
       {/* Donation Button */}
       <div className="mt-auto flex flex-col items-center gap-4">
         {/* Ko-fi donation button */}
