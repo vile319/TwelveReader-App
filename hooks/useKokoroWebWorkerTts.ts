@@ -6,6 +6,10 @@ import { KokoroTTS } from 'kokoro-js';
 import { AppError } from '../types';
 import { configureOnnxRuntimeForIOS } from '../utils/onnxIosConfig';
 
+// === HuggingFace Space TTS API URL ===
+const HF_TTS_API_URL = 'https://oronto-kokoro-tts-api.hf.space';
+
+
 // Force enable caching for transformers.js
 if (typeof window !== 'undefined') {
   // Enable caching explicitly
@@ -922,12 +926,11 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
 
           // Branching logic: Cloud API vs Local WebWorker
           if (isServerless) {
-            // === iOS / Serverless Route ===
-            // Call our new Vercel API
-            console.log(`☁️ Sending chunk ${i + 1} to Vercel Serverless API...`);
+            // === iOS / HuggingFace Space Route ===
+            console.log(`☁️ Sending chunk ${i + 1} to HuggingFace TTS API...`);
             const apiStart = performance.now();
 
-            const response = await fetch('/api/tts', {
+            const response = await fetch(`${HF_TTS_API_URL}/tts`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
@@ -939,10 +942,10 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
 
             if (!response.ok) {
               const errData = await response.json().catch(() => ({}));
-              throw new Error(`Serverless API failed: ${errData.error || response.statusText}`);
+              throw new Error(`HuggingFace TTS API failed: ${errData.detail || errData.error || response.statusText}`);
             }
 
-            console.log(`☁️ Received audio from Serverless API in ${(performance.now() - apiStart).toFixed(0)}ms`);
+            console.log(`☁️ Received audio from HF TTS API in ${(performance.now() - apiStart).toFixed(0)}ms`);
 
             // The API returns a WAV file blob. We need to decode it back into a Float32Array for the chunker.
             const arrayBuffer = await response.arrayBuffer();
