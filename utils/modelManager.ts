@@ -7,7 +7,7 @@ const MODEL_CACHE_STATUS_KEY = 'twelvereader-model-cache-status';
 
 export interface ModelPreferences {
   selectedModel: string;
-  preferredDevice: 'webgpu' | 'wasm' | 'cpu';
+  preferredDevice: 'webgpu' | 'wasm' | 'cpu' | 'serverless';
   lastUpdated: number;
 }
 
@@ -57,7 +57,7 @@ export class ModelManager {
     } catch (error) {
       console.warn('Failed to load model preferences:', error);
     }
-    
+
     return {
       selectedModel: 'kokoro-82m-fp32',
       preferredDevice: 'webgpu',
@@ -95,7 +95,7 @@ export class ModelManager {
     try {
       this.keepLocalSettings[modelId] = keepLocal;
       localStorage.setItem(MODEL_KEEP_LOCAL_KEY, JSON.stringify(this.keepLocalSettings));
-      
+
       // If user doesn't want to keep the model, clean up cache
       if (!keepLocal) {
         this.cleanupModelCache(modelId);
@@ -173,22 +173,22 @@ export class ModelManager {
       // Clear browser cache for this model
       if (typeof window !== 'undefined' && 'caches' in window) {
         const cacheNames = await caches.keys();
-        const modelCaches = cacheNames.filter(name => 
-          name.includes('model') || 
-          name.includes('kokoro') || 
+        const modelCaches = cacheNames.filter(name =>
+          name.includes('model') ||
+          name.includes('kokoro') ||
           name.includes(modelId)
         );
 
         for (const cacheName of modelCaches) {
           const cache = await caches.open(cacheName);
           const requests = await cache.keys();
-          
+
           // Remove files related to this model
           for (const request of requests) {
-            if (request.url.includes(modelId) || 
-                request.url.includes('onnx') || 
-                request.url.includes('bin') || 
-                request.url.includes('json')) {
+            if (request.url.includes(modelId) ||
+              request.url.includes('onnx') ||
+              request.url.includes('bin') ||
+              request.url.includes('json')) {
               await cache.delete(request);
             }
           }
@@ -204,16 +204,16 @@ export class ModelManager {
   public async cleanupUnwantedModels(): Promise<void> {
     try {
       const downloadedModels = this.getDownloadedModels();
-      const modelsToKeep = downloadedModels.filter(modelId => 
+      const modelsToKeep = downloadedModels.filter(modelId =>
         this.getModelKeepLocal(modelId)
       );
 
-      const modelsToRemove = downloadedModels.filter(modelId => 
+      const modelsToRemove = downloadedModels.filter(modelId =>
         !this.getModelKeepLocal(modelId)
       );
 
       console.log(`🧹 Cleaning up ${modelsToRemove.length} unwanted models...`);
-      
+
       for (const modelId of modelsToRemove) {
         await this.cleanupModelCache(modelId);
       }
@@ -226,13 +226,13 @@ export class ModelManager {
 
   // Model recommendation system
   public getRecommendedModel(device: 'webgpu' | 'wasm' | 'cpu', models: ModelConfig[]): ModelConfig {
-    const deviceModels = models.filter(model => 
+    const deviceModels = models.filter(model =>
       device === 'webgpu' ? model.device === 'webgpu' : model.device !== 'webgpu'
     );
 
     // Prefer downloaded models
     const downloadedModels = this.getDownloadedModels();
-    const downloadedDeviceModels = deviceModels.filter(model => 
+    const downloadedDeviceModels = deviceModels.filter(model =>
       downloadedModels.includes(model.id)
     );
 
@@ -259,14 +259,14 @@ export class ModelManager {
 
       if (typeof window !== 'undefined' && 'caches' in window) {
         const cacheNames = await caches.keys();
-        const modelCaches = cacheNames.filter(name => 
+        const modelCaches = cacheNames.filter(name =>
           name.includes('model') || name.includes('kokoro')
         );
 
         for (const cacheName of modelCaches) {
           const cache = await caches.open(cacheName);
           const requests = await cache.keys();
-          
+
           for (const request of requests) {
             const response = await cache.match(request);
             if (response) {
@@ -279,7 +279,7 @@ export class ModelManager {
       }
 
       const sizeFormatted = this.formatBytes(totalSize);
-      
+
       return { totalSize, fileCount, sizeFormatted };
     } catch (error) {
       console.warn('Failed to calculate cache size:', error);
@@ -306,7 +306,7 @@ export class ModelManager {
       // Clear all caches
       if (typeof window !== 'undefined' && 'caches' in window) {
         const cacheNames = await caches.keys();
-        const modelCaches = cacheNames.filter(name => 
+        const modelCaches = cacheNames.filter(name =>
           name.includes('model') || name.includes('kokoro')
         );
 

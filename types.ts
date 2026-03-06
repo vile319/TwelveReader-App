@@ -42,7 +42,7 @@ export interface ModelState {
   showModelWarning: boolean;
   normalizeAudio: boolean;
   selectedModel: string;
-  preferredDevice: 'webgpu' | 'wasm' | 'cpu';
+  preferredDevice: 'webgpu' | 'wasm' | 'cpu' | 'serverless';
   preferredDtype: 'fp32' | 'fp16' | 'q8' | 'q4' | 'q4f16';
   autoSelect: boolean;
   keepLocal: boolean;
@@ -68,27 +68,27 @@ export interface AppState {
   inputText: string;
   uploadedPDF: File | null;
   isExtractingPDF: boolean;
-  
+
   // Audio state
   audio: AudioState;
-  
+
   // Model state
   model: ModelState;
-  
+
   // UI state
   selectedVoice: string;
   error: AppError | null;
   isReading: boolean;
   currentSentence: string;
-  
+
   // Seeking state
   isSeekingHover: boolean;
   hoverTime: number;
   isDragging: boolean;
-  
+
   // Pending read state
   pendingRead: { text: string; voice: string } | null;
-  
+
   // Modal states
   showOnboarding: boolean;
   showHelp: boolean;
@@ -112,48 +112,48 @@ export interface AppContextType {
     setInputText: (text: string) => void;
     setUploadedPDF: (file: File | null) => void;
     setIsExtractingPDF: (extracting: boolean) => void;
-    
+
     // Audio actions
     handleStartReading: (text?: string) => void;
     handleStopReading: () => void;
     handleWordClick: (time: number) => void;
     handleDownloadAudio: () => void;
-    
+
     // Model actions
     handleAcceptModelDownload: () => void;
     handleCancelModelDownload: () => void;
-    
+
     // PDF actions
     handleFileUpload: (event: React.ChangeEvent<HTMLInputElement>) => void;
     handlePDFTextExtracted: (text: string) => void;
     handlePDFError: (errorMsg: string) => void;
-    
+
     // Voice actions
     setSelectedVoice: (voice: string) => void;
-    
+
     // Model selection actions
     setSelectedModel: (modelId: string) => void;
-    setPreferredDevice: (device: 'webgpu' | 'wasm' | 'cpu') => void;
+    setPreferredDevice: (device: 'webgpu' | 'wasm' | 'cpu' | 'serverless') => void;
     setPreferredDtype: (dtype: 'fp32' | 'fp16' | 'q8' | 'q4' | 'q4f16') => void;
     setAutoSelect: (enabled: boolean) => void;
     setKeepLocal: (enabled: boolean) => void;
     setModelKeepLocal: (modelId: string, keepLocal: boolean) => void;
-    
+
     // UI actions
     setError: (error: AppError | null) => void;
     setIsSeekingHover: (hover: boolean) => void;
     setHoverTime: (time: number) => void;
     setIsDragging: (dragging: boolean) => void;
-    
+
     // Utility functions
     formatTime: (seconds: number) => string;
-    
+
     // Modal actions
     handleShowOnboarding: () => void;
     handleCloseOnboarding: () => void;
     handleShowHelp: () => void;
     handleCloseHelp: () => void;
-    
+
     // TTS functions (from hook)
     clearModel: () => Promise<void>;
     checkCacheStatus: () => Promise<any>;
@@ -183,7 +183,7 @@ export interface AppContextType {
     // Scroll progress
     updateScrollPosition: (scrollTop: number) => void;
   };
-  
+
   // TTS hook data
   tts: {
     voices: Voice[];

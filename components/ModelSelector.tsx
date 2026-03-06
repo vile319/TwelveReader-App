@@ -1,4 +1,4 @@
-import React, { type FC, useState, useEffect, type ChangeEvent, useCallback } from 'react';
+import { type FC, useState, useEffect, type ChangeEvent, useCallback } from 'react';
 import { modelManager } from '../utils/modelManager';
 
 export interface ModelConfig {
@@ -9,7 +9,7 @@ export interface ModelConfig {
   quality: 'fast' | 'balanced' | 'high';
   url: string;
   dtype: 'fp32' | 'fp16' | 'q8' | 'q4' | 'q4f16';
-  device: 'webgpu' | 'wasm' | 'cpu';
+  device: 'webgpu' | 'wasm' | 'cpu' | 'serverless';
   filename: string;
   isDefault?: boolean;
   isDownloaded?: boolean;
@@ -20,7 +20,7 @@ interface ModelSelectorProps {
   selectedModel: string;
   onModelChange: (modelId: string) => void;
   disabled?: boolean;
-  onDeviceChange?: (device: 'webgpu' | 'wasm' | 'cpu') => void;
+  onDeviceChange?: (device: 'webgpu' | 'wasm' | 'cpu' | 'serverless') => void;
   onDtypeChange?: (dtype: 'fp32' | 'fp16' | 'q8' | 'q4' | 'q4f16') => void;
   modelKeepLocal?: Record<string, boolean>;
   onModelKeepLocalChange?: (modelId: string, keepLocal: boolean) => void;
@@ -100,23 +100,23 @@ export const getAllModels = (): ModelConfig[] => {
 };
 
 // Helper function to get recommended models for a device
-export const getRecommendedModels = (device: 'webgpu' | 'wasm' | 'cpu'): ModelConfig[] => {
-  return AVAILABLE_MODELS.filter(model => 
-    model.recommended && 
+export const getRecommendedModels = (device: 'webgpu' | 'wasm' | 'cpu' | 'serverless'): ModelConfig[] => {
+  return AVAILABLE_MODELS.filter(model =>
+    model.recommended &&
     (device === 'webgpu' ? model.device === 'webgpu' : model.device !== 'webgpu')
   );
 };
 
-const ModelSelector: FC<ModelSelectorProps> = ({ 
-  selectedModel, 
-  onModelChange, 
+const ModelSelector: FC<ModelSelectorProps> = ({
+  selectedModel,
+  onModelChange,
   disabled = false,
   onDeviceChange,
   onDtypeChange,
   modelKeepLocal = {},
   onModelKeepLocalChange
 }: ModelSelectorProps) => {
-  const [preferredDevice, setPreferredDevice] = useState<'webgpu' | 'wasm' | 'cpu'>('webgpu');
+  const [preferredDevice, setPreferredDevice] = useState<'webgpu' | 'wasm' | 'cpu' | 'serverless'>('webgpu');
   const [gpuAvailable, setGpuAvailable] = useState(false);
   const [downloadedModels, setDownloadedModels] = useState<Set<string>>(new Set());
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -137,7 +137,7 @@ const ModelSelector: FC<ModelSelectorProps> = ({
         setGpuAvailable(false);
       }
     };
-    
+
     checkGPU();
   }, []);
 
@@ -147,15 +147,15 @@ const ModelSelector: FC<ModelSelectorProps> = ({
       const downloadedModelIds = modelManager.getDownloadedModels();
       setDownloadedModels(new Set(downloadedModelIds));
     };
-    
+
     checkDownloadedModels();
   }, []);
 
   // Load preferences from model manager on mount
   useEffect(() => {
     const preferences = modelManager.getPreferences();
-    setPreferredDevice(preferences.preferredDevice as 'webgpu' | 'wasm' | 'cpu');
-    
+    setPreferredDevice(preferences.preferredDevice as 'webgpu' | 'wasm' | 'cpu' | 'serverless');
+
     // Use the saved model if exists
     if (preferences.selectedModel) {
       onModelChange(preferences.selectedModel);
@@ -163,7 +163,7 @@ const ModelSelector: FC<ModelSelectorProps> = ({
   }, [onModelChange]);
 
   // Save preferences using model manager
-  const savePreferences = useCallback((newSelectedModel: string, newPreferredDevice: 'webgpu' | 'wasm' | 'cpu') => {
+  const savePreferences = useCallback((newSelectedModel: string, newPreferredDevice: 'webgpu' | 'wasm' | 'cpu' | 'serverless') => {
     modelManager.savePreferences({
       selectedModel: newSelectedModel,
       preferredDevice: newPreferredDevice
@@ -184,7 +184,7 @@ const ModelSelector: FC<ModelSelectorProps> = ({
   }, []);
 
   const handleDeviceChange = useCallback((e: ChangeEvent<HTMLSelectElement>) => {
-    const device = e.target.value as 'webgpu' | 'wasm' | 'cpu';
+    const device = e.target.value as 'webgpu' | 'wasm' | 'cpu' | 'serverless';
     if (isChangingFromModel) {
       return;
     }
@@ -236,13 +236,14 @@ const ModelSelector: FC<ModelSelectorProps> = ({
       case 'webgpu': return '⚡';
       case 'wasm': return '🖥️';
       case 'cpu': return '💻';
+      case 'serverless': return '☁️';
       default: return '❓';
     }
   }, []);
 
-  const getRecommendedModelsForDevice = useCallback((device: 'webgpu' | 'wasm' | 'cpu') => {
-    return AVAILABLE_MODELS.filter(model => 
-      model.recommended && 
+  const getRecommendedModelsForDevice = useCallback((device: 'webgpu' | 'wasm' | 'cpu' | 'serverless') => {
+    return AVAILABLE_MODELS.filter(model =>
+      model.recommended &&
       (device === 'webgpu' ? model.device === 'webgpu' : model.device !== 'webgpu')
     );
   }, []);
@@ -271,18 +272,20 @@ const ModelSelector: FC<ModelSelectorProps> = ({
           value={preferredDevice}
           onChange={handleDeviceChange}
           disabled={disabled}
-          className={`w-full p-2 bg-slate-700 border border-slate-600 rounded text-slate-200 text-sm transition-colors ${
-            disabled ? 'opacity-50 cursor-not-allowed' : 'hover:border-slate-500 focus:border-purple-500 focus:ring-1 focus:ring-purple-500'
-          }`}
+          className={`w-full p-2 bg-slate-700 border border-slate-600 rounded text-slate-200 text-sm transition-colors ${disabled ? 'opacity-50 cursor-not-allowed' : 'hover:border-slate-500 focus:border-purple-500 focus:ring-1 focus:ring-purple-500'
+            }`}
         >
           <option value="webgpu" disabled={!gpuAvailable}>
             {getDeviceIcon('webgpu')} GPU (WebGPU) {!gpuAvailable && '(Not Available)'}
           </option>
           <option value="wasm">
-            {getDeviceIcon('wasm')} CPU (WASM)
+            {getDeviceIcon('wasm')} CPU (Local WASM)
           </option>
           <option value="cpu">
             {getDeviceIcon('cpu')} CPU (Native)
+          </option>
+          <option value="serverless">
+            {getDeviceIcon('serverless')} Serverless API (Cloud)
           </option>
         </select>
         {!gpuAvailable && (
@@ -324,7 +327,7 @@ const ModelSelector: FC<ModelSelectorProps> = ({
         >
           {showAdvanced ? '▼' : '▶'} Show All Models ({AVAILABLE_MODELS.length})
         </button>
-        
+
         {showAdvanced && (
           <div className="space-y-2 mt-2">
             {AVAILABLE_MODELS.filter(model => !model.recommended).map((model) => (
@@ -399,11 +402,10 @@ const ModelCard: FC<ModelCardProps> = ({
 }) => {
   return (
     <div
-      className={`p-3 rounded-lg border cursor-pointer transition-all duration-200 ${
-        isSelected
-          ? 'border-blue-500 bg-blue-500/10 shadow-md'
-          : 'border-slate-600 bg-slate-700 hover:border-slate-500 hover:bg-slate-600'
-      } ${disabled ? 'cursor-not-allowed opacity-50' : ''}`}
+      className={`p-3 rounded-lg border cursor-pointer transition-all duration-200 ${isSelected
+        ? 'border-blue-500 bg-blue-500/10 shadow-md'
+        : 'border-slate-600 bg-slate-700 hover:border-slate-500 hover:bg-slate-600'
+        } ${disabled ? 'cursor-not-allowed opacity-50' : ''}`}
       onClick={() => !disabled && onSelect()}
     >
       <div className="flex items-start justify-between">
@@ -429,7 +431,7 @@ const ModelCard: FC<ModelCardProps> = ({
             <span>🎯 {model.dtype.toUpperCase()}</span>
             <span>{getDeviceIcon(model.device)} {model.device}</span>
           </div>
-          
+
           {/* Keep Local Toggle */}
           <div className="flex items-center gap-2">
             <label className="flex items-center gap-2 text-xs text-slate-400 cursor-pointer">

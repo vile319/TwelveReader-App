@@ -55,21 +55,18 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
   // Model download consent
   const [showModelWarning, setShowModelWarning] = useState(false);
   const [modelAccepted, setModelAccepted] = useState(false);
-  
+
   // Model selection state - initialized from model manager
   const [selectedModel, setSelectedModel] = useState(() => {
     const preferences = modelManager.getPreferences();
     return preferences.selectedModel;
   });
-  const [preferredDevice, setPreferredDevice] = useState<'webgpu' | 'wasm' | 'cpu'>(() => {
+  const [preferredDevice, setPreferredDevice] = useState<'webgpu' | 'wasm' | 'cpu' | 'serverless'>(() => {
     const preferences = modelManager.getPreferences();
     return preferences.preferredDevice;
   });
   const [preferredDtype, setPreferredDtype] = useState<'fp32' | 'fp16' | 'q8' | 'q4' | 'q4f16'>('fp32');
-  const [autoSelect, setAutoSelect] = useState(() => {
-    const preferences = modelManager.getPreferences();
-    return preferences.autoSelect;
-  });
+  const [autoSelect, setAutoSelect] = useState(false);
   const [keepLocal, setKeepLocal] = useState(true);
   const [modelKeepLocal, setModelKeepLocal] = useState<Record<string, boolean>>(() => {
     return modelManager.getAllKeepLocalSettings();
@@ -101,7 +98,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     try {
       const raw = localStorage.getItem(TEXT_SETS_KEY);
       if (raw) return JSON.parse(raw) as TextSet[];
-    } catch {}
+    } catch { }
     return [];
   });
 
@@ -113,7 +110,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     try {
       const raw = localStorage.getItem(PROGRESS_KEY);
       if (raw) return JSON.parse(raw) as Record<string, { audioTime: number; scrollTop: number }>;
-    } catch {}
+    } catch { }
     return {};
   });
 
@@ -126,7 +123,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     onError: setError,
     enabled: modelAccepted,
     selectedModel,
-    preferredDevice,
+    preferredDevice: preferredDevice as 'webgpu' | 'wasm' | 'cpu' | 'serverless',
     preferredDtype
   });
 
@@ -138,7 +135,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       setError({ title: 'No Text', message: 'Please enter some text or upload a PDF to read.' });
       return;
     }
-    
+
     // Reset generation progress
     setGenerationProgress(0);
 
@@ -157,21 +154,21 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       setPendingRead({ text: textToRead, voice: selectedVoice });
       return;
     }
-    
+
     console.log('🎵 Starting audio reading...');
     setIsReading(true);
     setCurrentSentence(textToRead);
-    
+
     try {
       await tts.speak(textToRead, selectedVoice, (p: number) => setGenerationProgress(Math.round(p)));
       console.log('✅ Audio generation completed');
-      
+
       // Ensure progress shows complete
       setGenerationProgress(100);
-      
+
       // Audio is ready, user can now use play/pause controls
       setIsReading(false);
-      
+
     } catch (error) {
       console.error('❌ Error during reading:', error);
       setError({ title: 'Reading Error', message: 'Failed to read the text. Please try again.' });
@@ -327,7 +324,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     tts.seekToTime(time);
   };
 
-  const handleDeviceChange = (device: 'webgpu' | 'wasm' | 'cpu') => {
+  const handleDeviceChange = (device: 'webgpu' | 'wasm' | 'cpu' | 'serverless') => {
     setPreferredDevice(device);
     modelManager.savePreferences({ preferredDevice: device });
   };
@@ -365,7 +362,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       (async () => {
         try {
           await tts.speak(pendingRead.text, pendingRead.voice);
-        } catch {}
+        } catch { }
         setPendingRead(null);
       })();
     }
@@ -394,7 +391,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
         alert('Cannot save: local storage limit exceeded. Please delete existing items or use Google Drive sync.');
         return;
       }
-    } catch {}
+    } catch { }
     setSavedTextSets((prev: TextSet[]) => [...prev, newSet]);
     setCurrentSetId(newSet.id);
   };
@@ -596,7 +593,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
         const preferences = modelManager.getPreferences();
         setSelectedModel(preferences.selectedModel);
         setPreferredDevice(preferences.preferredDevice);
-        setAutoSelect(preferences.autoSelect);
+        setAutoSelect(false);
         setModelKeepLocal(modelManager.getAllKeepLocalSettings());
       },
       getModelCacheSize: async () => {
