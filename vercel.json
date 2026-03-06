@@ -1,9 +1,1 @@
-{
-    "functions": {
-        "api/tts.ts": {
-            "memory": 1024,
-            "maxDuration": 60,
-            "excludeFiles": "{node_modules/onnxruntime-node/**}"
-        }
-    }
-}
+{}
