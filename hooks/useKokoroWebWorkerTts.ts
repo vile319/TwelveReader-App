@@ -187,6 +187,10 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
   // onended inspects this to skip "natural end" handling when stop was intentional.
   const intentionalStopRef = useRef<boolean>(false);
 
+  // Ref to playCompleteAudio so speak() (which doesn't have it in its deps)
+  // always calls the LATEST version, never the stale mount-time closure.
+  const playCompleteAudioRef = useRef<(startTime?: number) => Promise<void>>(() => Promise.resolve());
+
   // New continuous audio buffer system
   const audioBufferRef = useRef<Float32Array[]>([]);
   const sampleRateRef = useRef<number>(24000);
@@ -539,6 +543,12 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
     }
     // Note: deps intentionally omit completeAudioBuffer/Rate — we read from refs instead.
   }, [duration, updateCurrentWordIndex]);
+
+  // Keep playCompleteAudioRef in sync whenever playCompleteAudio is re-created.
+  // This lets speak() (which has a stale closure) always call the latest version.
+  useEffect(() => {
+    playCompleteAudioRef.current = playCompleteAudio;
+  });
 
   const togglePlayPause = useCallback(() => {
     if (!canScrub) return;
