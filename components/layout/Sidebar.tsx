@@ -96,6 +96,8 @@ const Sidebar: FC = () => {
           onDeviceChange={actions.setPreferredDevice}
           onDtypeChange={actions.setPreferredDtype}
           disabled={state.audio.isLoading}
+          modelKeepLocal={state.model.modelKeepLocal}
+          onModelKeepLocalChange={actions.setModelKeepLocal}
         />
       </div>
 

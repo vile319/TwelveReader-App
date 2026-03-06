@@ -508,21 +508,21 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
       }, 100); // Update every 100ms
 
       source.onended = () => {
-        console.log('🏁 Complete audio playback ended');
-        // Only set to end if we're actually playing (not manually paused)
-        if (isPlaying) {
-          setIsPlaying(false);
-          setCurrentTime(duration);
-          console.log('🏁 Audio completed naturally');
-        }
+        console.log('🏁 Complete audio playback ended naturally');
+        // Unconditionally mark as stopped — avoids stale closure on isPlaying
+        setIsPlaying(false);
+        setCurrentTime(duration);
+        playbackOffsetRef.current = duration;
         completeAudioSourceRef.current = null;
         if (progressAnimationRef.current) {
           cancelAnimationFrame(progressAnimationRef.current);
+          progressAnimationRef.current = 0;
         }
         if (progressIntervalRef.current) {
           clearInterval(progressIntervalRef.current);
           progressIntervalRef.current = null;
         }
+        console.log('🏁 Audio completed — ready to restart');
       };
 
       // Start playing from offset

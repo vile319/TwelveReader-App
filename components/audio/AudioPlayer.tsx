@@ -14,16 +14,12 @@ const AudioPlayer: FC = () => {
   const progressPercent = safeDuration > 0 ? (safeCurrentTime / safeDuration) * 100 : 0;
 
   return (
-    <div
-      className={cn(
-        'bg-slate-900 border border-slate-800 rounded-2xl p-6 mb-6 transition-opacity',
-        disabled && 'opacity-50 pointer-events-none'
-      )}
-    >
+    <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 mb-6">
       {/* Progress Bar — above controls for more prominent placement */}
       <div
         className={cn(
           'w-full h-2 bg-slate-700 rounded-full relative overflow-hidden mb-5',
+          disabled ? 'opacity-50' : '',
           state.audio.canScrub ? 'cursor-pointer' : 'cursor-not-allowed'
         )}
         onMouseMove={(e: React.MouseEvent<HTMLDivElement>) => {
@@ -68,7 +64,7 @@ const AudioPlayer: FC = () => {
       </div>
 
       {/* Main Controls Row */}
-      <div className="flex items-center justify-center gap-6">
+      <div className={cn('flex items-center justify-center gap-6', disabled && 'opacity-50 pointer-events-none')}>
         {/* Skip Back */}
         <button
           onClick={actions.skipBackward}
@@ -113,7 +109,7 @@ const AudioPlayer: FC = () => {
       </div>
 
       {/* Time + Status row */}
-      <div className="mt-4 flex items-center justify-between text-sm text-slate-400">
+      <div className={cn('mt-4 flex items-center justify-between text-sm text-slate-400', disabled && 'opacity-50')}>
         <span className="font-mono tabular-nums">{actions.formatTime(safeCurrentTime)}</span>
         {state.isReading && (
           <span className="text-blue-400 text-xs animate-pulse">Generating audio…</span>
@@ -121,45 +117,50 @@ const AudioPlayer: FC = () => {
         <span className="font-mono tabular-nums">{actions.formatTime(safeDuration)}</span>
       </div>
 
-      {/* Speed + Download + Google Drive row */}
-      <div className="mt-4 flex items-center justify-between gap-3 flex-wrap">
-        <div className="flex items-center gap-2 text-sm text-slate-300">
-          <span className="text-slate-500">Speed</span>
-          <select
-            value={state.audio.playbackRate}
-            onChange={(e: React.ChangeEvent<HTMLSelectElement>) => actions.setPlaybackRate(parseFloat(e.target.value))}
-            className="bg-slate-800 border border-slate-700 rounded-md px-2 py-1 text-sm focus:outline-none focus:border-blue-500"
-          >
-            <option value="0.5">0.5×</option>
-            <option value="0.75">0.75×</option>
-            <option value="1">1×</option>
-            <option value="1.25">1.25×</option>
-            <option value="1.5">1.5×</option>
-            <option value="2">2×</option>
-          </select>
-        </div>
+      {/* Speed row — disabled when no audio */}
+      <div className={cn('mt-4 flex items-center gap-2 text-sm text-slate-300', disabled && 'opacity-50 pointer-events-none')}>
+        <span className="text-slate-500">Speed</span>
+        <select
+          value={state.audio.playbackRate}
+          onChange={(e: React.ChangeEvent<HTMLSelectElement>) => actions.setPlaybackRate(parseFloat(e.target.value))}
+          className="bg-slate-800 border border-slate-700 rounded-md px-2 py-1 text-sm focus:outline-none focus:border-blue-500"
+        >
+          <option value="0.5">0.5×</option>
+          <option value="0.75">0.75×</option>
+          <option value="1">1×</option>
+          <option value="1.25">1.25×</option>
+          <option value="1.5">1.5×</option>
+          <option value="2">2×</option>
+        </select>
+      </div>
 
-        <div className="flex items-center gap-2">
-          {state.audio.synthesisComplete && (
-            <button
-              onClick={actions.handleDownloadAudio}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 text-sm font-medium transition-colors"
-              title="Download audio as WAV file"
-            >
-              💾 Download WAV
-            </button>
+      {/* Download + Google Drive — always interactive */}
+      <div className="mt-3 flex items-center gap-2 flex-wrap">
+        <button
+          onClick={actions.handleDownloadAudio}
+          disabled={!state.audio.synthesisComplete}
+          className={cn(
+            'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors',
+            state.audio.synthesisComplete
+              ? 'bg-slate-700 hover:bg-slate-600 text-slate-200'
+              : 'bg-slate-800 text-slate-600 cursor-not-allowed'
           )}
-          <button
-            onClick={actions.linkGoogleDrive}
-            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${state.googleDriveLinked
-                ? 'bg-sky-500/20 text-sky-400 border border-sky-500/40'
-                : 'bg-slate-700 hover:bg-slate-600 text-slate-300'
-              }`}
-            title="Link Google Drive to sync your saved texts across devices"
-          >
-            ☁️ {state.googleDriveLinked ? 'Drive: Linked' : 'Link Drive'}
-          </button>
-        </div>
+          title={state.audio.synthesisComplete ? 'Download audio as WAV file' : 'Generate audio first'}
+        >
+          💾 Download WAV
+        </button>
+        <button
+          onClick={actions.linkGoogleDrive}
+          className={cn(
+            'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors',
+            state.googleDriveLinked
+              ? 'bg-sky-500/20 text-sky-400 border border-sky-500/40 hover:bg-sky-500/30'
+              : 'bg-slate-700 hover:bg-slate-600 text-slate-300'
+          )}
+          title="Link Google Drive to sync your saved texts across devices"
+        >
+          ☁️ {state.googleDriveLinked ? 'Drive: Linked' : 'Link Drive'}
+        </button>
       </div>
     </div>
   );
