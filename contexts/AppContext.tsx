@@ -142,8 +142,10 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     // Stop any previous audio before starting anew
     tts.stop();
 
-    // If model not accepted yet, show warning and remember intention
-    if (!modelAccepted) {
+    // If model not accepted and using local mode, show download warning
+    // Cloud/serverless mode skips this entirely - no download needed
+    const isCloudMode = preferredDevice === 'serverless' || !preferredDevice;
+    if (!modelAccepted && !isCloudMode) {
       setPendingRead({ text: textToRead, voice: selectedVoice });
       setShowModelWarning(true);
       return;

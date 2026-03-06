@@ -8,6 +8,11 @@ const AudioPlayer: FC = () => {
 
   const disabled = !state.audio.canScrub;
 
+  // FIX: clamp currentTime so it never exceeds duration
+  const safeDuration = state.audio.duration || 0;
+  const safeCurrentTime = Math.min(state.audio.currentTime, safeDuration);
+  const progressPercent = safeDuration > 0 ? (safeCurrentTime / safeDuration) * 100 : 0;
+
   return (
     <div
       className={cn(
@@ -15,56 +20,17 @@ const AudioPlayer: FC = () => {
         disabled && 'opacity-50 pointer-events-none'
       )}
     >
-      {/* Main Controls */}
-      <div className="flex items-center gap-4 mb-5">
-        {/* Skip Back */}
-        <button
-          onClick={actions.skipBackward}
-          className="w-12 h-12 rounded-full bg-slate-700 text-slate-200 text-sm font-semibold flex items-center justify-center hover:bg-slate-600 hover:scale-105 transition-transform"
-        >
-          -15s
-        </button>
-        
-        {/* Play/Pause */}
-        <button
-          onClick={actions.togglePlayPause}
-          className="w-16 h-16 rounded-full bg-blue-500 text-white text-2xl flex items-center justify-center shadow-lg hover:bg-blue-600 hover:scale-105 transition-transform"
-        >
-          {state.audio.isPlaying ? '⏸️' : '▶️'}
-        </button>
-        
-        {/* Skip Forward */}
-        <button
-          onClick={actions.skipForward}
-          className="w-12 h-12 rounded-full bg-slate-700 text-slate-200 text-sm font-semibold flex items-center justify-center hover:bg-slate-600 hover:scale-105 transition-transform"
-        >
-          +15s
-        </button>
-        
-        {/* Time Display */}
-        <div className="flex-1 text-center">
-          <div className="text-lg font-semibold text-slate-200 mb-1">
-            {actions.formatTime(state.audio.currentTime)} / {actions.formatTime(state.audio.duration || state.audio.currentTime)}
-          </div>
-          {state.isReading && (
-            <div className="text-xs text-blue-400">
-              Generating audio...
-            </div>
-          )}
-        </div>
-      </div>
-      
-      {/* Progress Bar */}
+      {/* Progress Bar — above controls for more prominent placement */}
       <div
         className={cn(
-          'w-full h-3 bg-slate-700 rounded-md relative overflow-hidden',
+          'w-full h-2 bg-slate-700 rounded-full relative overflow-hidden mb-5',
           state.audio.canScrub ? 'cursor-pointer' : 'cursor-not-allowed'
         )}
         onMouseMove={(e: React.MouseEvent<HTMLDivElement>) => {
           if (!state.audio.canScrub) return;
           const rect = e.currentTarget.getBoundingClientRect();
           const hoverPosition = (e.clientX - rect.left) / rect.width;
-          actions.setHoverTime(hoverPosition * (state.audio.duration || 0));
+          actions.setHoverTime(hoverPosition * safeDuration);
           actions.setIsSeekingHover(true);
         }}
         onMouseLeave={() => {
@@ -76,7 +42,7 @@ const AudioPlayer: FC = () => {
           actions.setIsDragging(true);
           const rect = e.currentTarget.getBoundingClientRect();
           const clickPosition = (e.clientX - rect.left) / rect.width;
-          const newTime = clickPosition * (state.audio.duration || 0);
+          const newTime = clickPosition * safeDuration;
           actions.seekToTime(newTime);
         }}
         onMouseUp={() => {
@@ -86,69 +52,97 @@ const AudioPlayer: FC = () => {
       >
         {/* Progress Fill */}
         <div
-          className="h-full bg-blue-500 rounded-md transition-[width] duration-100 ease-out"
-          style={{
-            width: `${((state.audio.duration || 0) > 0 ? (state.audio.currentTime / (state.audio.duration || 1)) * 100 : 0)}%`,
-          }}
+          className="h-full bg-blue-500 rounded-full transition-[width] duration-100 ease-out"
+          style={{ width: `${progressPercent}%` }}
         />
-        
+
         {/* Hover Time Tooltip */}
         {state.isSeekingHover && (
           <div
             className="absolute -top-9 -translate-x-1/2 px-2 py-1 bg-slate-950 text-white text-xs font-medium rounded border border-slate-600 shadow-lg z-10"
-            style={{
-              left: `${(state.hoverTime / (state.audio.duration || 1)) * 100}%`,
-            }}
+            style={{ left: `${(state.hoverTime / (safeDuration || 1)) * 100}%` }}
           >
             {actions.formatTime(state.hoverTime)}
           </div>
         )}
       </div>
-      
-      {/* Download Button */}
-      {state.audio.synthesisComplete && (
-        <div className="mt-4 text-center">
-          <button
-            onClick={actions.handleDownloadAudio}
-            className="inline-flex items-center gap-2 px-5 py-2 rounded-lg bg-emerald-500 text-white text-sm font-semibold hover:bg-emerald-600 hover:-translate-y-0.5 transition-transform"
-          >
-            💾 Download Audio (WAV)
-          </button>
-        </div>
-      )}
 
-      {/* Playback Speed Controls (always visible) */}
-      <div className="mt-4 flex items-center justify-center gap-2 text-sm text-slate-200">
-        <span>Speed:</span>
-        <select
-          value={state.audio.playbackRate}
-          onChange={(e: React.ChangeEvent<HTMLSelectElement>) => actions.setPlaybackRate(parseFloat(e.target.value))}
-          className="bg-slate-700 rounded px-2 py-1 focus:outline-none"
+      {/* Main Controls Row */}
+      <div className="flex items-center justify-center gap-6">
+        {/* Skip Back */}
+        <button
+          onClick={actions.skipBackward}
+          className="w-12 h-12 rounded-full bg-slate-700/60 text-slate-300 text-sm font-semibold flex items-center justify-center hover:bg-slate-600 hover:text-white hover:scale-110 active:scale-95 transition-all"
+          title="Skip back 15s"
         >
-          <option value="0.5">0.5x</option>
-          <option value="0.75">0.75x</option>
-          <option value="1">1x</option>
-          <option value="1.25">1.25x</option>
-          <option value="1.5">1.5x</option>
-          <option value="2">2x</option>
-        </select>
+          <span className="text-xs leading-none">-15s</span>
+        </button>
+
+        {/* Play/Pause — large prominent button */}
+        <button
+          onClick={actions.togglePlayPause}
+          className="w-20 h-20 rounded-full bg-blue-600 text-white flex items-center justify-center shadow-xl shadow-blue-900/40 hover:bg-blue-500 hover:scale-110 active:scale-95 transition-all"
+          title={state.audio.isPlaying ? 'Pause' : 'Play'}
+        >
+          {state.audio.isPlaying ? (
+            /* Pause icon — two bars */
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-9 h-9">
+              <path fillRule="evenodd" d="M6.75 5.25a.75.75 0 0 1 .75-.75H9a.75.75 0 0 1 .75.75v13.5a.75.75 0 0 1-.75.75H7.5a.75.75 0 0 1-.75-.75V5.25zm7.5 0A.75.75 0 0 1 15 4.5h1.5a.75.75 0 0 1 .75.75v13.5a.75.75 0 0 1-.75.75H15a.75.75 0 0 1-.75-.75V5.25z" clipRule="evenodd" />
+            </svg>
+          ) : (
+            /* Play icon */
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-9 h-9 translate-x-0.5">
+              <path fillRule="evenodd" d="M4.5 5.653c0-1.427 1.529-2.33 2.779-1.643l11.54 6.347c1.295.712 1.295 2.573 0 3.286L7.28 19.99c-1.25.687-2.779-.217-2.779-1.643V5.653z" clipRule="evenodd" />
+            </svg>
+          )}
+        </button>
+
+        {/* Skip Forward */}
+        <button
+          onClick={actions.skipForward}
+          className="w-12 h-12 rounded-full bg-slate-700/60 text-slate-300 text-sm font-semibold flex items-center justify-center hover:bg-slate-600 hover:text-white hover:scale-110 active:scale-95 transition-all"
+          title="Skip forward 15s"
+        >
+          <span className="text-xs leading-none">+15s</span>
+        </button>
       </div>
 
-      {/* Audio Stats */}
-      {state.audio.canScrub && (
-        <div className="mt-3 text-center text-xs text-slate-400">
-          {state.audio.wordTimings.length > 0 && (
-            <span>
-              {state.audio.wordTimings.length} words tracked • 
-              {state.audio.currentWordIndex >= 0 && state.audio.currentWordIndex < state.audio.wordTimings.length && (
-                <span className="text-blue-400 font-medium">
-                  {' '}highlighting "{state.audio.wordTimings[state.audio.currentWordIndex]?.word}"
-                </span>
-              )}
-            </span>
-          )}
+      {/* Time + Status row */}
+      <div className="mt-4 flex items-center justify-between text-sm text-slate-400">
+        <span className="font-mono tabular-nums">{actions.formatTime(safeCurrentTime)}</span>
+        {state.isReading && (
+          <span className="text-blue-400 text-xs animate-pulse">Generating audio…</span>
+        )}
+        <span className="font-mono tabular-nums">{actions.formatTime(safeDuration)}</span>
+      </div>
+
+      {/* Speed + Download row */}
+      <div className="mt-4 flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2 text-sm text-slate-300">
+          <span className="text-slate-500">Speed</span>
+          <select
+            value={state.audio.playbackRate}
+            onChange={(e: React.ChangeEvent<HTMLSelectElement>) => actions.setPlaybackRate(parseFloat(e.target.value))}
+            className="bg-slate-800 border border-slate-700 rounded-md px-2 py-1 text-sm focus:outline-none focus:border-blue-500"
+          >
+            <option value="0.5">0.5×</option>
+            <option value="0.75">0.75×</option>
+            <option value="1">1×</option>
+            <option value="1.25">1.25×</option>
+            <option value="1.5">1.5×</option>
+            <option value="2">2×</option>
+          </select>
         </div>
-      )}
+
+        {state.audio.synthesisComplete && (
+          <button
+            onClick={actions.handleDownloadAudio}
+            className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 text-sm font-medium transition-colors"
+          >
+            💾 Download WAV
+          </button>
+        )}
+      </div>
     </div>
   );
 };
