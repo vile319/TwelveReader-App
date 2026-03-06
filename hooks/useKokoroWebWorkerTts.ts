@@ -1099,7 +1099,8 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
 
             let wordStart = chunkOffset;
             const provisionalTimings = wordsInChunk.map((w: string) => {
-              const wordDur = w.length * timePerChar + 0.05; // Base time + per-char time
+              // Exact proportional allocation so the highlight stays accurately in sync across the whole chunk
+              const wordDur = totalChars > 0 ? (w.length * timePerChar) : (chunkDuration / wordsInChunk.length);
               const timing = {
                 word: w,
                 start: wordStart,
