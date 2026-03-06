@@ -1180,12 +1180,11 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
 
       setIsStreaming(false); // Switch from streaming to complete mode
 
-      // If audio was playing, seamlessly switch to complete audio playback.
-      // MUST use currentTimeRef.current, NOT the `currentTime` React state —
-      // speak() is a useCallback and its closure captures currentTime = 0 (stale).
       if (wasPlaying) {
         console.log('🔄 Switching from streaming to complete audio playback');
-        playCompleteAudio(currentTimeRef.current);
+        // Use ref — speak()'s closure doesn't include playCompleteAudio in its deps,
+        // so the direct call would use the stale mount-time version with duration=0.
+        playCompleteAudioRef.current(currentTimeRef.current);
       }
 
       onProgress?.(100);
