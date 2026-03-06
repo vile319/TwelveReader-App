@@ -313,11 +313,13 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
       // Start progress tracking for streaming
       const trackStreamingProgress = () => {
         if (isPlaybackActiveRef.current && audioContextRef.current) {
+          // elapsed in audio-time (already accounts for playback rate via AudioContext scheduling)
           const elapsed = (audioContextRef.current.currentTime - streamingStartTimeRef.current) * playbackRateRef.current;
           // Calculate max time from streaming audio length
           const totalStreamingSamples = streamingAudioRef.current.reduce((sum: number, chunk: Float32Array) => sum + chunk.length, 0);
           const maxStreamTime = totalStreamingSamples / samplesPerSecond;
-          const currentPos = Math.max(0, Math.min(elapsed * playbackRateRef.current, maxStreamTime));
+          // DO NOT multiply elapsed by playbackRate again — it was already applied above
+          const currentPos = Math.max(0, Math.min(elapsed, maxStreamTime));
           setCurrentTime(currentPos);
 
           // Update current word index for highlighting (un-throttled for accuracy)
@@ -436,7 +438,10 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
         await audioContextRef.current.resume();
       }
 
-      // Create audio buffer
+      // Create audio buffer — use the AudioContext's native sample rate for the buffer
+      // so that duration math (elapsed = samples / rate) is always self-consistent.
+      // Note: createBuffer resamples internally when the buffer rate != context rate,
+      // so the actual pitch is always correct regardless.
       const audioBuffer = audioContextRef.current.createBuffer(
         1,
         completeAudioBuffer.length,
@@ -444,6 +449,10 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
       );
       const channelData = audioBuffer.getChannelData(0);
       channelData.set(completeAudioBuffer);
+
+      // Use the buffer's ACTUAL sample rate (post-resample) for timing calculation.
+      // audioBuffer.sampleRate equals the AudioContext rate after createBuffer resamples.
+      const actualSampleRate = audioBuffer.sampleRate;
 
       // Create and configure source
       const source = audioContextRef.current.createBufferSource();
@@ -466,13 +475,15 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
         }
 
         const elapsed = audioContextRef.current!.currentTime - playbackStartTimeRef.current;
+        // Duration in audio-time uses the buffer's actual sample rate (resolved after createBuffer)
+        const audioDurationSec = audioBuffer.length / actualSampleRate;
         const currentPos = playbackOffsetRef.current + elapsed * playbackRateRef.current;
 
         const now = performance.now();
-        if (currentPos >= duration && now - lastTimeUpdateRef.current > 100) {
+        if (currentPos >= audioDurationSec && now - lastTimeUpdateRef.current > 100) {
           lastTimeUpdateRef.current = now;
           setIsPlaying(false);
-          setCurrentTime(duration);
+          setCurrentTime(duration); // keep the state var at the user-facing duration
           updateCurrentWordIndex(duration);
           completeAudioSourceRef.current = null;
           if (progressIntervalRef.current) {
@@ -981,7 +992,11 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
             }
             const decodedBuffer = await audioContextRef.current.decodeAudioData(arrayBuffer);
             audioData = decodedBuffer.getChannelData(0); // Assuming mono output
+            // IMPORTANT: use the rate from the decoded buffer (which is the AudioContext's actual rate after resampling)
+            // This ensures all timing math (duration, word timings, progress) uses the right denominator
             sampleRate = decodedBuffer.sampleRate;
+            // Keep sampleRateRef in sync so the streaming path also gets the correct rate
+            sampleRateRef.current = sampleRate;
 
             // Mock empty alignments for serverless for now
             audioObject = { alignments: null };
@@ -1004,6 +1019,7 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
                 sampleRate = audioObject.sample_rate || audioObject.sampling_rate || 24000;
               } else if (audioObject instanceof Float32Array) {
                 audioData = audioObject;
+                // Float32Array carries no metadata — keep whatever sampleRate the model reported earlier (or default 24000)
               } else {
                 for (const value of Object.values(audioObject)) {
                   if (value instanceof Float32Array) {
@@ -1013,6 +1029,8 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
                 }
               }
             }
+            // Keep sampleRateRef in sync for streaming path consistency
+            sampleRateRef.current = sampleRate;
           }
 
           // === New cancellation check ===
