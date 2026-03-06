@@ -25,8 +25,11 @@ export default async function handler(
         // or if the model failed to load previously
         if (!ttsInstance) {
             console.log('Initializing Kokoro TTS in Node (CPU) mode...');
+            // Use q8f16 (86MB) - smallest quantization that runs well on CPU
+            // Model weights are downloaded from HuggingFace at runtime, NOT bundled into the function
             ttsInstance = await KokoroTTS.from_pretrained('onnx-community/Kokoro-82M-v1.0-ONNX', {
-                device: 'cpu' // Crucial: Force CPU for Vercel Serverless Function
+                device: 'cpu', // Crucial: Force CPU for Vercel Serverless Function
+                dtype: 'q8' // q8 / q8f16 — ~86MB, good quality/speed balance for serverless CPU
             });
         }
 
