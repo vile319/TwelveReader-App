@@ -1,8 +1,20 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
+
+// === CRITICAL: Force onnxruntime-web (WASM) instead of onnxruntime-node ===
+// onnxruntime-node includes native binaries for Windows + macOS + Linux (~220MB total)
+// which exceeds Vercel's 250MB function limit.
+// onnxruntime-web (WASM-based) is only ~30MB and works fine in Node.js too.
+// We set this env var BEFORE importing kokoro-js so transformers.js picks it up.
+process.env.TRANSFORMERS_JS_BACKEND = 'wasm';
+
 import { KokoroTTS } from 'kokoro-js';
+import * as ort from 'onnxruntime-web';
+
+// Point ort to load WASM files from the built-in node_modules path
+// (no CDN dependency needed in serverless)
+ort.env.wasm.numThreads = 1; // Single thread — serverless environment
 
 // Cache the TTS instance so Vercel can reuse it across warm invocations
-// to save model loading time
 let ttsInstance: KokoroTTS | null = null;
 
 export default async function handler(
@@ -21,21 +33,19 @@ export default async function handler(
             return response.status(400).json({ error: 'Text is required' });
         }
 
-        // Initialize KokoroTTS in 'node' (CPU) mode if not already initialized
-        // or if the model failed to load previously
         if (!ttsInstance) {
-            console.log('Initializing Kokoro TTS in Node (CPU) mode...');
-            // Use q8f16 (86MB) - smallest quantization that runs well on CPU
-            // Model weights are downloaded from HuggingFace at runtime, NOT bundled into the function
+            console.log('Initializing Kokoro TTS with WASM (onnxruntime-web) backend...');
+            // Use q8 → model_quantized.onnx (92.4MB) — pure 8-bit, WASM-compatible
+            // q8f16 (86MB) has fp16 components which WASM can't run, so q8 is the right choice
+            // Model is downloaded from HuggingFace at runtime, NOT bundled into the function
             ttsInstance = await KokoroTTS.from_pretrained('onnx-community/Kokoro-82M-v1.0-ONNX', {
-                device: 'cpu', // Crucial: Force CPU for Vercel Serverless Function
-                dtype: 'q8' // q8 / q8f16 — ~86MB, good quality/speed balance for serverless CPU
+                device: 'wasm', // Force WASM — avoids pulling in onnxruntime-node
+                dtype: 'q8'
             });
         }
 
         console.log(`Generating audio for text (length: ${text.length}), voice: ${voice}`);
 
-        // Generate the audio
         const audioData = await ttsInstance.generate(text, {
             voice,
             speed
@@ -45,14 +55,11 @@ export default async function handler(
             throw new Error('Audio generation failed');
         }
 
-        // The audioData.audio is a Float32Array (PCM data). 
-        // We need to convert it to a format the browser can easily play (like WAV)
         const wavBuffer = encodeWAV(audioData.audio, audioData.sampling_rate);
 
-        // Send the WAV buffer back as an audio stream
         response.setHeader('Content-Type', 'audio/wav');
         response.setHeader('Content-Disposition', 'attachment; filename="audio.wav"');
-        response.setHeader('Cache-Control', 's-maxage=3600, stale-while-revalidate'); // Cache on Vercel Edge
+        response.setHeader('Cache-Control', 's-maxage=3600, stale-while-revalidate');
 
         return response.send(wavBuffer);
 
@@ -63,51 +70,35 @@ export default async function handler(
 }
 
 /**
- * Helper function to convert raw Float32Array PCM audio into a standard WAV buffer.
- * Kokoro JS returns raw PCM, but browsers expect a proper media format like WAV.
+ * Convert raw Float32Array PCM audio into a standard WAV buffer.
  */
 function encodeWAV(samples: Float32Array, sampleRate: number): Buffer {
     const buffer = new ArrayBuffer(44 + samples.length * 2);
     const view = new DataView(buffer);
 
-    // Helper to write strings
     const writeString = (view: DataView, offset: number, string: string) => {
         for (let i = 0; i < string.length; i++) {
             view.setUint8(offset + i, string.charCodeAt(i));
         }
     };
 
-    /* RIFF identifier */
     writeString(view, 0, 'RIFF');
-    /* RIFF chunk length */
     view.setUint32(4, 36 + samples.length * 2, true);
-    /* RIFF type */
     writeString(view, 8, 'WAVE');
-    /* format chunk identifier */
     writeString(view, 12, 'fmt ');
-    /* format chunk length */
     view.setUint32(16, 16, true);
-    /* sample format (raw) */
     view.setUint16(20, 1, true);
-    /* channel count (mono) */
-    view.setUint16(22, 1, true);
-    /* sample rate */
+    view.setUint16(22, 1, true); // mono
     view.setUint32(24, sampleRate, true);
-    /* byte rate (sample rate * block align) */
     view.setUint32(28, sampleRate * 2, true);
-    /* block align (channel count * bytes per sample) */
     view.setUint16(32, 2, true);
-    /* bits per sample */
     view.setUint16(34, 16, true);
-    /* data chunk identifier */
     writeString(view, 36, 'data');
-    /* data chunk length */
     view.setUint32(40, samples.length * 2, true);
 
-    // Write PCM samples (convert Float32 -1.0..1.0 to Int16 -32768..32767)
     let offset = 44;
     for (let i = 0; i < samples.length; i++, offset += 2) {
-        let s = Math.max(-1, Math.min(1, samples[i]));
+        const s = Math.max(-1, Math.min(1, samples[i]));
         view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
     }
 
