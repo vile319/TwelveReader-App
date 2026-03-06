@@ -31,7 +31,7 @@ const AVAILABLE_MODELS: ModelConfig[] = [
   {
     id: 'kokoro-82m-fp32',
     name: 'Kokoro 82M (FP32)',
-    description: 'Full precision model - Highest quality, GPU recommended',
+    description: 'Full precision – highest quality, GPU recommended',
     size: '310MB',
     quality: 'high',
     url: 'onnx-community/Kokoro-82M-ONNX',
@@ -44,7 +44,7 @@ const AVAILABLE_MODELS: ModelConfig[] = [
   {
     id: 'kokoro-82m-fp16',
     name: 'Kokoro 82M (FP16)',
-    description: 'Half precision - High quality, GPU recommended',
+    description: 'Half precision – high quality, GPU recommended',
     size: '156MB',
     quality: 'high',
     url: 'onnx-community/Kokoro-82M-ONNX',
@@ -56,7 +56,7 @@ const AVAILABLE_MODELS: ModelConfig[] = [
   {
     id: 'kokoro-82m-q8',
     name: 'Kokoro 82M (Q8)',
-    description: '8-bit quantized - Balanced quality and speed',
+    description: '8-bit quantised – balanced quality and speed',
     size: '82MB',
     quality: 'balanced',
     url: 'onnx-community/Kokoro-82M-ONNX',
@@ -68,7 +68,7 @@ const AVAILABLE_MODELS: ModelConfig[] = [
   {
     id: 'kokoro-82m-q4',
     name: 'Kokoro 82M (Q4)',
-    description: '4-bit quantized - Fastest, works on all devices',
+    description: '4-bit quantised – fastest, works on all devices',
     size: '290MB',
     quality: 'fast',
     url: 'onnx-community/Kokoro-82M-ONNX',
@@ -79,7 +79,7 @@ const AVAILABLE_MODELS: ModelConfig[] = [
   {
     id: 'kokoro-82m-q4f16',
     name: 'Kokoro 82M (Q4F16)',
-    description: '4-bit with FP16 fallback - Good balance',
+    description: '4-bit with FP16 fallback – good balance',
     size: '147MB',
     quality: 'fast',
     url: 'onnx-community/Kokoro-82M-ONNX',
@@ -121,7 +121,6 @@ const ModelSelector: FC<ModelSelectorProps> = ({
   );
   const [gpuAvailable, setGpuAvailable] = useState(false);
   const [downloadedModels, setDownloadedModels] = useState<Set<string>>(new Set());
-  const [showAdvanced, setShowAdvanced] = useState(false);
 
   // Check GPU availability on mount
   useEffect(() => {
@@ -198,48 +197,18 @@ const ModelSelector: FC<ModelSelectorProps> = ({
     const model = AVAILABLE_MODELS.find(m => m.id === modelId);
     if (model) {
       onDtypeChange?.(model.dtype);
-      // NOTE: Do NOT force device to match model.device — let the user's chosen
-      // processing mode (cloud/local) take precedence over model hardware hints.
     }
     savePreferences(modelId, preferredDevice);
   }, [preferredDevice, savePreferences, onModelChange, onDtypeChange]);
 
-  const getQualityColor = useCallback((quality: string) => {
+  const getQualityBadge = useCallback((quality: string) => {
     switch (quality) {
-      case 'fast': return 'text-green-500';
-      case 'balanced': return 'text-yellow-500';
-      case 'high': return 'text-blue-500';
-      default: return 'text-gray-500';
+      case 'fast': return { label: 'fast', cls: 'text-green-400 bg-green-400/10 border-green-400/30' };
+      case 'balanced': return { label: 'balanced', cls: 'text-yellow-400 bg-yellow-400/10 border-yellow-400/30' };
+      case 'high': return { label: 'high', cls: 'text-blue-400 bg-blue-400/10 border-blue-400/30' };
+      default: return { label: quality, cls: 'text-slate-400' };
     }
   }, []);
-
-  const getQualityIcon = useCallback((quality: string) => {
-    switch (quality) {
-      case 'fast': return '⚡';
-      case 'balanced': return '⚖️';
-      case 'high': return '🎯';
-      default: return '❓';
-    }
-  }, []);
-
-  const getDeviceIcon = useCallback((device: string) => {
-    switch (device) {
-      case 'webgpu': return '⚡';
-      case 'wasm': return '🖥️';
-      case 'cpu': return '💻';
-      case 'serverless': return '☁️';
-      default: return '❓';
-    }
-  }, []);
-
-  const getRecommendedModelsForDevice = useCallback((device: 'webgpu' | 'wasm' | 'cpu' | 'serverless') => {
-    return AVAILABLE_MODELS.filter(model =>
-      model.recommended &&
-      (device === 'webgpu' ? model.device === 'webgpu' : model.device !== 'webgpu')
-    );
-  }, []);
-
-  const currentRecommendedModels = getRecommendedModelsForDevice(preferredDevice);
 
   // After the useEffect for loading preferences, add this new useEffect for device fallback
   useEffect(() => {
@@ -250,7 +219,7 @@ const ModelSelector: FC<ModelSelectorProps> = ({
       onModelChange(bestModel.id);
       savePreferences(bestModel.id, newDevice);
     }
-  }, [gpuAvailable, preferredDevice, selectedModel, savePreferences, onModelChange, getBestModelForDevice]);
+  }, [gpuAvailable, preferredDevice, savePreferences, onModelChange, getBestModelForDevice]);
 
   return (
     <div className="space-y-4">
@@ -286,147 +255,77 @@ const ModelSelector: FC<ModelSelectorProps> = ({
         )}
       </div>
 
-      {/* Recommended Models */}
-      <div className="mb-4">
-        <h4 className="text-xs font-semibold text-green-400 mb-2 flex items-center gap-1">
-          ⭐ Recommended Models ({currentRecommendedModels.length})
+      {/* All Models — flat list, always visible */}
+      <div>
+        <h4 className="text-xs font-semibold text-slate-400 mb-2 uppercase tracking-wide">
+          Models ({AVAILABLE_MODELS.length})
         </h4>
         <div className="space-y-2">
-          {currentRecommendedModels.map((model) => (
-            <ModelCard
-              key={model.id}
-              model={model}
-              isSelected={selectedModel === model.id}
-              isDownloaded={downloadedModels.has(model.id)}
-              isKeepLocal={modelKeepLocal[model.id] ?? false}
-              onSelect={() => handleModelChange(model.id)}
-              onKeepLocalChange={(keepLocal) => onModelKeepLocalChange?.(model.id, keepLocal)}
-              disabled={disabled}
-              getQualityColor={getQualityColor}
-              getQualityIcon={getQualityIcon}
-              getDeviceIcon={getDeviceIcon}
-            />
-          ))}
-        </div>
-      </div>
-
-      {/* All Models (Advanced) */}
-      <div className="mb-4">
-        <button
-          onClick={() => setShowAdvanced(!showAdvanced)}
-          className="w-full py-2 text-xs text-slate-400 hover:text-slate-200 transition-colors flex items-center justify-center gap-1"
-        >
-          {showAdvanced ? '▼' : '▶'} Show All Models ({AVAILABLE_MODELS.length})
-        </button>
-
-        {showAdvanced && (
-          <div className="space-y-2 mt-2">
-            {AVAILABLE_MODELS.filter(model => !model.recommended).map((model) => (
-              <ModelCard
+          {AVAILABLE_MODELS.map((model) => {
+            const isSelected = selectedModel === model.id;
+            const isDownloaded = downloadedModels.has(model.id);
+            const { label: qLabel, cls: qCls } = getQualityBadge(model.quality);
+            return (
+              <div
                 key={model.id}
-                model={model}
-                isSelected={selectedModel === model.id}
-                isDownloaded={downloadedModels.has(model.id)}
-                isKeepLocal={modelKeepLocal[model.id] ?? false}
-                onSelect={() => handleModelChange(model.id)}
-                onKeepLocalChange={(keepLocal) => onModelKeepLocalChange?.(model.id, keepLocal)}
-                disabled={disabled}
-                getQualityColor={getQualityColor}
-                getQualityIcon={getQualityIcon}
-                getDeviceIcon={getDeviceIcon}
-              />
-            ))}
-          </div>
-        )}
-      </div>
-
-    </div>
-  );
-};
-
-// Separate ModelCard component for better organization
-interface ModelCardProps {
-  model: ModelConfig;
-  isSelected: boolean;
-  isDownloaded: boolean;
-  isKeepLocal: boolean;
-  onSelect: () => void;
-  onKeepLocalChange: (keepLocal: boolean) => void;
-  disabled: boolean;
-  getQualityColor: (quality: string) => string;
-  getQualityIcon: (quality: string) => string;
-  getDeviceIcon: (device: string) => string;
-}
-
-const ModelCard: FC<ModelCardProps> = ({
-  model,
-  isSelected,
-  isDownloaded,
-  isKeepLocal,
-  onSelect,
-  onKeepLocalChange,
-  disabled,
-  getQualityColor,
-  getQualityIcon,
-  getDeviceIcon
-}) => {
-  return (
-    <div
-      className={`p-3 rounded-lg border cursor-pointer transition-all duration-200 ${isSelected
-        ? 'border-blue-500 bg-blue-500/10 shadow-md'
-        : 'border-slate-600 bg-slate-700 hover:border-slate-500 hover:bg-slate-600'
-        } ${disabled ? 'cursor-not-allowed opacity-50' : ''}`}
-      onClick={() => !disabled && onSelect()}
-    >
-      <div className="flex items-start justify-between">
-        <div className="flex-1">
-          <div className="flex items-center gap-2 mb-1">
-            <span className="font-medium text-slate-200">{model.name}</span>
-            {model.isDefault && (
-              <span className="px-2 py-0.5 text-xs bg-blue-500 text-white rounded-full">Default</span>
-            )}
-            {model.recommended && (
-              <span className="px-2 py-0.5 text-xs bg-green-500 text-white rounded-full">⭐</span>
-            )}
-            {isDownloaded && (
-              <span className="px-2 py-0.5 text-xs bg-green-500 text-white rounded-full">Downloaded</span>
-            )}
-            <span className={`text-sm ${getQualityColor(model.quality)}`}>
-              {getQualityIcon(model.quality)} {model.quality}
-            </span>
-          </div>
-          <p className="text-xs text-slate-400 mb-2">{model.description}</p>
-          <div className="flex items-center gap-4 text-xs text-slate-500 mb-2">
-            <span>📦 {model.size}</span>
-            <span>🎯 {model.dtype.toUpperCase()}</span>
-            <span>{getDeviceIcon(model.device)} {model.device}</span>
-          </div>
-
-          {/* Keep Local Toggle */}
-          <div className="flex items-center gap-2">
-            <label className="flex items-center gap-2 text-xs text-slate-400 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={isKeepLocal}
-                onChange={(e) => onKeepLocalChange(e.target.checked)}
-                disabled={disabled}
-                className="w-3 h-3 text-blue-600 bg-slate-700 border-slate-600 rounded focus:ring-blue-500 focus:ring-1"
-                onClick={(e) => e.stopPropagation()}
-              />
-              Keep downloaded between refreshes
-            </label>
-          </div>
-        </div>
-        <div className="ml-3">
-          <input
-            type="radio"
-            name="model-selection"
-            value={model.id}
-            checked={isSelected}
-            onChange={() => !disabled && onSelect()}
-            disabled={disabled}
-            className="w-4 h-4 text-blue-600 bg-slate-700 border-slate-600 focus:ring-blue-500 focus:ring-2"
-          />
+                className={`p-3 rounded-lg border cursor-pointer transition-all duration-200 ${isSelected
+                  ? 'border-blue-500 bg-blue-500/10 shadow-md'
+                  : 'border-slate-600 bg-slate-700 hover:border-slate-500 hover:bg-slate-600'
+                  } ${disabled ? 'cursor-not-allowed opacity-50' : ''}`}
+                onClick={() => !disabled && handleModelChange(model.id)}
+              >
+                <div className="flex items-center justify-between gap-2">
+                  {/* Left: name + badges */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1.5 flex-wrap mb-0.5">
+                      <span className="font-medium text-slate-200 text-sm">{model.name}</span>
+                      {model.isDefault && (
+                        <span className="px-1.5 py-0.5 text-xs bg-blue-500 text-white rounded-full">Default</span>
+                      )}
+                      {model.recommended && (
+                        <span className="px-1.5 py-0.5 text-xs bg-green-500/20 text-green-400 border border-green-500/30 rounded-full">⭐ rec</span>
+                      )}
+                      <span className={`px-1.5 py-0.5 text-xs border rounded-full ${qCls}`}>{qLabel}</span>
+                    </div>
+                    <p className="text-xs text-slate-400 mb-1.5 leading-snug">{model.description}</p>
+                    {/* Stats row */}
+                    <div className="flex items-center gap-3 text-xs">
+                      <span className="text-slate-500">📦 {model.size}</span>
+                      <span className="text-slate-500">{model.dtype.toUpperCase()}</span>
+                      {/* Download status — always shown */}
+                      {isDownloaded ? (
+                        <span className="text-emerald-400 font-medium">✓ Cached</span>
+                      ) : (
+                        <span className="text-slate-600">○ Not cached</span>
+                      )}
+                    </div>
+                    {/* Keep local toggle */}
+                    <label className="flex items-center gap-1.5 mt-1.5 text-xs text-slate-400 cursor-pointer" onClick={e => e.stopPropagation()}>
+                      <input
+                        type="checkbox"
+                        checked={modelKeepLocal[model.id] ?? false}
+                        onChange={(e) => onModelKeepLocalChange?.(model.id, e.target.checked)}
+                        disabled={disabled}
+                        className="w-3 h-3 text-blue-600 bg-slate-700 border-slate-600 rounded"
+                      />
+                      Keep cached between refreshes
+                    </label>
+                  </div>
+                  {/* Right: radio */}
+                  <input
+                    type="radio"
+                    name="model-selection"
+                    value={model.id}
+                    checked={isSelected}
+                    onChange={() => !disabled && handleModelChange(model.id)}
+                    disabled={disabled}
+                    className="w-4 h-4 text-blue-600 bg-slate-700 border-slate-600 shrink-0"
+                    onClick={e => e.stopPropagation()}
+                  />
+                </div>
+              </div>
+            );
+          })}
         </div>
       </div>
     </div>

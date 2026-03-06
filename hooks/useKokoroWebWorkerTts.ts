@@ -586,17 +586,27 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
       console.log('▶️ Starting audio playback');
       setIsPlaying(true);
 
-      if (isStreaming && currentTime < synthesizedDuration) {
+      // If we're at (or very near) the end, restart from the beginning
+      const effectiveDuration = isStreaming ? synthesizedDuration : duration;
+      const atEnd = effectiveDuration > 0 && currentTime >= effectiveDuration - 0.3;
+      const startPosition = atEnd ? 0 : currentTime;
+      if (atEnd) {
+        setCurrentTime(0);
+        playbackOffsetRef.current = 0;
+        console.log('🔁 At end — restarting from beginning');
+      }
+
+      if (isStreaming && !atEnd && currentTime < synthesizedDuration) {
         // For streaming mode, restart streaming playback
-        startStreamingFromPosition(currentTime);
+        startStreamingFromPosition(startPosition);
       } else if (completeAudioBuffer) {
-        // Resume complete audio from the last known position instead of restarting
+        // Resume (or restart) complete audio from position
         isPlaybackActiveRef.current = true;
-        playCompleteAudio(currentTime);
+        playCompleteAudio(startPosition);
         setIsPlaying(true);
       }
     }
-  }, [canScrub, isPlaying, currentTime, isStreaming, synthesizedDuration, completeAudioBuffer, startStreamingFromPosition, playCompleteAudio]);
+  }, [canScrub, isPlaying, currentTime, isStreaming, synthesizedDuration, duration, completeAudioBuffer, startStreamingFromPosition, playCompleteAudio]);
 
   // Don't auto-play - let user control playback
   // Audio is ready when completeAudioBuffer is set

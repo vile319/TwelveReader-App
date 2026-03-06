@@ -99,15 +99,6 @@ const Sidebar: FC = () => {
         />
       </div>
 
-      {/* Google Drive Sync */}
-      <div className="mb-6">
-        <button
-          onClick={actions.linkGoogleDrive}
-          className="w-full py-3 rounded-lg border border-sky-500 text-sky-500 font-semibold flex items-center justify-center gap-2 hover:bg-sky-500/10 transition-colors"
-        >
-          {state.googleDriveLinked ? '☁️ Google Drive: Linked' : '☁️ Link Google Drive'}
-        </button>
-      </div>
 
       {/* Donation Button */}
       <div className="mt-auto flex flex-col items-center gap-4">

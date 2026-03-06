@@ -82,12 +82,17 @@ const AudioPlayer: FC = () => {
         <button
           onClick={actions.togglePlayPause}
           className="w-20 h-20 rounded-full bg-blue-600 text-white flex items-center justify-center shadow-xl shadow-blue-900/40 hover:bg-blue-500 hover:scale-110 active:scale-95 transition-all"
-          title={state.audio.isPlaying ? 'Pause' : 'Play'}
+          title={state.audio.isPlaying ? 'Pause' : (safeCurrentTime >= safeDuration - 0.3 && safeDuration > 0 ? 'Restart' : 'Play')}
         >
           {state.audio.isPlaying ? (
             /* Pause icon — two bars */
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-9 h-9">
               <path fillRule="evenodd" d="M6.75 5.25a.75.75 0 0 1 .75-.75H9a.75.75 0 0 1 .75.75v13.5a.75.75 0 0 1-.75.75H7.5a.75.75 0 0 1-.75-.75V5.25zm7.5 0A.75.75 0 0 1 15 4.5h1.5a.75.75 0 0 1 .75.75v13.5a.75.75 0 0 1-.75.75H15a.75.75 0 0 1-.75-.75V5.25z" clipRule="evenodd" />
+            </svg>
+          ) : safeCurrentTime >= safeDuration - 0.3 && safeDuration > 0 ? (
+            /* Restart icon */
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-8 h-8">
+              <path fillRule="evenodd" d="M4.755 10.059a7.5 7.5 0 0 1 12.548-3.364l1.903 1.903h-3.183a.75.75 0 1 0 0 1.5h4.992a.75.75 0 0 0 .75-.75V4.356a.75.75 0 0 0-1.5 0v3.18l-1.9-1.9A9 9 0 0 0 3.306 9.67a.75.75 0 1 0 1.45.388Zm15.408 3.352a.75.75 0 0 0-.919.53 7.5 7.5 0 0 1-12.548 3.364l-1.902-1.903h3.183a.75.75 0 0 0 0-1.5H2.984a.75.75 0 0 0-.75.75v4.992a.75.75 0 0 0 1.5 0v-3.18l1.9 1.9a9 9 0 0 0 15.059-4.035.75.75 0 0 0-.53-.918Z" clipRule="evenodd" />
             </svg>
           ) : (
             /* Play icon */
@@ -116,8 +121,8 @@ const AudioPlayer: FC = () => {
         <span className="font-mono tabular-nums">{actions.formatTime(safeDuration)}</span>
       </div>
 
-      {/* Speed + Download row */}
-      <div className="mt-4 flex items-center justify-between gap-3">
+      {/* Speed + Download + Google Drive row */}
+      <div className="mt-4 flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-2 text-sm text-slate-300">
           <span className="text-slate-500">Speed</span>
           <select
@@ -134,14 +139,27 @@ const AudioPlayer: FC = () => {
           </select>
         </div>
 
-        {state.audio.synthesisComplete && (
+        <div className="flex items-center gap-2">
+          {state.audio.synthesisComplete && (
+            <button
+              onClick={actions.handleDownloadAudio}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 text-sm font-medium transition-colors"
+              title="Download audio as WAV file"
+            >
+              💾 Download WAV
+            </button>
+          )}
           <button
-            onClick={actions.handleDownloadAudio}
-            className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 text-sm font-medium transition-colors"
+            onClick={actions.linkGoogleDrive}
+            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${state.googleDriveLinked
+                ? 'bg-sky-500/20 text-sky-400 border border-sky-500/40'
+                : 'bg-slate-700 hover:bg-slate-600 text-slate-300'
+              }`}
+            title="Link Google Drive to sync your saved texts across devices"
           >
-            💾 Download WAV
+            ☁️ {state.googleDriveLinked ? 'Drive: Linked' : 'Link Drive'}
           </button>
-        )}
+        </div>
       </div>
     </div>
   );

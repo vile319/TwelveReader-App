@@ -440,11 +440,19 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
           });
           return merged;
         });
+        alert(`✅ Google Drive linked! Synced ${remoteSets.length} saved text(s).`);
+      } else {
+        alert('✅ Google Drive linked! Your saved texts will now sync automatically.');
       }
-      alert('Google Drive linked! Your library will now sync.');
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      alert('Failed to link Google Drive. See console for details.');
+      const isPlaceholder = String(err?.message || '').includes('YOUR_GOOGLE_DRIVE_CLIENT_ID') ||
+        String(err).includes('idpiframe');
+      if (isPlaceholder) {
+        alert('⚙️ Google Drive sync is not yet configured for this deployment.\n\nThe developer needs to set up a Google OAuth Client ID. Check ADSENSE_SETUP.md or the project README for instructions.');
+      } else {
+        alert('Failed to link Google Drive. See browser console (F12) for details.\n\n' + (err?.message || String(err)));
+      }
     }
   };
 
