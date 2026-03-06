@@ -824,9 +824,12 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
     }
   }, [onError, detectWebGPU]);
 
-  // Initialize when enabled flips true or model configuration changes
+  // Initialize when enabled flips true or model configuration changes.
+  // Cloud/serverless mode initializes immediately without needing model download consent.
+  // Local WASM/WebGPU mode requires explicit user consent (enabled flag).
   useEffect(() => {
-    if (enabled) {
+    const isCloudMode = !preferredDevice || preferredDevice === 'serverless';
+    if (isCloudMode || enabled) {
       initializeTts();
     }
   }, [enabled, selectedModel, preferredDevice, preferredDtype, initializeTts]);
