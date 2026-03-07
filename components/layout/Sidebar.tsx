@@ -7,7 +7,7 @@ import { cn } from '../../utils/cn';
 const Sidebar: FC = () => {
   const { state, actions, tts } = useAppContext();
   const [showSettings, setShowSettings] = useState(false);
-  const [showDriveMenu, setShowDriveMenu] = useState(false);
+  const [showUserMenu, setShowUserMenu] = useState(false);
 
   return (
     <>
@@ -54,22 +54,24 @@ const Sidebar: FC = () => {
         {/* Right: Actions */}
         <div className="flex items-center gap-4">
 
-          {/* Sign In / Google Account */}
+          {/* Identity / Sign In */}
           <div className="relative">
             <button
-              onClick={() => state.googleDriveLinked ? setShowDriveMenu(!showDriveMenu) : actions.linkGoogleDrive()}
+              onClick={() => state.userEmail ? setShowUserMenu(!showUserMenu) : actions.loginUser()}
               className={cn(
                 "flex items-center gap-2 px-4 py-2 rounded-full font-medium text-sm transition-all border",
-                state.googleDriveLinked
-                  ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20 hover:bg-emerald-500/20"
-                  : "bg-slate-900 border-slate-700 text-slate-300 hover:text-white hover:border-slate-500"
+                state.userEmail
+                  ? "bg-slate-800 text-slate-200 border-slate-700 hover:bg-slate-700"
+                  : "bg-indigo-600 border-indigo-500 text-white hover:bg-indigo-500 hover:border-indigo-400 shadow-md shadow-indigo-900/20"
               )}
-              title="Manage Google Account Connection"
+              title="Manage Account"
             >
-              {state.googleDriveLinked ? (
+              {state.userEmail ? (
                 <>
-                  <div className="w-2 h-2 rounded-full bg-emerald-500" />
-                  Google Account
+                  <div className="w-5 h-5 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-500 flex items-center justify-center text-white text-xs font-bold uppercase overflow-hidden ring-2 ring-slate-800">
+                    {state.userEmail.charAt(0)}
+                  </div>
+                  {state.isPremium && <span className="ml-1 text-xs text-amber-400 font-bold tracking-wider">PRO</span>}
                 </>
               ) : (
                 <>
@@ -79,27 +81,36 @@ const Sidebar: FC = () => {
               )}
             </button>
 
-            {/* Dropdown Menu */}
-            {showDriveMenu && state.googleDriveLinked && (
+            {/* User Dropdown Menu */}
+            {showUserMenu && state.userEmail && (
               <>
-                <div className="fixed inset-0 z-40" onClick={() => setShowDriveMenu(false)} />
-                <div className="absolute top-full mt-2 right-0 w-48 bg-slate-900 border border-slate-800 rounded-xl shadow-2xl py-1 z-50 animate-in fade-in slide-in-from-top-2">
-                  <div className="px-3 py-2 border-b border-slate-800/50 mb-1">
-                    <p className="text-xs font-semibold text-slate-500 uppercase tracking-widest text-center">Sync Options</p>
+                <div className="fixed inset-0 z-40" onClick={() => setShowUserMenu(false)} />
+                <div className="absolute top-full mt-2 right-0 w-56 bg-slate-900 border border-slate-800 rounded-xl shadow-2xl py-1 z-50 animate-in fade-in slide-in-from-top-2">
+                  <div className="px-4 py-3 border-b border-slate-800/50 mb-1 flex flex-col items-center">
+                    <p className="text-sm font-semibold text-slate-200 truncate w-full text-center">{state.userEmail}</p>
+                    {state.isPremium ? (
+                      <span className="text-xs text-amber-400 font-bold tracking-widest uppercase mt-1">Premium Member</span>
+                    ) : (
+                      <span className="text-xs text-slate-500 mt-1">Free Tier</span>
+                    )}
                   </div>
+
+                  {!state.isPremium && (
+                    <button
+                      onClick={() => { setShowUserMenu(false); alert('Stripe Checkout coming soon...'); }}
+                      className="w-full text-left px-4 py-2 hover:bg-slate-800 transition-colors text-amber-400 hover:text-amber-300 text-sm flex items-center gap-2 font-medium"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4"><path fillRule="evenodd" d="M10.868 2.884c-.321-.772-1.415-.772-1.736 0l-1.83 4.401-4.753.381c-.833.067-1.171 1.107-.536 1.651l3.62 3.102-1.106 4.637c-.194.813.691 1.456 1.405 1.02L10 15.591l4.069 2.485c.713.436 1.598-.207 1.404-1.02l-1.106-4.637 3.62-3.102c.635-.544.297-1.584-.536-1.65l-4.752-.382-1.831-4.401Z" clipRule="evenodd" /></svg>
+                      Upgrade to Premium
+                    </button>
+                  )}
+
                   <button
-                    onClick={() => { setShowDriveMenu(false); actions.forceSyncDrive(); }}
-                    className="w-full text-left px-4 py-2 hover:bg-slate-800 transition-colors text-slate-200 text-sm flex items-center gap-2"
+                    onClick={() => { setShowUserMenu(false); actions.logoutUser(); }}
+                    className="w-full text-left px-4 py-2 hover:bg-red-500/10 text-red-400 hover:text-red-300 transition-colors text-sm flex items-center gap-2 mt-1 border-t border-slate-800 pt-2"
                   >
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" /></svg>
-                    Force Sync Now
-                  </button>
-                  <button
-                    onClick={() => { setShowDriveMenu(false); actions.disconnectDrive(); }}
-                    className="w-full text-left px-4 py-2 hover:bg-red-500/10 text-red-400 hover:text-red-300 transition-colors text-sm flex items-center gap-2"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M22 10.5h-6m-2.25-4.125a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zM4 19.235v-.11a6.375 6.375 0 0112.75 0v.109A12.318 12.318 0 0110.374 21c-2.331 0-4.512-.645-6.374-1.766z" /></svg>
-                    Disconnect Account
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15m3 0l3-3m0 0l-3-3m3 3H9" /></svg>
+                    Sign Out
                   </button>
                 </div>
               </>
@@ -177,20 +188,23 @@ const Sidebar: FC = () => {
         </div>
       )}
 
-      {/* Global Error Toast */}
-      {state.error && (
-        <div className="fixed bottom-6 right-6 z-50 bg-red-900/90 backdrop-blur border border-red-500 text-red-100 p-4 rounded-xl shadow-2xl max-w-sm animate-in slide-in-from-bottom">
-          <div className="flex justify-between items-start gap-4">
-            <div>
-              <h4 className="font-semibold text-red-50 mb-1">{state.error.title}</h4>
-              <p className="text-sm text-red-200 leading-snug">{state.error.message}</p>
-            </div>
-            <button onClick={() => actions.setError(null)} className="text-red-400 hover:text-white">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5">
-                <path d="M6.28 5.22a.75.75 0 0 0-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 1 0 1.06 1.06L10 11.06l3.72 3.72a.75.75 0 1 0 1.06-1.06L11.06 10l3.72-3.72a.75.75 0 0 0-1.06-1.06L10 8.94 6.28 5.22Z" />
-              </svg>
-            </button>
+      {/* Global Toast Notification */}
+      {state.toast && (
+        <div className={cn(
+          "fixed bottom-6 right-6 z-50 backdrop-blur p-4 rounded-xl shadow-2xl max-w-sm animate-in slide-in-from-bottom flex justify-between items-start gap-4 border",
+          state.toast.type === 'error' ? "bg-red-950/90 border-red-500/50 text-red-100 shadow-red-900/20" :
+            state.toast.type === 'success' ? "bg-emerald-950/90 border-emerald-500/50 text-emerald-100 shadow-emerald-900/20" :
+              "bg-slate-900/90 border-indigo-500/50 text-indigo-100 shadow-indigo-900/20"
+        )}>
+          <div>
+            {state.toast.title && <h4 className="font-semibold mb-1 text-white">{state.toast.title}</h4>}
+            <p className="text-sm opacity-90 leading-snug">{state.toast.message}</p>
           </div>
+          <button onClick={() => actions.setToast(null)} className="opacity-70 hover:opacity-100 hover:text-white transition-opacity">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5">
+              <path d="M6.28 5.22a.75.75 0 0 0-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 1 0 1.06 1.06L10 11.06l3.72 3.72a.75.75 0 1 0 1.06-1.06L11.06 10l3.72-3.72a.75.75 0 0 0-1.06-1.06L10 8.94 6.28 5.22Z" />
+            </svg>
+          </button>
         </div>
       )}
     </>

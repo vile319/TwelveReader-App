@@ -1,8 +1,9 @@
 /// <reference types="react" />
 
-export interface AppError {
-  title: string;
+export interface AppToast {
+  title?: string;
   message: string;
+  type: 'success' | 'info' | 'error';
 }
 
 export interface Voice {
@@ -77,7 +78,7 @@ export interface AppState {
 
   // UI state
   selectedVoice: string;
-  error: AppError | null;
+  toast: AppToast | null;
   isReading: boolean;
   currentSentence: string;
 
@@ -98,6 +99,10 @@ export interface AppState {
   currentSetId: string | null;
   googleDriveLinked: boolean;
   isSyncingToDrive: boolean;
+
+  // 👤 Identity / Stripe
+  userEmail: string | null;
+  isPremium: boolean;
 
   // Progress map
   readingProgress: Record<string, ReadingProgressEntry>;
@@ -144,7 +149,7 @@ export interface AppContextType {
     setModelKeepLocal: (modelId: string, keepLocal: boolean) => void;
 
     // UI actions
-    setError: (error: AppError | null) => void;
+    setToast: (toast: AppToast | null) => void;
     setIsSeekingHover: (hover: boolean) => void;
     setHoverTime: (time: number) => void;
     setIsDragging: (dragging: boolean) => void;
@@ -176,6 +181,10 @@ export interface AppContextType {
     linkGoogleDrive: () => void;
     disconnectDrive: () => void;
     forceSyncDrive: () => Promise<void>;
+
+    // Identity
+    loginUser: () => void;
+    logoutUser: () => void;
 
     // Scroll progress
     updateScrollPosition: (scrollTop: number) => void;

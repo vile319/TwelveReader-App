@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import useKokoroWebWorkerTts from '../hooks/useKokoroWebWorkerTts';
 import { BRAND_NAME } from '../utils/branding';
-import { AppContextType, AppState, AppError, SampleText, TextSet } from '../types';
+import { AppContextType, AppState, AppToast, SampleText, TextSet } from '../types';
 import { driveSync } from '../utils/GoogleDriveSync';
 import { localDB } from '../utils/localDatabase';
 import { modelManager } from '../utils/modelManager';
@@ -46,7 +46,16 @@ export const sampleTexts: SampleText[] = [
 export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
   // Core state
   const [selectedVoice, setSelectedVoice] = useState('af_heart');
-  const [error, setError] = useState<AppError | null>(null);
+  const [toast, setToast] = useState<AppToast | null>(null);
+
+  // Auto-dismiss short-lived toasts
+  useEffect(() => {
+    if (toast && toast.type !== 'error') {
+      const timer = setTimeout(() => setToast(null), 4000);
+      return () => clearTimeout(timer);
+    }
+  }, [toast]);
+
   // Pre-populate with the first sample text so the user can generate audio right away
   const [inputText, setInputText] = useState<string>(() => sampleTexts[0].text);
   const [isReading, setIsReading] = useState(false);
@@ -112,6 +121,14 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
   const [googleDriveLinked, setGoogleDriveLinked] = useState(false);
   const [isSyncingToDrive, setIsSyncingToDrive] = useState<boolean>(false);
 
+  // 👤 Identity / Stripe
+  const [userEmail, setUserEmail] = useState<string | null>(() => {
+    try {
+      return localStorage.getItem('twelvereader-signed-in-email');
+    } catch { return null; }
+  });
+  const [isPremium, setIsPremium] = useState<boolean>(false);
+
   // Reading progress map { setId: { audioTime: number; scrollTop: number } }
   const [readingProgress, setReadingProgress] = useState<Record<string, { audioTime: number; scrollTop: number }>>(() => {
     try {
@@ -123,9 +140,13 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
 
   const [showHelp, setShowHelp] = useState(false);
 
+  const handleTtsError = React.useCallback((t: { title: string; message: string }) => {
+    setToast({ title: t.title, message: t.message, type: 'error' });
+  }, []);
+
   // Initialize TTS hook
   const tts = useKokoroWebWorkerTts({
-    onError: setError,
+    onError: handleTtsError,
     enabled: modelAccepted,
     selectedModel,
     preferredDevice: preferredDevice as 'webgpu' | 'wasm' | 'cpu' | 'serverless',
@@ -137,7 +158,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     const textToRead = (providedText ?? inputText).trim();
 
     if (!textToRead) {
-      setError({ title: 'No Text', message: 'Please enter some text or upload a PDF to read.' });
+      setToast({ title: 'No Text', message: 'Please enter some text or upload a PDF to read.', type: 'info' });
       return;
     }
 
@@ -178,13 +199,13 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
         })
         .catch(error => {
           console.error('❌ Error during synthesis:', error);
-          setError({ title: 'Reading Error', message: 'Failed to synthesize the full text. Check console.' });
+          setToast({ title: 'Reading Error', message: 'Failed to synthesize the full text. Check console.', type: 'error' });
           setIsGenerating(false); // Reset isGenerating on error
         });
 
     } catch (error) {
       console.error('❌ Error initializing reading:', error);
-      setError({ title: 'Reading Error', message: 'Failed to start reading. Please try again.' });
+      setToast({ title: 'Reading Error', message: 'Failed to start reading. Please try again.', type: 'error' });
       setIsReading(false);
       setCurrentSentence('');
       setIsGenerating(false); // Reset isGenerating on error
@@ -220,7 +241,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     setInputText(text);
 
     // Reset error state (if any)
-    setError(null);
+    setToast(null);
   };
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -236,13 +257,13 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     if (isPDF) {
       setUploadedPDF(file);
       setIsExtractingPDF(true);
-      setError(null);
+      setToast(null);
     } else if (isEPUB) {
       setIsExtractingPDF(true);
-      setError(null);
+      setToast(null);
       extractEpubText(file);
     } else {
-      setError({ title: 'Invalid File', message: 'Please upload a PDF or EPUB file.' });
+      setToast({ title: 'Invalid File', message: 'Please upload a PDF or EPUB file.', type: 'error' });
     }
   };
 
@@ -290,7 +311,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       }
     } catch (error) {
       console.error('❌ EPUB extraction failed:', error);
-      setError({ title: 'EPUB Error', message: 'Unable to extract text from this EPUB. It might be protected or contain unsupported formatting.' });
+      setToast({ title: 'EPUB Error', message: 'Unable to extract text from this EPUB. It might be protected or contain unsupported formatting.', type: 'error' });
     } finally {
       setIsExtractingPDF(false);
     }
@@ -299,19 +320,19 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
   const handlePDFTextExtracted = (text: string) => {
     if (text.trim()) {
       setInputText(text);
-      setError(null);
+      setToast(null);
       setIsExtractingPDF(false);
       setUploadedPDF(null);
       console.log('PDF text extracted - press Play to start TTS');
     } else {
-      setError({ title: 'PDF Error', message: 'Unable to extract text from this PDF. It might be a scanned PDF or password-protected.' });
+      setToast({ title: 'PDF Error', message: 'Unable to extract text from this PDF. It might be a scanned PDF or password-protected.', type: 'error' });
     }
     setIsExtractingPDF(false);
     setUploadedPDF(null); // Clear PDF after extraction
   };
 
   const handlePDFError = (errorMsg: string) => {
-    setError({ title: 'PDF Error', message: errorMsg });
+    setToast({ title: 'PDF Error', message: errorMsg, type: 'error' });
     setIsExtractingPDF(false);
     setUploadedPDF(null);
   };
@@ -397,11 +418,12 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       setGoogleDriveLinked(false);
       localStorage.removeItem('twelvereader-drive-linked');
       driveSync.setAccessToken('');
-      alert('Google Drive session expired. Please sign in again to resume automatic syncing.');
+      setToast({ title: 'Sync Paused', message: 'Google Drive session expired. Please sign in again to resume automatic syncing.', type: 'error' });
     } else {
-      setError({
+      setToast({
         title: 'Google Drive Sync Failed',
-        message: `Failed to sync. Your text is saved locally, but could not be backed up to Drive. Error: ${e instanceof Error ? e.message : String(e)}`
+        message: `Failed to sync. Your text is saved locally, but could not be backed up to Drive. Error: ${e instanceof Error ? e.message : String(e)}`,
+        type: 'error'
       });
     }
   };
@@ -591,9 +613,9 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
               });
               return merged;
             });
-            alert(`✅ Google Drive linked! Synced ${remoteSets.length} saved text(s).`);
+            setToast({ title: 'Account Linked', message: `Synced ${remoteSets.length} saved text(s) from Google Drive.`, type: 'success' });
           } else {
-            alert('✅ Google Drive linked! Your saved texts will now sync automatically to your Google account.');
+            setToast({ title: 'Account Linked', message: 'Your saved texts will now sync automatically to Google Drive.', type: 'success' });
           }
 
           if (remoteProgress && Object.keys(remoteProgress).length > 0) {
@@ -608,11 +630,11 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
             });
           }
         } else {
-          alert('✅ Google Drive linked! Your saved texts will now sync automatically to your Google account.');
+          setToast({ title: 'Account Linked', message: 'Your saved texts will now sync automatically to Google Drive.', type: 'success' });
         }
       } catch (err: any) {
         console.error(err);
-        alert('Failed to initialize Google Drive folder. See browser console for details.\n\n' + (err?.message || String(err)));
+        setToast({ title: 'Link Failed', message: 'Failed to initialize Google Drive folder. See browser console for details.', type: 'error' });
         setGoogleDriveLinked(false);
         localStorage.removeItem('twelvereader-drive-linked');
       } finally {
@@ -623,9 +645,9 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       console.error('Login Failed:', errorResponse);
       const errStr = String(errorResponse);
       if (errStr.includes('YOUR_GOOGLE_DRIVE_CLIENT_ID') || errStr.includes('idpiframe') || errStr.includes('idpiframe_initialization_failed')) {
-        alert('⚙️ Google Drive sync is not yet configured for this deployment.\n\nThe developer needs to set up a Google OAuth Client ID in the .env file. Check README for instructions.');
+        setToast({ title: 'Setup Required', message: 'Google Drive sync is not yet configured for this deployment. Developer must add Client ID.', type: 'error' });
       } else {
-        alert('Failed to link Google Drive. Ensure you have an active internet connection and try again.');
+        setToast({ title: 'Link Failed', message: 'Ensure you have an active internet connection and try again.', type: 'error' });
       }
     }
   });
@@ -688,6 +710,47 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     loginToDrive();
   };
 
+  // -------- Identity (Stripe / Auth) --------
+  const loginUser = useGoogleLogin({
+    scope: 'email profile',
+    onSuccess: async (tokenResponse: any) => {
+      try {
+        const res = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+          headers: { Authorization: `Bearer ${tokenResponse.access_token}` },
+        });
+        if (!res.ok) throw new Error('Failed to fetch user info');
+        const data = await res.json();
+        if (data && data.email) {
+          setUserEmail(data.email);
+          localStorage.setItem('twelvereader-signed-in-email', data.email);
+          // TODO: Check Stripe API here
+          // setIsPremium(true) if valid
+          setToast({ title: 'Signed In', message: `Successfully signed in as ${data.email}`, type: 'success' });
+        }
+      } catch (err) {
+        console.error("Identity login failed:", err);
+        setToast({ title: 'Sign In Failed', message: 'Failed to sign in. Please try again.', type: 'error' });
+        setUserEmail(null);
+        localStorage.removeItem('twelvereader-signed-in-email');
+      }
+    },
+    onError: (errorResponse: any) => {
+      console.error('Login Failed:', errorResponse);
+      const errStr = String(errorResponse);
+      if (errStr.includes('YOUR_GOOGLE_DRIVE_CLIENT_ID') || errStr.includes('idpiframe')) {
+        setToast({ title: 'Setup Required', message: 'Sign in configuration is missing on this deployment.', type: 'error' });
+      } else {
+        setToast({ title: 'Sign In Failed', message: 'Ensure you have an active internet connection and try again.', type: 'error' });
+      }
+    }
+  });
+
+  const logoutUser = () => {
+    setUserEmail(null);
+    setIsPremium(false);
+    localStorage.removeItem('twelvereader-signed-in-email');
+  };
+
   // Sync to Drive whenever savedTextSets change
   useEffect(() => {
     (async () => {
@@ -713,16 +776,16 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
 
   const forceSyncDrive = async () => {
     if (!googleDriveLinked || !driveSync.hasToken()) {
-      alert('Google Drive is not linked.');
+      setToast({ message: 'Google Drive is not linked.', type: 'error' });
       return;
     }
     setIsSyncingToDrive(true);
     try {
       await driveSync.uploadSyncData(savedTextSets, readingProgress);
-      alert('✅ Force Sync Complete: All texts backed up to Google Drive.');
+      setToast({ title: 'Sync Complete', message: 'All texts backed up to Google Drive.', type: 'success' });
     } catch (e) {
       handleDriveError(e, 'Force Sync');
-      alert('❌ Sync failed. Please check your connection and try again.');
+      setToast({ title: 'Sync Failed', message: 'Please check your connection and try again.', type: 'error' });
     } finally {
       setIsSyncingToDrive(false);
     }
@@ -813,7 +876,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       modelKeepLocal,
     },
     selectedVoice,
-    error,
+    toast,
     isReading,
     currentSentence,
     isSeekingHover,
@@ -826,6 +889,8 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     currentSetId,
     googleDriveLinked,
     isSyncingToDrive,
+    userEmail,
+    isPremium,
     readingProgress,
     generationProgress,
     isGenerating,
@@ -863,7 +928,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
         setModelKeepLocal((prev: Record<string, boolean>) => ({ ...prev, [modelId]: keepLocal }));
         modelManager.setModelKeepLocal(modelId, keepLocal);
       },
-      setError,
+      setToast,
       setIsSeekingHover,
       setHoverTime,
       setIsDragging,
@@ -887,6 +952,9 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       linkGoogleDrive,
       disconnectDrive,
       forceSyncDrive,
+      // Identity
+      loginUser,
+      logoutUser,
       updateScrollPosition,
     },
     tts,
