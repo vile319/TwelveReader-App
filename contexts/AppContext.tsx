@@ -767,11 +767,10 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
   }, [savedTextSets, googleDriveLinked]);
 
   const disconnectDrive = () => {
-    if (confirm('Disconnect from Google Drive? Your texts will no longer sync automatically.')) {
-      setGoogleDriveLinked(false);
-      localStorage.removeItem('twelvereader-drive-linked');
-      driveSync.setAccessToken('');
-    }
+    setGoogleDriveLinked(false);
+    localStorage.removeItem('twelvereader-drive-linked');
+    driveSync.setAccessToken('');
+    setToast({ title: 'Drive Unlinked', message: 'Your texts will no longer sync automatically.', type: 'info' });
   };
 
   const forceSyncDrive = async () => {

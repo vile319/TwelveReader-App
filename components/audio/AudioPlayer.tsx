@@ -1,10 +1,20 @@
 import type React from 'react';
-import { type FC } from 'react';
+import { type FC, useState, useEffect } from 'react';
 import { useAppContext } from '../../contexts/AppContext';
 import { cn } from '../../utils/cn';
 
 const AudioPlayer: FC = () => {
   const { state, actions } = useAppContext();
+  const [showDriveMenu, setShowDriveMenu] = useState(false);
+
+  // Close drive menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = () => {
+      if (showDriveMenu) setShowDriveMenu(false);
+    };
+    document.addEventListener('click', handleClickOutside);
+    return () => document.removeEventListener('click', handleClickOutside);
+  }, [showDriveMenu]);
 
   // If there's no text and no audio, don't show the player to keep UI clean
   if (!state.inputText.trim() && !state.audio.canScrub && !state.isReading) {
@@ -159,32 +169,63 @@ const AudioPlayer: FC = () => {
             Download
           </button>
 
-          <button
-            onClick={actions.linkGoogleDrive}
-            disabled={state.isSyncingToDrive}
-            className={cn(
-              'px-3 py-1.5 rounded-full transition-colors relative flex items-center gap-1.5 text-sm font-medium',
-              state.googleDriveLinked ? 'text-emerald-400 bg-emerald-500/10 border border-emerald-500/20' : 'text-slate-400 hover:text-white hover:bg-slate-800'
+          <div className="relative" onClick={(e) => e.stopPropagation()}>
+            <button
+              onClick={() => {
+                if (state.googleDriveLinked) setShowDriveMenu(!showDriveMenu);
+                else actions.linkGoogleDrive();
+              }}
+              disabled={state.isSyncingToDrive}
+              className={cn(
+                'px-3 py-1.5 rounded-full transition-colors relative flex items-center gap-1.5 text-sm font-medium',
+                state.googleDriveLinked ? 'text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 hover:bg-emerald-500/20' : 'text-slate-400 hover:text-white hover:bg-slate-800'
+              )}
+              title={state.googleDriveLinked ? 'Manage Google Drive Sync' : 'Link Google Drive'}
+            >
+              {state.isSyncingToDrive ? (
+                <>
+                  <svg className="animate-spin h-4 w-4 text-emerald-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                  Syncing...
+                </>
+              ) : state.googleDriveLinked ? (
+                <>
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4"><path fillRule="evenodd" d="M19.916 4.626a.75.75 0 0 1 .208 1.04l-9 13.5a.75.75 0 0 1-1.154.114l-6-6a.75.75 0 0 1 1.06-1.06l5.353 5.353 8.493-12.74a.75.75 0 0 1 1.04-.207Z" clipRule="evenodd" /></svg>
+                  Drive Synced
+                </>
+              ) : (
+                <>
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M12 16.5V9.75m0 0 3 3m-3-3-3 3M6.75 19.5a4.5 4.5 0 0 1-1.41-8.775 5.25 5.25 0 0 1 10.233-2.33 3 3 0 0 1 3.758 3.848A3.752 3.752 0 0 1 18 19.5H6.75Z" /></svg>
+                  Link Drive
+                </>
+              )}
+            </button>
+
+            {showDriveMenu && state.googleDriveLinked && (
+              <div className="absolute bottom-full right-0 mb-2 w-48 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl py-1 z-50 animate-in slide-in-from-bottom-2 fade-in duration-200">
+                <button
+                  onClick={() => {
+                    actions.forceSyncDrive();
+                    setShowDriveMenu(false);
+                  }}
+                  className="w-full text-left px-4 py-2 hover:bg-slate-800 text-slate-300 hover:text-white transition-colors text-sm flex items-center gap-2"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" /></svg>
+                  Force Sync Now
+                </button>
+                <div className="h-px bg-slate-800 my-1"></div>
+                <button
+                  onClick={() => {
+                    actions.disconnectDrive();
+                    setShowDriveMenu(false);
+                  }}
+                  className="w-full text-left px-4 py-2 hover:bg-red-500/10 text-red-400 hover:text-red-300 transition-colors text-sm flex items-center gap-2"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M22 10.5h-6m-2.25-4.125a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zM4 19.235v-.11a6.375 6.375 0 0112.75 0v.109A12.318 12.318 0 0110.374 21c-2.331 0-4.512-.645-6.374-1.766z" /></svg>
+                  Disconnect Drive
+                </button>
+              </div>
             )}
-            title={state.googleDriveLinked ? 'Manage Google Drive Sync' : 'Link Google Drive'}
-          >
-            {state.isSyncingToDrive ? (
-              <>
-                <svg className="animate-spin h-4 w-4 text-emerald-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-                Syncing...
-              </>
-            ) : state.googleDriveLinked ? (
-              <>
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4"><path fillRule="evenodd" d="M19.916 4.626a.75.75 0 0 1 .208 1.04l-9 13.5a.75.75 0 0 1-1.154.114l-6-6a.75.75 0 0 1 1.06-1.06l5.353 5.353 8.493-12.74a.75.75 0 0 1 1.04-.207Z" clipRule="evenodd" /></svg>
-                Drive Synced
-              </>
-            ) : (
-              <>
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M12 16.5V9.75m0 0 3 3m-3-3-3 3M6.75 19.5a4.5 4.5 0 0 1-1.41-8.775 5.25 5.25 0 0 1 10.233-2.33 3 3 0 0 1 3.758 3.848A3.752 3.752 0 0 1 18 19.5H6.75Z" /></svg>
-                Link Drive
-              </>
-            )}
-          </button>
+          </div>
         </div>
 
       </div>

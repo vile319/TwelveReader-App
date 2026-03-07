@@ -191,7 +191,7 @@ const Sidebar: FC = () => {
       {/* Global Toast Notification */}
       {state.toast && (
         <div className={cn(
-          "fixed bottom-6 right-6 z-50 backdrop-blur p-4 rounded-xl shadow-2xl max-w-sm animate-in slide-in-from-bottom flex justify-between items-start gap-4 border",
+          "fixed top-6 right-6 z-50 backdrop-blur p-4 rounded-xl shadow-2xl max-w-sm animate-in slide-in-from-top flex justify-between items-start gap-4 border",
           state.toast.type === 'error' ? "bg-red-950/90 border-red-500/50 text-red-100 shadow-red-900/20" :
             state.toast.type === 'success' ? "bg-emerald-950/90 border-emerald-500/50 text-emerald-100 shadow-emerald-900/20" :
               "bg-slate-900/90 border-indigo-500/50 text-indigo-100 shadow-indigo-900/20"

@@ -3,7 +3,6 @@ import React, { useState, useCallback, useRef, useEffect } from 'react';
 // Touch the default import to avoid TS6133 (React might still be needed by JSX in future refactor)
 void React;
 import { KokoroTTS } from 'kokoro-js';
-import { AppError } from '../types';
 import { configureOnnxRuntimeForIOS } from '../utils/onnxIosConfig';
 
 // === HuggingFace Space TTS API URL ===
@@ -38,7 +37,7 @@ if (typeof window !== 'undefined') {
 }
 
 interface UseKokoroWebWorkerTtsProps {
-  onError: (error: AppError) => void;
+  onError: (error: { title: string; message: string }) => void;
   enabled?: boolean; // if false, delay model initialization
   selectedModel?: string; // New: selected model ID
   preferredDevice?: 'webgpu' | 'wasm' | 'cpu' | 'serverless'; // New: preferred device
@@ -881,12 +880,12 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
           substr.lastIndexOf(', ')
         );
 
-        if (lastPunc > 20) {
+        if (lastPunc > 300) {
           endIndex = currentIndex + lastPunc + 1; // Include the punctuation
         } else if (/\S/.test(text[endIndex])) {
           // Fallback to word boundary
           const lastSpace = text.lastIndexOf(' ', endIndex);
-          if (lastSpace > currentIndex + 20) {
+          if (lastSpace > currentIndex + 250) {
             endIndex = lastSpace;
           }
         }
@@ -938,8 +937,8 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
     try {
       console.log(`📚 Processing text (${text.length} characters)`);
 
-      // First chunk is much smaller (e.g. 80 chars) to ensure instant playback streaming
-      const chunks = chunkText(text, 300, 80);
+      // Using larger chunks (600 max, 300 min punctuation cut) for better flow
+      const chunks = chunkText(text, 600, 600);
       console.log(`📝 Split into ${chunks.length} chunks for processing`);
 
       // Process all chunks but in smaller batches to prevent stack overflow
@@ -1190,6 +1189,12 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
       // Stop streaming playback before switching to complete mode
       const wasPlaying = isPlaybackActiveRef.current;
       isPlaybackActiveRef.current = false;
+
+      // Stop any currently scheduled streaming audio nodes to prevent overlap with the complete buffer
+      scheduledSourceNodesRef.current.forEach(node => {
+        try { node.stop(); } catch (e) { }
+      });
+      scheduledSourceNodesRef.current = [];
 
       // Stop any current streaming audio source
       if (completeAudioSourceRef.current) {
