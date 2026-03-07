@@ -198,6 +198,7 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
   const streamingAudioRef = useRef<Float32Array[]>([]);
   const streamingStartTimeRef = useRef<number>(0);
   const scheduledSourceNodesRef = useRef<AudioBufferSourceNode[]>([]);
+  const streamingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Complete list of all Kokoro voices from Hugging Face
   const voices = [
@@ -299,6 +300,11 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
   // Start streaming playback from a specific position
   const startStreamingFromPosition = useCallback(async (startTime: number = 0) => {
     if (isPlaybackActiveRef.current) return;
+
+    if (streamingTimeoutRef.current) {
+      clearTimeout(streamingTimeoutRef.current);
+      streamingTimeoutRef.current = null;
+    }
 
     console.log(`🎵 Starting streaming playback from ${startTime.toFixed(2)}s`);
     isPlaybackActiveRef.current = true;
@@ -416,7 +422,10 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
     if (isPlaybackActiveRef.current) {
       if (currentSynthesisRef.current && !synthesisComplete) {
         // Still synthesizing, check for new chunks shortly
-        setTimeout(() => {
+        if (streamingTimeoutRef.current) {
+          clearTimeout(streamingTimeoutRef.current);
+        }
+        streamingTimeoutRef.current = setTimeout(() => {
           if (isPlaybackActiveRef.current) {
             playStreamingChunks(nextStartIndex, 0, nextPlayTime);
           }
@@ -576,6 +585,11 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
         try { node.stop(); } catch (e) { }
       });
       scheduledSourceNodesRef.current = [];
+
+      if (streamingTimeoutRef.current) {
+        clearTimeout(streamingTimeoutRef.current);
+        streamingTimeoutRef.current = null;
+      }
 
       // Clear progress updates when paused
       if (progressIntervalRef.current) {
@@ -920,6 +934,12 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
     audioBufferRef.current = [];
     streamingAudioRef.current = [];
     isPlaybackActiveRef.current = false;
+
+    if (streamingTimeoutRef.current) {
+      clearTimeout(streamingTimeoutRef.current);
+      streamingTimeoutRef.current = null;
+    }
+
     setCompleteAudioBuffer(null);
     setCurrentTimeBoth(0);
     setDurationBoth(0);
