@@ -161,6 +161,7 @@ export interface AppContextType {
     skipBackward: () => void;
     getAudioBlob: () => Blob | null;
     setPlaybackRate: (rate: number) => void;
+    primeAudioContext: () => void;
 
     // Library actions
     saveCurrentTextSet: (title?: string) => void;
@@ -196,5 +197,6 @@ export interface AppContextType {
     isReady: boolean;
     setPlaybackRate: (rate: number) => void;
     playbackRate: number;
+    primeAudioContext: () => void;
   };
 }

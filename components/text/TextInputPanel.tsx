@@ -88,6 +88,7 @@ const TextInputPanel: FC = () => {
       <div className="flex justify-center mb-4">
         <button
           onClick={() => {
+            actions.primeAudioContext();
             if (state.isReading) {
               actions.handleStopReading();
             } else {
@@ -102,15 +103,15 @@ const TextInputPanel: FC = () => {
           )}
         >
           {state.audio.isLoading ? '⏳ Loading Model...' :
-           state.isReading ? `⏹️ Stop (${state.generationProgress}%)` :
-           state.audio.canScrub ? '🔄 Regenerate' :
-           '▶️ Generate Audio'}
+            state.isReading ? `⏹️ Stop (${state.generationProgress}%)` :
+              state.audio.canScrub ? '🔄 Regenerate' :
+                '▶️ Generate Audio'}
         </button>
       </div>
-      
+
       {/* Content Display */}
       {renderContent()}
-      
+
       {/* Sample Texts */}
       <div className="mt-4">
         <div className="text-sm font-semibold text-slate-200 mb-3">📚 Sample Texts</div>

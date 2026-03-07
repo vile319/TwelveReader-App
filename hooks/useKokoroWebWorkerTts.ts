@@ -1676,6 +1676,22 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
     };
   }, []);
 
+  // NEW: Expose a primeAudioContext function to be called explicitly by the UI
+  // inside synchronous event handlers (e.g. onClick) to satisfy iOS Safari requirements.
+  const primeAudioContext = useCallback(() => {
+    try {
+      if (!audioContextRef.current) {
+        audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+      }
+      if (audioContextRef.current.state === 'suspended') {
+        audioContextRef.current.resume();
+      }
+      console.log('🔊 AudioContext explicitly primed by UI interaction');
+    } catch (e) {
+      console.warn('⚠️ Unable to prime AudioContext:', e);
+    }
+  }, []);
+
   const setPlaybackRate = useCallback((rate: number) => {
     if (rate <= 0) return;
     playbackRateRef.current = rate;
@@ -1735,6 +1751,7 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
     seek,
     playbackRate,
     setPlaybackRate,
+    primeAudioContext,
   };
 };
 

@@ -76,7 +76,10 @@ const AudioPlayer: FC = () => {
 
         {/* Play/Pause — large prominent button */}
         <button
-          onClick={actions.togglePlayPause}
+          onClick={() => {
+            actions.primeAudioContext();
+            actions.togglePlayPause();
+          }}
           className="w-20 h-20 rounded-full bg-blue-600 text-white flex items-center justify-center shadow-xl shadow-blue-900/40 hover:bg-blue-500 hover:scale-110 active:scale-95 transition-all"
           title={state.audio.isPlaying ? 'Pause' : (safeCurrentTime >= safeDuration - 0.3 && safeDuration > 0 ? 'Restart' : 'Play')}
         >

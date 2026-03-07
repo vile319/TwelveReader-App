@@ -593,6 +593,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       skipBackward: tts.skipBackward,
       getAudioBlob: tts.getAudioBlob,
       setPlaybackRate: tts.setPlaybackRate,
+      primeAudioContext: tts.primeAudioContext,
       // Library
       saveCurrentTextSet,
       loadTextSet,
