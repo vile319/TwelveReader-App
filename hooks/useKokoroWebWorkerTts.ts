@@ -857,27 +857,43 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
   }, [enabled, selectedModel, preferredDevice, preferredDtype, initializeTts]);
 
   // Chunk text for better TTS processing
-  const chunkText = useCallback((text: string, maxChunkSize: number = 2000): string[] => {
-    if (text.length <= maxChunkSize) {
+  const chunkText = useCallback((text: string, maxChunkSize: number = 2000, firstChunkSize: number = maxChunkSize): string[] => {
+    if (text.length <= firstChunkSize && text.length <= maxChunkSize) {
       return [text];
     }
 
     const chunks: string[] = [];
     let currentIndex = 0;
+    let isFirst = true;
 
     while (currentIndex < text.length) {
-      let endIndex = Math.min(currentIndex + maxChunkSize, text.length);
+      const currentSize = isFirst ? firstChunkSize : maxChunkSize;
+      let endIndex = Math.min(currentIndex + currentSize, text.length);
 
-      // Ensure we do not split inside a word
-      if (endIndex < text.length && /\S/.test(text[endIndex])) {
-        const lastSpace = text.lastIndexOf(' ', endIndex);
-        if (lastSpace > currentIndex + 20) { // keep reasonable chunk size
-          endIndex = lastSpace;
+      if (endIndex < text.length) {
+        // Try to split at a sentence/clause boundary for smoother audio
+        const substr = text.slice(currentIndex, endIndex);
+        const lastPunc = Math.max(
+          substr.lastIndexOf('. '),
+          substr.lastIndexOf('! '),
+          substr.lastIndexOf('? '),
+          substr.lastIndexOf(', ')
+        );
+
+        if (lastPunc > 20) {
+          endIndex = currentIndex + lastPunc + 1; // Include the punctuation
+        } else if (/\S/.test(text[endIndex])) {
+          // Fallback to word boundary
+          const lastSpace = text.lastIndexOf(' ', endIndex);
+          if (lastSpace > currentIndex + 20) {
+            endIndex = lastSpace;
+          }
         }
       }
 
       chunks.push(text.slice(currentIndex, endIndex).trim());
       currentIndex = endIndex;
+      isFirst = false;
     }
 
     return chunks.filter(chunk => chunk.length > 0);
@@ -921,8 +937,8 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
     try {
       console.log(`📚 Processing text (${text.length} characters)`);
 
-      // Chunk text for better processing - shorter chunks to avoid TTS cutoff
-      const chunks = chunkText(text, 300);
+      // First chunk is much smaller (e.g. 80 chars) to ensure instant playback streaming
+      const chunks = chunkText(text, 300, 80);
       console.log(`📝 Split into ${chunks.length} chunks for processing`);
 
       // Process all chunks but in smaller batches to prevent stack overflow

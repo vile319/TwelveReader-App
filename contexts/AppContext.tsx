@@ -164,18 +164,20 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     setCurrentSentence(textToRead);
 
     try {
-      await tts.speak(textToRead, selectedVoice, (p: number) => setGenerationProgress(Math.round(p)));
-      console.log('✅ Audio generation completed');
-
-      // Ensure progress shows complete
-      setGenerationProgress(100);
-
-      // Audio is ready, user can now use play/pause controls
-      setIsReading(false);
+      // Fire and forget, don't await to block UI state. The player will handle playback.
+      tts.speak(textToRead, selectedVoice, (p: number) => setGenerationProgress(Math.round(p)))
+        .then(() => {
+          console.log('✅ Audio generation completed');
+          setGenerationProgress(100);
+        })
+        .catch(error => {
+          console.error('❌ Error during synthesis:', error);
+          setError({ title: 'Reading Error', message: 'Failed to synthesize the full text. Check console.' });
+        });
 
     } catch (error) {
-      console.error('❌ Error during reading:', error);
-      setError({ title: 'Reading Error', message: 'Failed to read the text. Please try again.' });
+      console.error('❌ Error initializing reading:', error);
+      setError({ title: 'Reading Error', message: 'Failed to start reading. Please try again.' });
       setIsReading(false);
       setCurrentSentence('');
     }
