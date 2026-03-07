@@ -1109,14 +1109,19 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
             const chunkOffset = currentStreamDuration - chunkDuration;
             const wordsInChunk = chunk.split(/\s+/).filter((w: string) => w.length > 0);
 
-            // Improved timing estimation based on word length
+            // Kokoro typically adds ~250ms of trailing silence after a chunk (punctuation)
+            const trailingSilence = 0.25;
+            const activeDuration = Math.max(0.1, chunkDuration - trailingSilence);
             const totalChars = wordsInChunk.reduce((sum: number, word: string) => sum + word.length, 0);
-            const timePerChar = totalChars > 0 ? chunkDuration / totalChars : 0;
+            const timePerChar = totalChars > 0 ? activeDuration / totalChars : 0;
 
             let wordStart = chunkOffset;
-            const provisionalTimings = wordsInChunk.map((w: string) => {
-              // Exact proportional allocation so the highlight stays accurately in sync across the whole chunk
-              const wordDur = totalChars > 0 ? (w.length * timePerChar) : (chunkDuration / wordsInChunk.length);
+            const provisionalTimings = wordsInChunk.map((w: string, idx: number) => {
+              const isLastWord = idx === wordsInChunk.length - 1;
+              const wordActiveDur = totalChars > 0 ? (w.length * timePerChar) : (activeDuration / wordsInChunk.length);
+
+              // Only the last word in the chunk holds through the trailing silence
+              const wordDur = wordActiveDur + (isLastWord ? (chunkDuration - activeDuration) : 0);
               const timing = {
                 word: w,
                 start: wordStart,

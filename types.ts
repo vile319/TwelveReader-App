@@ -103,6 +103,9 @@ export interface AppState {
 
   /** Progress percentage while generating audio (0-100). 0 when idle */
   generationProgress: number;
+
+  /** True while the TTS models/APIs are actively creating chunks */
+  isGenerating: boolean;
 }
 
 export interface AppContextType {

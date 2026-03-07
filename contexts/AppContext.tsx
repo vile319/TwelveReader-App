@@ -84,6 +84,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
 
   // Generation progress (0-100)
   const [generationProgress, setGenerationProgress] = useState<number>(0);
+  const [isGenerating, setIsGenerating] = useState(false);
 
   // Modal states
   const ONBOARDING_KEY = `${BRAND_NAME.toLowerCase()}-onboarding-completed`;
@@ -163,16 +164,20 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     setIsReading(true);
     setCurrentSentence(textToRead);
 
+    setIsGenerating(true); // Set isGenerating to true here
+
     try {
       // Fire and forget, don't await to block UI state. The player will handle playback.
       tts.speak(textToRead, selectedVoice, (p: number) => setGenerationProgress(Math.round(p)))
         .then(() => {
           console.log('✅ Audio generation completed');
           setGenerationProgress(100);
+          setIsGenerating(false); // Reset isGenerating on success
         })
         .catch(error => {
           console.error('❌ Error during synthesis:', error);
           setError({ title: 'Reading Error', message: 'Failed to synthesize the full text. Check console.' });
+          setIsGenerating(false); // Reset isGenerating on error
         });
 
     } catch (error) {
@@ -180,6 +185,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       setError({ title: 'Reading Error', message: 'Failed to start reading. Please try again.' });
       setIsReading(false);
       setCurrentSentence('');
+      setIsGenerating(false); // Reset isGenerating on error
     }
   };
 
@@ -190,6 +196,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
 
     // Reset progress
     setGenerationProgress(0);
+    setIsGenerating(false); // Reset isGenerating when stopping reading
   };
 
   // --- New: Reset playback when input text changes directly ---
@@ -597,6 +604,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     googleDriveLinked,
     readingProgress,
     generationProgress,
+    isGenerating,
   };
 
   // Context value

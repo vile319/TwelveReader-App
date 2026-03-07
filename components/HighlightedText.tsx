@@ -46,10 +46,10 @@ const RenderLine = memo(({ index, style: rowStyle, data }: ListChildComponentPro
         key={i}
         onClick={() => timing && onWordClick?.(timing.start)}
         className={`transition-colors duration-200 ${isCurrent
-            ? 'text-indigo-400 bg-indigo-500/10 rounded-sm'
-            : isPast
-              ? 'text-slate-500'
-              : 'text-slate-200 hover:text-indigo-300 cursor-pointer'
+          ? 'text-indigo-400 bg-indigo-500/10 rounded-sm'
+          : isPast
+            ? 'text-slate-500'
+            : 'text-slate-200 hover:text-indigo-300 cursor-pointer'
           }`}
       >
         {part}
@@ -62,7 +62,7 @@ const RenderLine = memo(({ index, style: rowStyle, data }: ListChildComponentPro
     <div style={{
       ...rowStyle,
       padding: '0 24px'
-    }} className="font-serif text-xl md:text-2xl leading-relaxed py-2 md:py-3 tracking-wide flex flex-wrap">
+    }} className="font-serif text-xl md:text-2xl leading-relaxed py-2 md:py-3 tracking-wide whitespace-pre-wrap">
       {elements}
     </div>
   );
