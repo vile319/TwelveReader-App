@@ -1,0 +1,79 @@
+/* Premium Reader Styles (ElevenLabs Inspired) */
+
+/* Base Typography Tuning */
+body {
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  letter-spacing: -0.011em;
+  line-height: 1.6;
+  background-color: #020617;
+  /* slate-950 */
+  color: #f8fafc;
+  /* slate-50 */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Custom Minimalist Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.2);
+  /* slate-400 / 20% */
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(148, 163, 184, 0.4);
+}
+
+/* Glassmorphism Utilities */
+.glass-panel {
+  background: rgba(15, 23, 42, 0.6);
+  /* slate-900 / 60% */
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.glass-floating-bar {
+  background: rgba(2, 6, 23, 0.85);
+  /* slate-950 / 85% */
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.3);
+}
+
+/* Button & Interactive Resets */
+button:focus-visible {
+  outline: 2px solid #3b82f6;
+  outline-offset: 2px;
+}
+
+/* Clean Editor Typography */
+.prose-editor {
+  font-size: 1.125rem;
+  /* text-lg */
+  line-height: 1.8;
+  color: #e2e8f0;
+  /* slate-200 */
+}
+
+.prose-editor::placeholder {
+  color: #475569;
+  /* slate-600 */
+  font-weight: 300;
+}
+
+/* Smooth Fade Utilities */
+.fade-edges-y {
+  mask-image: linear-gradient(to bottom, transparent, black 15%, black 85%, transparent);
+  -webkit-mask-image: linear-gradient(to bottom, transparent, black 15%, black 85%, transparent);
+}

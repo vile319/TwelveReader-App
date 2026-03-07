@@ -1618,32 +1618,32 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
     return new Blob([view], { type: 'audio/wav' });
   }, [completeAudioBuffer, completeAudioSampleRate]);
 
-  // Load audio WAV blob back into player (for saved books) - deprecated
-  // const loadAudioFromBlob = useCallback(async (blob: Blob) => {
-  //   if (!blob) return;
-  //   if (!audioContextRef.current) {
-  //     audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
-  //   }
-  //   try {
-  //     const arrayBuffer = await blob.arrayBuffer();
-  //     const audioBuffer = await audioContextRef.current.decodeAudioData(arrayBuffer);
-  //     const channelData = audioBuffer.getChannelData(0);
-  //     const floatData = new Float32Array(channelData.length);
-  //     floatData.set(channelData);
-  //     setCompleteAudioBuffer(floatData);
-  //     setCompleteAudioSampleRate(audioBuffer.sampleRate);
-  //     setDuration(audioBuffer.duration);
-  //     setCurrentTimeBoth(0);
-  //     setCanScrub(true);
-  //     setIsStreaming(false);
-  //     setSynthesisComplete(true);
-  //     setWordTimings([]);
-  //     setCurrentWordIndex(-1);
-  //     console.log('📚 Loaded saved audio book');
-  //   } catch (err) {
-  //     console.error('Failed to decode saved audio', err);
-  //   }
-  // }, []);
+  // Load audio WAV blob back into player (for saved books)
+  const loadAudioFromBlob = useCallback(async (blob: Blob) => {
+    if (!blob) return;
+    if (!audioContextRef.current) {
+      audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+    }
+    try {
+      const arrayBuffer = await blob.arrayBuffer();
+      const audioBuffer = await audioContextRef.current.decodeAudioData(arrayBuffer);
+      const channelData = audioBuffer.getChannelData(0);
+      const floatData = new Float32Array(channelData.length);
+      floatData.set(channelData);
+      setCompleteAudioBuffer(floatData);
+      setCompleteAudioSampleRate(audioBuffer.sampleRate);
+      setDurationBoth(audioBuffer.duration); // Use setDurationBoth for safety
+      setCurrentTimeBoth(0);
+      setCanScrub(true);
+      setIsStreaming(false);
+      setSynthesisComplete(true);
+      setWordTimings([]);
+      setCurrentWordIndex(-1);
+      console.log('📚 Loaded saved audio book');
+    } catch (err) {
+      console.error('Failed to decode saved audio', err);
+    }
+  }, [setDurationBoth, setCurrentTimeBoth]);
 
   const seek = useCallback((time: number) => {
     console.log(`🎤 Seeking to ${time.toFixed(2)}s`);
@@ -1748,6 +1748,7 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
     synthesisComplete,
     // Utility: get combined audio buffer as WAV Blob
     getAudioBlob,
+    loadAudioFromBlob,
     seek,
     playbackRate,
     setPlaybackRate,

@@ -11,7 +11,9 @@
     "deploy": "npm run build"
   },
   "dependencies": {
+    "@react-oauth/google": "^0.13.4",
     "@types/react-window": "^1.8.8",
+    "googleapis": "^171.4.0",
     "jszip": "^3.10.1",
     "kokoro-js": "^1.2.1",
     "onnxruntime-web": "^1.17.3",

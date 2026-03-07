@@ -169,7 +169,7 @@ export interface AppContextType {
     deleteTextSet: (id: string) => void;
 
     // Cloud sync
-    linkGoogleDrive: () => Promise<void>;
+    linkGoogleDrive: () => void;
 
     // Scroll progress
     updateScrollPosition: (scrollTop: number) => void;
@@ -194,6 +194,7 @@ export interface AppContextType {
     currentWordIndex: number;
     synthesisComplete: boolean;
     getAudioBlob: () => Blob | null;
+    loadAudioFromBlob: (blob: Blob) => Promise<void>;
     isReady: boolean;
     setPlaybackRate: (rate: number) => void;
     playbackRate: number;

@@ -6,164 +6,168 @@ import { cn } from '../../utils/cn';
 const AudioPlayer: FC = () => {
   const { state, actions } = useAppContext();
 
-  const disabled = !state.audio.canScrub;
+  // If there's no text and no audio, don't show the player to keep UI clean
+  if (!state.inputText.trim() && !state.audio.canScrub && !state.isReading) {
+    return null;
+  }
 
-  // FIX: clamp currentTime so it never exceeds duration
+  const disabled = !state.audio.canScrub && !state.isReading;
+
   const safeDuration = state.audio.duration || 0;
   const safeCurrentTime = Math.min(state.audio.currentTime, safeDuration);
   const progressPercent = safeDuration > 0 ? (safeCurrentTime / safeDuration) * 100 : 0;
 
   return (
-    <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 mb-6">
-      {/* Progress Bar — above controls for more prominent placement */}
-      <div
-        className={cn(
-          'w-full h-2 bg-slate-700 rounded-full relative overflow-hidden mb-5',
-          disabled ? 'opacity-50' : '',
-          state.audio.canScrub ? 'cursor-pointer' : 'cursor-not-allowed'
-        )}
-        onMouseMove={(e: React.MouseEvent<HTMLDivElement>) => {
-          if (!state.audio.canScrub) return;
-          const rect = e.currentTarget.getBoundingClientRect();
-          const hoverPosition = (e.clientX - rect.left) / rect.width;
-          actions.setHoverTime(hoverPosition * safeDuration);
-          actions.setIsSeekingHover(true);
-        }}
-        onMouseLeave={() => {
-          if (!state.audio.canScrub) return;
-          actions.setIsSeekingHover(false);
-        }}
-        onMouseDown={(e: React.MouseEvent<HTMLDivElement>) => {
-          if (!state.audio.canScrub) return;
-          actions.setIsDragging(true);
-          const rect = e.currentTarget.getBoundingClientRect();
-          const clickPosition = (e.clientX - rect.left) / rect.width;
-          const newTime = clickPosition * safeDuration;
-          actions.seekToTime(newTime);
-        }}
-        onMouseUp={() => {
-          if (!state.audio.canScrub) return;
-          actions.setIsDragging(false);
-        }}
-      >
-        {/* Progress Fill */}
-        <div
-          className="h-full bg-blue-500 rounded-full transition-[width] duration-100 ease-out"
-          style={{ width: `${progressPercent}%` }}
-        />
+    <div className={cn(
+      "fixed bottom-0 left-0 right-0 z-50 transition-transform duration-500 ease-out",
+      "glass-floating-bar px-4 py-3 md:px-8",
+      disabled && !state.inputText.trim() ? "translate-y-full" : "translate-y-0"
+    )}>
+      <div className="max-w-5xl mx-auto flex flex-col md:flex-row items-center gap-4 md:gap-8">
 
-        {/* Hover Time Tooltip */}
-        {state.isSeekingHover && (
-          <div
-            className="absolute -top-9 -translate-x-1/2 px-2 py-1 bg-slate-950 text-white text-xs font-medium rounded border border-slate-600 shadow-lg z-10"
-            style={{ left: `${(state.hoverTime / (safeDuration || 1)) * 100}%` }}
+        {/* Playback Controls */}
+        <div className={cn('flex items-center gap-4 shrink-0', disabled && 'opacity-50 pointer-events-none')}>
+          {/* Skip Back */}
+          <button
+            onClick={actions.skipBackward}
+            className="w-10 h-10 rounded-full text-slate-400 hover:text-white hover:bg-slate-800 transition-all flex items-center justify-center"
+            title="Skip back 15s"
           >
-            {actions.formatTime(state.hoverTime)}
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M9 15 3 9m0 0 6-6M3 9h12a6 6 0 0 1 0 12h-3" /></svg>
+          </button>
+
+          {/* Play/Pause */}
+          <button
+            onClick={() => {
+              actions.primeAudioContext();
+              if (state.isReading && !state.audio.canScrub && !state.audio.isPlaying) {
+                actions.handleStartReading();
+              } else {
+                actions.togglePlayPause();
+              }
+            }}
+            disabled={!state.inputText.trim() && !state.audio.canScrub}
+            className={cn(
+              "w-12 h-12 rounded-full flex items-center justify-center transition-all",
+              state.isReading && state.audio.isLoading ? "bg-slate-800 text-slate-400" : "bg-white text-black hover:scale-105 shadow-xl shadow-white/10"
+            )}
+            title={state.audio.isPlaying ? 'Pause' : (safeCurrentTime >= safeDuration - 0.3 && safeDuration > 0 ? 'Restart' : 'Play')}
+          >
+            {state.isReading && state.audio.isLoading ? (
+              <div className="w-5 h-5 border-2 border-slate-400 border-t-transparent rounded-full animate-spin" />
+            ) : state.audio.isPlaying ? (
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-6 h-6"><path fillRule="evenodd" d="M6.75 5.25a.75.75 0 0 1 .75-.75H9a.75.75 0 0 1 .75.75v13.5a.75.75 0 0 1-.75.75H7.5a.75.75 0 0 1-.75-.75V5.25zm7.5 0A.75.75 0 0 1 15 4.5h1.5a.75.75 0 0 1 .75.75v13.5a.75.75 0 0 1-.75.75H15a.75.75 0 0 1-.75-.75V5.25z" clipRule="evenodd" /></svg>
+            ) : safeCurrentTime >= safeDuration - 0.3 && safeDuration > 0 ? (
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-6 h-6"><path fillRule="evenodd" d="M4.755 10.059a7.5 7.5 0 0 1 12.548-3.364l1.903 1.903h-3.183a.75.75 0 1 0 0 1.5h4.992a.75.75 0 0 0 .75-.75V4.356a.75.75 0 0 0-1.5 0v3.18l-1.9-1.9A9 9 0 0 0 3.306 9.67a.75.75 0 1 0 1.45.388Zm15.408 3.352a.75.75 0 0 0-.919.53 7.5 7.5 0 0 1-12.548 3.364l-1.902-1.903h3.183a.75.75 0 0 0 0-1.5H2.984a.75.75 0 0 0-.75.75v4.992a.75.75 0 0 0 1.5 0v-3.18l1.9 1.9a9 9 0 0 0 15.059-4.035.75.75 0 0 0-.53-.918Z" clipRule="evenodd" /></svg>
+            ) : (
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-6 h-6 translate-x-0.5"><path fillRule="evenodd" d="M4.5 5.653c0-1.427 1.529-2.33 2.779-1.643l11.54 6.347c1.295.712 1.295 2.573 0 3.286L7.28 19.99c-1.25.687-2.779-.217-2.779-1.643V5.653z" clipRule="evenodd" /></svg>
+            )}
+          </button>
+
+          {/* Skip Forward */}
+          <button
+            onClick={actions.skipForward}
+            className="w-10 h-10 rounded-full text-slate-400 hover:text-white hover:bg-slate-800 transition-all flex items-center justify-center"
+            title="Skip forward 15s"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M15 15l6-6m0 0-6-6m6 6H9a6 6 0 0 0 0 12h3" /></svg>
+          </button>
+        </div>
+
+        {/* Progress Bar Area */}
+        <div className="flex-1 w-full flex items-center gap-4">
+          <span className="text-xs font-medium text-slate-500 tabular-nums shrink-0">
+            {actions.formatTime(safeCurrentTime)}
+          </span>
+
+          <div className="relative flex-1 group h-8 flex items-center">
+            <div
+              className={cn(
+                'w-full h-1.5 bg-slate-800 rounded-full relative overflow-hidden transition-all group-hover:h-2',
+                disabled ? 'opacity-50' : '',
+                state.audio.canScrub ? 'cursor-pointer' : 'cursor-not-allowed'
+              )}
+              onMouseMove={(e: React.MouseEvent<HTMLDivElement>) => {
+                if (!state.audio.canScrub) return;
+                const rect = e.currentTarget.getBoundingClientRect();
+                const hoverPosition = (e.clientX - rect.left) / rect.width;
+                actions.setHoverTime(hoverPosition * safeDuration);
+                actions.setIsSeekingHover(true);
+              }}
+              onMouseLeave={() => {
+                if (!state.audio.canScrub) return;
+                actions.setIsSeekingHover(false);
+              }}
+              onMouseDown={(e: React.MouseEvent<HTMLDivElement>) => {
+                if (!state.audio.canScrub) return;
+                actions.setIsDragging(true);
+                const rect = e.currentTarget.getBoundingClientRect();
+                const clickPosition = (e.clientX - rect.left) / rect.width;
+                actions.seekToTime(clickPosition * safeDuration);
+              }}
+              onMouseUp={() => { if (!state.audio.canScrub) return; actions.setIsDragging(false); }}
+            >
+              {/* Progress Fill */}
+              <div
+                className="absolute left-0 top-0 h-full bg-indigo-500 rounded-full transition-[width] duration-100 ease-out"
+                style={{ width: `${progressPercent}%` }}
+              />
+
+              {/* Hover Tooltip */}
+              {state.isSeekingHover && (
+                <div
+                  className="absolute -top-8 -translate-x-1/2 px-2 py-0.5 bg-slate-800 text-white text-[10px] font-medium rounded border border-slate-700 shadow-lg z-10"
+                  style={{ left: `${(state.hoverTime / (safeDuration || 1)) * 100}%` }}
+                >
+                  {actions.formatTime(state.hoverTime)}
+                </div>
+              )}
+            </div>
           </div>
-        )}
-      </div>
 
-      {/* Main Controls Row */}
-      <div className={cn('flex items-center justify-center gap-6', disabled && 'opacity-50 pointer-events-none')}>
-        {/* Skip Back */}
-        <button
-          onClick={actions.skipBackward}
-          className="w-12 h-12 rounded-full bg-slate-700/60 text-slate-300 text-sm font-semibold flex items-center justify-center hover:bg-slate-600 hover:text-white hover:scale-110 active:scale-95 transition-all"
-          title="Skip back 15s"
-        >
-          <span className="text-xs leading-none">-15s</span>
-        </button>
+          <span className="text-xs font-medium text-slate-500 tabular-nums shrink-0">
+            {actions.formatTime(safeDuration)}
+          </span>
+        </div>
 
-        {/* Play/Pause — large prominent button */}
-        <button
-          onClick={() => {
-            actions.primeAudioContext();
-            actions.togglePlayPause();
-          }}
-          className="w-20 h-20 rounded-full bg-blue-600 text-white flex items-center justify-center shadow-xl shadow-blue-900/40 hover:bg-blue-500 hover:scale-110 active:scale-95 transition-all"
-          title={state.audio.isPlaying ? 'Pause' : (safeCurrentTime >= safeDuration - 0.3 && safeDuration > 0 ? 'Restart' : 'Play')}
-        >
-          {state.audio.isPlaying ? (
-            /* Pause icon — two bars */
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-9 h-9">
-              <path fillRule="evenodd" d="M6.75 5.25a.75.75 0 0 1 .75-.75H9a.75.75 0 0 1 .75.75v13.5a.75.75 0 0 1-.75.75H7.5a.75.75 0 0 1-.75-.75V5.25zm7.5 0A.75.75 0 0 1 15 4.5h1.5a.75.75 0 0 1 .75.75v13.5a.75.75 0 0 1-.75.75H15a.75.75 0 0 1-.75-.75V5.25z" clipRule="evenodd" />
-            </svg>
-          ) : safeCurrentTime >= safeDuration - 0.3 && safeDuration > 0 ? (
-            /* Restart icon */
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-8 h-8">
-              <path fillRule="evenodd" d="M4.755 10.059a7.5 7.5 0 0 1 12.548-3.364l1.903 1.903h-3.183a.75.75 0 1 0 0 1.5h4.992a.75.75 0 0 0 .75-.75V4.356a.75.75 0 0 0-1.5 0v3.18l-1.9-1.9A9 9 0 0 0 3.306 9.67a.75.75 0 1 0 1.45.388Zm15.408 3.352a.75.75 0 0 0-.919.53 7.5 7.5 0 0 1-12.548 3.364l-1.902-1.903h3.183a.75.75 0 0 0 0-1.5H2.984a.75.75 0 0 0-.75.75v4.992a.75.75 0 0 0 1.5 0v-3.18l1.9 1.9a9 9 0 0 0 15.059-4.035.75.75 0 0 0-.53-.918Z" clipRule="evenodd" />
-            </svg>
-          ) : (
-            /* Play icon */
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-9 h-9 translate-x-0.5">
-              <path fillRule="evenodd" d="M4.5 5.653c0-1.427 1.529-2.33 2.779-1.643l11.54 6.347c1.295.712 1.295 2.573 0 3.286L7.28 19.99c-1.25.687-2.779-.217-2.779-1.643V5.653z" clipRule="evenodd" />
-            </svg>
-          )}
-        </button>
+        {/* Utilities: Speed, Download, Sync */}
+        <div className="flex items-center gap-2 shrink-0">
+          <select
+            value={state.audio.playbackRate}
+            onChange={(e: React.ChangeEvent<HTMLSelectElement>) => actions.setPlaybackRate(parseFloat(e.target.value))}
+            className="appearance-none bg-transparent hover:bg-slate-800 text-slate-300 text-xs font-medium py-1.5 px-2 rounded cursor-pointer focus:outline-none focus:ring-1 focus:ring-indigo-500 transition-colors"
+          >
+            <option value="0.75">0.75×</option>
+            <option value="1">1.0×</option>
+            <option value="1.25">1.25×</option>
+            <option value="1.5">1.5×</option>
+            <option value="2">2.0×</option>
+          </select>
 
-        {/* Skip Forward */}
-        <button
-          onClick={actions.skipForward}
-          className="w-12 h-12 rounded-full bg-slate-700/60 text-slate-300 text-sm font-semibold flex items-center justify-center hover:bg-slate-600 hover:text-white hover:scale-110 active:scale-95 transition-all"
-          title="Skip forward 15s"
-        >
-          <span className="text-xs leading-none">+15s</span>
-        </button>
-      </div>
+          <button
+            onClick={actions.handleDownloadAudio}
+            disabled={!state.audio.synthesisComplete}
+            className={cn(
+              'p-2 rounded-full transition-colors',
+              state.audio.synthesisComplete ? 'text-slate-400 hover:text-white hover:bg-slate-800' : 'text-slate-700 cursor-not-allowed'
+            )}
+            title="Download Audio"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" /></svg>
+          </button>
 
-      {/* Time + Status row */}
-      <div className={cn('mt-4 flex items-center justify-between text-sm text-slate-400', disabled && 'opacity-50')}>
-        <span className="font-mono tabular-nums">{actions.formatTime(safeCurrentTime)}</span>
-        {state.isReading && (
-          <span className="text-blue-400 text-xs animate-pulse">Generating audio…</span>
-        )}
-        <span className="font-mono tabular-nums">{actions.formatTime(safeDuration)}</span>
-      </div>
+          <button
+            onClick={actions.linkGoogleDrive}
+            className={cn(
+              'p-2 rounded-full transition-colors',
+              state.googleDriveLinked ? 'text-sky-400 bg-sky-500/10 border border-sky-500/20' : 'text-slate-400 hover:text-white hover:bg-slate-800'
+            )}
+            title="Google Drive Sync"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M12 16.5V9.75m0 0 3 3m-3-3-3 3M6.75 19.5a4.5 4.5 0 0 1-1.41-8.775 5.25 5.25 0 0 1 10.233-2.33 3 3 0 0 1 3.758 3.848A3.752 3.752 0 0 1 18 19.5H6.75Z" /></svg>
+          </button>
+        </div>
 
-      {/* Speed row — disabled when no audio */}
-      <div className={cn('mt-4 flex items-center gap-2 text-sm text-slate-300', disabled && 'opacity-50 pointer-events-none')}>
-        <span className="text-slate-500">Speed</span>
-        <select
-          value={state.audio.playbackRate}
-          onChange={(e: React.ChangeEvent<HTMLSelectElement>) => actions.setPlaybackRate(parseFloat(e.target.value))}
-          className="bg-slate-800 border border-slate-700 rounded-md px-2 py-1 text-sm focus:outline-none focus:border-blue-500"
-        >
-          <option value="0.5">0.5×</option>
-          <option value="0.75">0.75×</option>
-          <option value="1">1×</option>
-          <option value="1.25">1.25×</option>
-          <option value="1.5">1.5×</option>
-          <option value="2">2×</option>
-        </select>
-      </div>
-
-      {/* Download + Google Drive — always interactive */}
-      <div className="mt-3 flex items-center gap-2 flex-wrap">
-        <button
-          onClick={actions.handleDownloadAudio}
-          disabled={!state.audio.synthesisComplete}
-          className={cn(
-            'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors',
-            state.audio.synthesisComplete
-              ? 'bg-slate-700 hover:bg-slate-600 text-slate-200'
-              : 'bg-slate-800 text-slate-600 cursor-not-allowed'
-          )}
-          title={state.audio.synthesisComplete ? 'Download audio as WAV file' : 'Generate audio first'}
-        >
-          💾 Download WAV
-        </button>
-        <button
-          onClick={actions.linkGoogleDrive}
-          className={cn(
-            'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors',
-            state.googleDriveLinked
-              ? 'bg-sky-500/20 text-sky-400 border border-sky-500/40 hover:bg-sky-500/30'
-              : 'bg-slate-700 hover:bg-slate-600 text-slate-300'
-          )}
-          title="Link Google Drive to sync your saved texts across devices"
-        >
-          ☁️ {state.googleDriveLinked ? 'Drive: Linked' : 'Link Drive'}
-        </button>
       </div>
     </div>
   );

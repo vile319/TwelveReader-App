@@ -2,8 +2,10 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import useKokoroWebWorkerTts from '../hooks/useKokoroWebWorkerTts';
 import { BRAND_NAME } from '../utils/branding';
 import { AppContextType, AppState, AppError, SampleText, TextSet } from '../types';
-import { driveHelpers } from '../utils/googleDrive';
+import { driveSync } from '../utils/GoogleDriveSync';
+import { localDB } from '../utils/localDatabase';
 import { modelManager } from '../utils/modelManager';
+import { useGoogleLogin } from '@react-oauth/google';
 import JSZip from 'jszip';
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -371,7 +373,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
   }, [tts.isReady, pendingRead, tts.speak]);
 
   // -------- Library actions --------
-  const saveCurrentTextSet = (title?: string) => {
+  const saveCurrentTextSet = async (title?: string) => {
     const cleaned = inputText.trim();
     if (!cleaned) {
       alert('Nothing to save. Please enter or load some text first.');
@@ -382,10 +384,21 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       id: crypto.randomUUID(),
       title: finalTitle,
       text: cleaned,
-      lastPosition: 0,
+      lastPosition: tts.currentTime,
       audioGenerated: tts.synthesisComplete,
     };
-    // Check storage limit (~4.5MB)
+
+    // Save audio blob to IndexedDB if it exists
+    const blob = tts.getAudioBlob();
+    if (blob) {
+      try {
+        await localDB.saveAudioBlob(newSet.id, blob);
+      } catch (e) {
+        console.error('Failed to save audio blob to IndexedDB:', e);
+      }
+    }
+
+    // Check storage limit (~4.5MB) for metadata
     try {
       const prospective = JSON.stringify([...savedTextSets, newSet]);
       const bytes = new Blob([prospective]).size;
@@ -394,15 +407,29 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
         return;
       }
     } catch { }
+
     setSavedTextSets((prev: TextSet[]) => [...prev, newSet]);
     setCurrentSetId(newSet.id);
   };
 
-  const loadTextSet = (id: string) => {
+  const loadTextSet = async (id: string) => {
     const set = savedTextSets.find((s: TextSet) => s.id === id);
     if (!set) return;
     updateInputText(set.text);
     setCurrentSetId(id);
+
+    // Attempt to load the audio blob from IndexedDB
+    try {
+      const blob = await localDB.getAudioBlob(id);
+      if (blob) {
+        console.log('Loaded audio blob from DB, size:', blob.size);
+        // Restore the audio into the TTS engine so it's ready to play without regenerating
+        await tts.loadAudioFromBlob(blob);
+      }
+    } catch (e) {
+      console.error('Failed to load audio blob from IndexedDB:', e);
+    }
+
     // If we have stored progress, seek after generation is ready
     const prog = readingProgress[id];
     if (prog?.audioTime && tts.canScrub) {
@@ -410,8 +437,16 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     }
   };
 
-  const deleteTextSet = (id: string) => {
+  const deleteTextSet = async (id: string) => {
     if (!confirm('Delete this saved text permanently?')) return;
+
+    // Remove blob from IndexedDB
+    try {
+      await localDB.deleteAudioBlob(id);
+    } catch (e) {
+      console.error('Failed to delete audio blob:', e);
+    }
+
     setSavedTextSets((prev: TextSet[]) => prev.filter((s: TextSet) => s.id !== id));
     // Clear progress
     setReadingProgress((prev: Record<string, { audioTime: number; scrollTop: number }>) => {
@@ -426,43 +461,53 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
   };
 
   // -------- Cloud sync (Google Drive) --------
-  const linkGoogleDrive = async () => {
-    try {
-      await driveHelpers.signIn();
-      setGoogleDriveLinked(true);
-      const remoteSets = await driveHelpers.fetchTextSets();
-      if (remoteSets && remoteSets.length > 0) {
-        // Merge unique sets (by id)
-        setSavedTextSets((prev: TextSet[]) => {
-          const merged = [...prev];
-          remoteSets.forEach((r: TextSet) => {
-            if (!merged.find((s) => s.id === r.id)) merged.push(r);
+  const loginToDrive = useGoogleLogin({
+    scope: 'https://www.googleapis.com/auth/drive.file',
+    onSuccess: async (tokenResponse: any) => {
+      try {
+        driveSync.setAccessToken(tokenResponse.access_token);
+        setGoogleDriveLinked(true);
+        const remoteSets = await driveSync.fetchTextSets();
+        if (remoteSets && remoteSets.length > 0) {
+          // Merge unique sets (by id)
+          setSavedTextSets((prev: TextSet[]) => {
+            const merged = [...prev];
+            remoteSets.forEach((r: TextSet) => {
+              if (!merged.find((s) => s.id === r.id)) merged.push(r);
+            });
+            return merged;
           });
-          return merged;
-        });
-        alert(`✅ Google Drive linked! Synced ${remoteSets.length} saved text(s).`);
-      } else {
-        alert('✅ Google Drive linked! Your saved texts will now sync automatically.');
+          alert(`✅ Google Drive linked! Synced ${remoteSets.length} saved text(s).`);
+        } else {
+          alert('✅ Google Drive linked! Your saved texts will now sync automatically to your Google account.');
+        }
+      } catch (err: any) {
+        console.error(err);
+        alert('Failed to initialize Google Drive folder. See browser console for details.\n\n' + (err?.message || String(err)));
+        setGoogleDriveLinked(false);
       }
-    } catch (err: any) {
-      console.error(err);
-      const isPlaceholder = String(err?.message || '').includes('YOUR_GOOGLE_DRIVE_CLIENT_ID') ||
-        String(err).includes('idpiframe');
-      if (isPlaceholder) {
-        alert('⚙️ Google Drive sync is not yet configured for this deployment.\n\nThe developer needs to set up a Google OAuth Client ID. Check ADSENSE_SETUP.md or the project README for instructions.');
+    },
+    onError: (errorResponse: any) => {
+      console.error('Login Failed:', errorResponse);
+      const errStr = String(errorResponse);
+      if (errStr.includes('YOUR_GOOGLE_DRIVE_CLIENT_ID') || errStr.includes('idpiframe') || errStr.includes('idpiframe_initialization_failed')) {
+        alert('⚙️ Google Drive sync is not yet configured for this deployment.\n\nThe developer needs to set up a Google OAuth Client ID in the .env file. Check README for instructions.');
       } else {
-        alert('Failed to link Google Drive. See browser console (F12) for details.\n\n' + (err?.message || String(err)));
+        alert('Failed to link Google Drive. Ensure you have an active internet connection and try again.');
       }
     }
+  });
+
+  const linkGoogleDrive = () => {
+    loginToDrive();
   };
 
   // Sync to Drive whenever savedTextSets change
   useEffect(() => {
     (async () => {
-      if (!googleDriveLinked) return;
-      if (!driveHelpers.isSignedIn()) return;
+      if (!googleDriveLinked || !driveSync.hasToken()) return;
       try {
-        await driveHelpers.uploadTextSets(savedTextSets);
+        await driveSync.uploadTextSets(savedTextSets);
       } catch (e) {
         console.warn('Drive sync failed', e);
       }
