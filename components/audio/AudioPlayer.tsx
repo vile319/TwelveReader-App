@@ -30,10 +30,11 @@ const AudioPlayer: FC = () => {
           {/* Skip Back */}
           <button
             onClick={actions.skipBackward}
-            className="w-10 h-10 rounded-full text-slate-400 hover:text-white hover:bg-slate-800 transition-all flex items-center justify-center"
+            className="px-3 py-1.5 rounded-full text-slate-400 hover:text-white hover:bg-slate-800 transition-all flex items-center gap-1.5 text-sm font-medium"
             title="Skip back 15s"
           >
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M9 15 3 9m0 0 6-6M3 9h12a6 6 0 0 1 0 12h-3" /></svg>
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M9 15 3 9m0 0 6-6M3 9h12a6 6 0 0 1 0 12h-3" /></svg>
+            15s
           </button>
 
           {/* Play/Pause */}
@@ -67,10 +68,11 @@ const AudioPlayer: FC = () => {
           {/* Skip Forward */}
           <button
             onClick={actions.skipForward}
-            className="w-10 h-10 rounded-full text-slate-400 hover:text-white hover:bg-slate-800 transition-all flex items-center justify-center"
+            className="px-3 py-1.5 rounded-full text-slate-400 hover:text-white hover:bg-slate-800 transition-all flex items-center gap-1.5 text-sm font-medium"
             title="Skip forward 15s"
           >
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M15 15l6-6m0 0-6-6m6 6H9a6 6 0 0 0 0 12h3" /></svg>
+            15s
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M15 15l6-6m0 0-6-6m6 6H9a6 6 0 0 0 0 12h3" /></svg>
           </button>
         </div>
 
@@ -148,23 +150,40 @@ const AudioPlayer: FC = () => {
             onClick={actions.handleDownloadAudio}
             disabled={!state.audio.synthesisComplete}
             className={cn(
-              'p-2 rounded-full transition-colors',
+              'px-3 py-1.5 rounded-full transition-colors flex items-center gap-1.5 text-sm font-medium',
               state.audio.synthesisComplete ? 'text-slate-400 hover:text-white hover:bg-slate-800' : 'text-slate-700 cursor-not-allowed'
             )}
-            title="Download Audio"
+            title="Download Audio (.wav)"
           >
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" /></svg>
+            Download
           </button>
 
           <button
             onClick={actions.linkGoogleDrive}
+            disabled={state.isSyncingToDrive}
             className={cn(
-              'p-2 rounded-full transition-colors',
-              state.googleDriveLinked ? 'text-sky-400 bg-sky-500/10 border border-sky-500/20' : 'text-slate-400 hover:text-white hover:bg-slate-800'
+              'px-3 py-1.5 rounded-full transition-colors relative flex items-center gap-1.5 text-sm font-medium',
+              state.googleDriveLinked ? 'text-emerald-400 bg-emerald-500/10 border border-emerald-500/20' : 'text-slate-400 hover:text-white hover:bg-slate-800'
             )}
-            title="Google Drive Sync"
+            title={state.googleDriveLinked ? 'Manage Google Drive Sync' : 'Link Google Drive'}
           >
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M12 16.5V9.75m0 0 3 3m-3-3-3 3M6.75 19.5a4.5 4.5 0 0 1-1.41-8.775 5.25 5.25 0 0 1 10.233-2.33 3 3 0 0 1 3.758 3.848A3.752 3.752 0 0 1 18 19.5H6.75Z" /></svg>
+            {state.isSyncingToDrive ? (
+              <>
+                <svg className="animate-spin h-4 w-4 text-emerald-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                Syncing...
+              </>
+            ) : state.googleDriveLinked ? (
+              <>
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4"><path fillRule="evenodd" d="M19.916 4.626a.75.75 0 0 1 .208 1.04l-9 13.5a.75.75 0 0 1-1.154.114l-6-6a.75.75 0 0 1 1.06-1.06l5.353 5.353 8.493-12.74a.75.75 0 0 1 1.04-.207Z" clipRule="evenodd" /></svg>
+                Drive Synced
+              </>
+            ) : (
+              <>
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M12 16.5V9.75m0 0 3 3m-3-3-3 3M6.75 19.5a4.5 4.5 0 0 1-1.41-8.775 5.25 5.25 0 0 1 10.233-2.33 3 3 0 0 1 3.758 3.848A3.752 3.752 0 0 1 18 19.5H6.75Z" /></svg>
+                Link Drive
+              </>
+            )}
           </button>
         </div>
 

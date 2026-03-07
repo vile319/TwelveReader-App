@@ -97,6 +97,7 @@ export interface AppState {
   savedTextSets: TextSet[];
   currentSetId: string | null;
   googleDriveLinked: boolean;
+  isSyncingToDrive: boolean;
 
   // Progress map
   readingProgress: Record<string, ReadingProgressEntry>;
@@ -167,12 +168,14 @@ export interface AppContextType {
     primeAudioContext: () => void;
 
     // Library actions
-    saveCurrentTextSet: (title?: string) => void;
+    saveCurrentTextSet: (title?: string) => Promise<boolean>;
     loadTextSet: (id: string) => void;
     deleteTextSet: (id: string) => void;
 
     // Cloud sync
     linkGoogleDrive: () => void;
+    disconnectDrive: () => void;
+    forceSyncDrive: () => Promise<void>;
 
     // Scroll progress
     updateScrollPosition: (scrollTop: number) => void;

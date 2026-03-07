@@ -9,25 +9,86 @@ const TextInputPanel: FC = () => {
   const { state, actions } = useAppContext();
   const contentRef = useRef<HTMLDivElement>(null);
   const [showLibrary, setShowLibrary] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveTitle, setSaveTitle] = useState('');
+  const [isSaved, setIsSaved] = useState(false);
+  const [resumePrompt, setResumePrompt] = useState<{ id: string; time: number } | null>(null);
 
-  // Restore scroll on load of set
+  const handleSave = async () => {
+    let success = false;
+    if (!saveTitle.trim()) {
+      success = await actions.saveCurrentTextSet('Untitled');
+    } else {
+      success = await actions.saveCurrentTextSet(saveTitle);
+    }
+
+    setIsSaving(false);
+    setSaveTitle('');
+
+    if (success) {
+      setIsSaved(true);
+      setTimeout(() => setIsSaved(false), 2000);
+    }
+  };
+
+  // Restore scroll and prompt for audio resume on load of set
   useEffect(() => {
     if (!contentRef.current) return;
     const setId = state.currentSetId;
-    if (!setId) return;
-    const prog = state.readingProgress[setId];
-    if (prog && typeof prog.scrollTop === 'number') {
-      contentRef.current.scrollTop = prog.scrollTop;
+
+    // Clear prompt if we change documents
+    if (!setId || resumePrompt?.id !== setId) {
+      setResumePrompt(null);
     }
-  }, [state.currentSetId]);
+    if (!setId) return;
+
+    const prog = state.readingProgress[setId];
+    if (prog) {
+      if (typeof prog.scrollTop === 'number') {
+        contentRef.current.scrollTop = prog.scrollTop;
+      }
+      // If we have significant progress (> 5s) and we aren't already playing it, prompt to resume
+      if (prog.audioTime > 5 && !state.isReading && state.audio.currentTime < 1) {
+        setResumePrompt({ id: setId, time: prog.audioTime });
+      }
+    }
+  }, [state.currentSetId, state.readingProgress]);
 
   const renderContent = () => {
     return (
       <div
         ref={contentRef}
         onScroll={(e: React.UIEvent<HTMLDivElement>) => actions.updateScrollPosition((e.currentTarget).scrollTop)}
-        className="flex-1 w-full flex flex-col min-h-[40vh]"
+        className="flex-1 w-full flex flex-col min-h-[40vh] relative"
       >
+        {/* Resume Prompt Toast */}
+        {resumePrompt && resumePrompt.id === state.currentSetId && !state.isReading && (
+          <div className="absolute top-8 left-1/2 -translate-x-1/2 z-10 bg-indigo-600 text-white px-5 py-3 rounded-2xl shadow-2xl flex items-center gap-4 animate-in slide-in-from-top-4 fade-in duration-300">
+            <span className="text-sm font-medium">Resume from {Math.floor(resumePrompt.time / 60)}:{Math.floor(resumePrompt.time % 60).toString().padStart(2, '0')}?</span>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setResumePrompt(null)}
+                className="text-xs bg-indigo-700 hover:bg-indigo-800 px-3 py-1.5 rounded-full transition-colors"
+              >
+                Start Over
+              </button>
+              <button
+                onClick={async () => {
+                  try {
+                    await actions.handleStartReading();
+                    // Wait a tiny bit for the engine to initialize before seeking
+                    setTimeout(() => actions.handleWordClick(resumePrompt.time), 500);
+                  } catch { }
+                  setResumePrompt(null);
+                }}
+                className="text-xs bg-white text-indigo-600 hover:bg-slate-100 font-bold px-3 py-1.5 rounded-full shadow-sm transition-colors"
+              >
+                Resume
+              </button>
+            </div>
+          </div>
+        )}
+
         {state.inputText.length > 0 ? (
           <HighlightedText
             text={state.inputText}
@@ -76,6 +137,17 @@ const TextInputPanel: FC = () => {
               {showLibrary ? 'Hide Library' : 'Library'}
             </button>
           )}
+
+          {/* New Explicit PDF Upload Button */}
+          {!state.isReading && (
+            <label className="cursor-pointer flex items-center gap-2 text-sm text-slate-400 hover:text-indigo-400 transition-colors bg-slate-900/50 px-3 py-1.5 rounded-full border border-slate-800" title="Upload PDF or EPUB document">
+              <input type="file" accept=".pdf,.epub" onChange={actions.handleFileUpload} className="hidden" />
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m6.75 12-3-3m0 0-3 3m3-3v6m-1.5-15H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z" />
+              </svg>
+              Upload Document
+            </label>
+          )}
         </div>
 
         <div className="flex items-center gap-4">
@@ -83,13 +155,54 @@ const TextInputPanel: FC = () => {
             {state.inputText.length.toLocaleString()} chars
           </span>
           {state.inputText.trim().length > 0 && (
-            <button
-              onClick={() => actions.saveCurrentTextSet()}
-              className="text-emerald-500 hover:text-emerald-400 text-sm font-medium transition-colors"
-              title="Save to Library"
-            >
-              Save Text
-            </button>
+            isSaving ? (
+              <div className="flex items-center gap-2 animate-in slide-in-from-right-4 fade-in">
+                <input
+                  type="text"
+                  autoFocus
+                  placeholder="Story Title..."
+                  value={saveTitle}
+                  onChange={(e) => setSaveTitle(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      handleSave();
+                    } else if (e.key === 'Escape') {
+                      setIsSaving(false);
+                      setSaveTitle('');
+                    }
+                  }}
+                  className="bg-slate-900 border border-slate-700 rounded-md px-3 py-1 text-sm text-slate-200 outline-none focus:border-emerald-500 max-w-[150px]"
+                />
+                <button
+                  onClick={handleSave}
+                  className="text-emerald-500 hover:text-emerald-400 text-sm font-medium transition-colors bg-emerald-500/10 px-3 py-1 rounded-md"
+                >
+                  Save
+                </button>
+                <button
+                  onClick={() => {
+                    setIsSaving(false);
+                    setSaveTitle('');
+                  }}
+                  className="text-slate-500 hover:text-slate-300 transition-colors"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5"><path fillRule="evenodd" d="M10 18a8 8 0 1 0 0-16 8 8 0 0 0 0 16Zm.75-11.25a.75.75 0 0 0-1.5 0v2.5h-2.5a.75.75 0 0 0 0 1.5h2.5v2.5a.75.75 0 0 0 1.5 0v-2.5h2.5a.75.75 0 0 0 0-1.5h-2.5v-2.5Z" clipRule="evenodd" className="rotate-45 origin-center text-slate-400 hover:text-red-400" /></svg>
+                </button>
+              </div>
+            ) : isSaved ? (
+              <div className="flex items-center gap-1.5 text-emerald-400 text-sm font-medium animate-in zoom-in fade-in transition-all">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4"><path fillRule="evenodd" d="M16.704 4.153a.75.75 0 0 1 .143 1.052l-8 10.5a.75.75 0 0 1-1.127.075l-4.5-4.5a.75.75 0 0 1 1.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 0 1 1.05-.143Z" clipRule="evenodd" /></svg>
+                Saved!
+              </div>
+            ) : (
+              <button
+                onClick={() => setIsSaving(true)}
+                className="text-slate-400 hover:text-emerald-400 text-sm font-medium transition-colors hover:bg-emerald-500/10 px-3 py-1.5 rounded-full border border-transparent hover:border-emerald-500/30"
+                title="Save to Library"
+              >
+                Save Text
+              </button>
+            )
           )}
         </div>
       </div>

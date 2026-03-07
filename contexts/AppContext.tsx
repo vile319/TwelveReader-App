@@ -108,6 +108,10 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
   // Which set is currently loaded
   const [currentSetId, setCurrentSetId] = useState<string | null>(null);
 
+  // Google Drive linked flag (stub)
+  const [googleDriveLinked, setGoogleDriveLinked] = useState(false);
+  const [isSyncingToDrive, setIsSyncingToDrive] = useState<boolean>(false);
+
   // Reading progress map { setId: { audioTime: number; scrollTop: number } }
   const [readingProgress, setReadingProgress] = useState<Record<string, { audioTime: number; scrollTop: number }>>(() => {
     try {
@@ -117,8 +121,6 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     return {};
   });
 
-  // Google Drive linked flag (stub)
-  const [googleDriveLinked, setGoogleDriveLinked] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
 
   // Initialize TTS hook
@@ -388,14 +390,65 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     }
   }, [tts.isReady, pendingRead, tts.speak]);
 
+  // -------- Cloud sync helpers --------
+  const handleDriveError = (e: any, context: string) => {
+    console.warn(`[Drive Error] ${context}:`, e);
+    if (e instanceof Error && e.message.includes('token expired')) {
+      setGoogleDriveLinked(false);
+      localStorage.removeItem('twelvereader-drive-linked');
+      driveSync.setAccessToken('');
+      alert('Google Drive session expired. Please sign in again to resume automatic syncing.');
+    } else {
+      setError({
+        title: 'Google Drive Sync Failed',
+        message: `Failed to sync. Your text is saved locally, but could not be backed up to Drive. Error: ${e instanceof Error ? e.message : String(e)}`
+      });
+    }
+  };
+
   // -------- Library actions --------
-  const saveCurrentTextSet = async (title?: string) => {
+  const saveCurrentTextSet = async (title?: string, suppressPrompt: boolean = false): Promise<boolean> => {
     const cleaned = inputText.trim();
     if (!cleaned) {
-      alert('Nothing to save. Please enter or load some text first.');
-      return;
+      if (!suppressPrompt) alert('Nothing to save. Please enter or load some text first.');
+      return false;
     }
-    const finalTitle = title || prompt('Enter a title for this text:', 'Untitled') || 'Untitled';
+
+    // If we already have a set with this exact text, just update its audioGenerated status and save the blob
+    const existingSet = savedTextSets.find((s) => s.text === cleaned);
+    if (existingSet) {
+      const blob = tts.getAudioBlob();
+      if (blob) {
+        try {
+          await localDB.saveAudioBlob(existingSet.id, blob);
+          if (googleDriveLinked && driveSync.hasToken()) {
+            setIsSyncingToDrive(true);
+            try { await driveSync.uploadAudioBlob(existingSet.id, blob); }
+            catch (e) { handleDriveError(e, 'uploadAudioBlob (existing)'); }
+            finally { setIsSyncingToDrive(false); }
+          }
+        } catch (e) {
+          console.error('Failed to save audio blob:', e);
+        }
+      }
+      if (!existingSet.audioGenerated && tts.synthesisComplete) {
+        setSavedTextSets((prev: TextSet[]) => prev.map(s => s.id === existingSet.id ? { ...s, audioGenerated: true } : s));
+      }
+      if (!suppressPrompt) {
+        alert('This text is already saved in your Library!');
+      }
+      return true;
+    }
+
+    let finalTitle = title;
+    if (!finalTitle && suppressPrompt) {
+      const words = cleaned.split(/\s+/).slice(0, 5).join(' ');
+      finalTitle = words.length > 25 ? words.substring(0, 25) + '...' : words;
+      if (!finalTitle) finalTitle = 'Untitled';
+    } else if (!finalTitle) {
+      finalTitle = prompt('Enter a title for this text:', 'Untitled') || 'Untitled';
+    }
+
     const newSet: TextSet = {
       id: crypto.randomUUID(),
       title: finalTitle,
@@ -409,8 +462,20 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     if (blob) {
       try {
         await localDB.saveAudioBlob(newSet.id, blob);
+
+        // Push to Google Drive if linked
+        if (googleDriveLinked && driveSync.hasToken()) {
+          setIsSyncingToDrive(true);
+          try {
+            await driveSync.uploadAudioBlob(newSet.id, blob);
+          } catch (e) {
+            handleDriveError(e, 'uploadAudioBlob (new)');
+          } finally {
+            setIsSyncingToDrive(false);
+          }
+        }
       } catch (e) {
-        console.error('Failed to save audio blob to IndexedDB:', e);
+        console.error('Failed to save audio blob:', e);
       }
     }
 
@@ -419,14 +484,26 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       const prospective = JSON.stringify([...savedTextSets, newSet]);
       const bytes = new Blob([prospective]).size;
       if (bytes > 4.5 * 1024 * 1024) {
-        alert('Cannot save: local storage limit exceeded. Please delete existing items or use Google Drive sync.');
-        return;
+        if (!suppressPrompt) alert('Cannot save: local storage limit exceeded. Please delete existing items or use Google Drive sync.');
+        return false;
       }
     } catch { }
 
     setSavedTextSets((prev: TextSet[]) => [...prev, newSet]);
     setCurrentSetId(newSet.id);
+    return true;
   };
+
+  // Auto-save history when generation finishes
+  useEffect(() => {
+    if (tts.synthesisComplete && inputText.trim()) {
+      const timer = setTimeout(() => {
+        saveCurrentTextSet(undefined, true);
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tts.synthesisComplete]);
 
   const loadTextSet = async (id: string) => {
     const set = savedTextSets.find((s: TextSet) => s.id === id);
@@ -436,14 +513,31 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
 
     // Attempt to load the audio blob from IndexedDB
     try {
-      const blob = await localDB.getAudioBlob(id);
+      let blob = await localDB.getAudioBlob(id);
+
+      // Attempt to load from Google Drive if missing locally
+      if (!blob && googleDriveLinked && driveSync.hasToken()) {
+        setIsSyncingToDrive(true);
+        try {
+          blob = await driveSync.fetchAudioBlob(id);
+          if (blob) {
+            // Cache it locally for next time
+            await localDB.saveAudioBlob(id, blob);
+          }
+        } catch (e) {
+          handleDriveError(e, 'fetchAudioBlob');
+        } finally {
+          setIsSyncingToDrive(false);
+        }
+      }
+
       if (blob) {
-        console.log('Loaded audio blob from DB, size:', blob.size);
+        console.log('Loaded audio blob, size:', blob.size);
         // Restore the audio into the TTS engine so it's ready to play without regenerating
         await tts.loadAudioFromBlob(blob);
       }
     } catch (e) {
-      console.error('Failed to load audio blob from IndexedDB:', e);
+      console.error('Failed to load audio blob:', e);
     }
 
     // If we have stored progress, seek after generation is ready
@@ -483,17 +577,36 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       try {
         driveSync.setAccessToken(tokenResponse.access_token);
         setGoogleDriveLinked(true);
-        const remoteSets = await driveSync.fetchTextSets();
-        if (remoteSets && remoteSets.length > 0) {
-          // Merge unique sets (by id)
-          setSavedTextSets((prev: TextSet[]) => {
-            const merged = [...prev];
-            remoteSets.forEach((r: TextSet) => {
-              if (!merged.find((s) => s.id === r.id)) merged.push(r);
+        localStorage.setItem('twelvereader-drive-linked', 'true');
+        setIsSyncingToDrive(true);
+        const remoteData = await driveSync.fetchSyncData();
+        if (remoteData) {
+          const { textSets: remoteSets, readingProgress: remoteProgress } = remoteData;
+          if (remoteSets && remoteSets.length > 0) {
+            // Merge unique sets (by id)
+            setSavedTextSets((prev: TextSet[]) => {
+              const merged = [...prev];
+              remoteSets.forEach((r: TextSet) => {
+                if (!merged.find((s) => s.id === r.id)) merged.push(r);
+              });
+              return merged;
             });
-            return merged;
-          });
-          alert(`✅ Google Drive linked! Synced ${remoteSets.length} saved text(s).`);
+            alert(`✅ Google Drive linked! Synced ${remoteSets.length} saved text(s).`);
+          } else {
+            alert('✅ Google Drive linked! Your saved texts will now sync automatically to your Google account.');
+          }
+
+          if (remoteProgress && Object.keys(remoteProgress).length > 0) {
+            setReadingProgress((prev) => {
+              const next = { ...prev };
+              for (const [id, remoteProg] of Object.entries(remoteProgress)) {
+                if (!next[id] || remoteProg.audioTime > next[id].audioTime) {
+                  next[id] = remoteProg;
+                }
+              }
+              return next;
+            });
+          }
         } else {
           alert('✅ Google Drive linked! Your saved texts will now sync automatically to your Google account.');
         }
@@ -501,6 +614,9 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
         console.error(err);
         alert('Failed to initialize Google Drive folder. See browser console for details.\n\n' + (err?.message || String(err)));
         setGoogleDriveLinked(false);
+        localStorage.removeItem('twelvereader-drive-linked');
+      } finally {
+        setIsSyncingToDrive(false);
       }
     },
     onError: (errorResponse: any) => {
@@ -514,6 +630,60 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     }
   });
 
+  // Attempt silent login on mount if previously linked
+  const loginToDriveSilent = useGoogleLogin({
+    scope: 'https://www.googleapis.com/auth/drive.file',
+    prompt: 'none',
+    onSuccess: async (tokenResponse: any) => {
+      try {
+        driveSync.setAccessToken(tokenResponse.access_token);
+        setGoogleDriveLinked(true);
+        console.log("✅ Silently re-authenticated with Google Drive");
+        // We do a quiet background sync of remote sets
+        const remoteData = await driveSync.fetchSyncData();
+        if (remoteData) {
+          const { textSets: remoteSets, readingProgress: remoteProgress } = remoteData;
+          if (remoteSets && remoteSets.length > 0) {
+            setSavedTextSets((prev: TextSet[]) => {
+              const merged = [...prev];
+              remoteSets.forEach((r: TextSet) => {
+                if (!merged.find((s) => s.id === r.id)) merged.push(r);
+              });
+              return merged;
+            });
+          }
+
+          if (remoteProgress && Object.keys(remoteProgress).length > 0) {
+            setReadingProgress((prev) => {
+              const next = { ...prev };
+              for (const [id, remoteProg] of Object.entries(remoteProgress)) {
+                if (!next[id] || remoteProg.audioTime > next[id].audioTime) {
+                  next[id] = remoteProg;
+                }
+              }
+              return next;
+            });
+          }
+        }
+      } catch (err) {
+        console.error("Silent drive sync failed:", err);
+      }
+    },
+    onError: () => {
+      console.log("Silent Google Drive login failed or expired.");
+      setGoogleDriveLinked(false);
+      localStorage.removeItem('twelvereader-drive-linked');
+    }
+  });
+
+  useEffect(() => {
+    // Only attempt silent login if they previously chose to link it
+    if (localStorage.getItem('twelvereader-drive-linked') === 'true') {
+      loginToDriveSilent();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const linkGoogleDrive = () => {
     loginToDrive();
   };
@@ -523,12 +693,40 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     (async () => {
       if (!googleDriveLinked || !driveSync.hasToken()) return;
       try {
-        await driveSync.uploadTextSets(savedTextSets);
+        setIsSyncingToDrive(true);
+        await driveSync.uploadSyncData(savedTextSets, readingProgress);
       } catch (e) {
-        console.warn('Drive sync failed', e);
+        handleDriveError(e, 'uploadTextSets (auto-sync)');
+      } finally {
+        setIsSyncingToDrive(false);
       }
     })();
   }, [savedTextSets, googleDriveLinked]);
+
+  const disconnectDrive = () => {
+    if (confirm('Disconnect from Google Drive? Your texts will no longer sync automatically.')) {
+      setGoogleDriveLinked(false);
+      localStorage.removeItem('twelvereader-drive-linked');
+      driveSync.setAccessToken('');
+    }
+  };
+
+  const forceSyncDrive = async () => {
+    if (!googleDriveLinked || !driveSync.hasToken()) {
+      alert('Google Drive is not linked.');
+      return;
+    }
+    setIsSyncingToDrive(true);
+    try {
+      await driveSync.uploadSyncData(savedTextSets, readingProgress);
+      alert('✅ Force Sync Complete: All texts backed up to Google Drive.');
+    } catch (e) {
+      handleDriveError(e, 'Force Sync');
+      alert('❌ Sync failed. Please check your connection and try again.');
+    } finally {
+      setIsSyncingToDrive(false);
+    }
+  };
 
   // Persist saved text sets whenever they change
   useEffect(() => {
@@ -554,6 +752,24 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     }, 1000);
     return () => clearTimeout(handle);
   }, [tts.currentTime, currentSetId, tts.canScrub]);
+
+  // Sync progress to cloud when paused/stopped to avoid spamming the API
+  useEffect(() => {
+    if (!googleDriveLinked || !driveSync.hasToken() || tts.isPlaying) return;
+
+    // De-bounce the upload to avoid excessive API calls
+    const handle = setTimeout(async () => {
+      try {
+        // Only log in dev to avoid annoying users
+        // console.log("☁️ Auto-syncing progress to Google Drive...");
+        await driveSync.uploadSyncData(savedTextSets, readingProgress);
+      } catch (e) {
+        // Silent fail for background progress syncs to not disturb reading
+      }
+    }, 2000);
+
+    return () => clearTimeout(handle);
+  }, [readingProgress, googleDriveLinked, tts.isPlaying, savedTextSets]);
 
   // --- Scroll progress update ---
   const updateScrollPosition = (scrollTop: number) => {
@@ -609,6 +825,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     savedTextSets,
     currentSetId,
     googleDriveLinked,
+    isSyncingToDrive,
     readingProgress,
     generationProgress,
     isGenerating,
@@ -668,6 +885,8 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       deleteTextSet,
       // Cloud Sync
       linkGoogleDrive,
+      disconnectDrive,
+      forceSyncDrive,
       updateScrollPosition,
     },
     tts,
