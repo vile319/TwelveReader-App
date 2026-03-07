@@ -201,8 +201,15 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
 
   // --- New: Reset playback when input text changes directly ---
   const updateInputText = (text: string) => {
-    // Stop any ongoing synthesis or playback to avoid conflicts
-    handleStopReading();
+    // If they are actively reading, changing the text should seamlessly restart the generation
+    // if we wanted to be perfectly seamless, but for now we just let them type without 
+    // ejecting them from the reading view completely if they are just scrolling.
+    if (isReading && !tts.isPlaying) {
+      // Allow editing without dropping out of isReading if paused
+    } else if (isReading) {
+      // Stop ongoing synthesis
+      handleStopReading();
+    }
 
     // Clear any previously uploaded PDF context
     setUploadedPDF(null);
@@ -623,7 +630,13 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       handleFileUpload,
       handlePDFTextExtracted,
       handlePDFError,
-      setSelectedVoice,
+      setSelectedVoice: (voice: string) => {
+        setSelectedVoice(voice);
+        // If actively reading, changing the voice should stop playback so the user can manually restart
+        if (isReading) {
+          handleStopReading();
+        }
+      },
       setSelectedModel,
       setPreferredDevice: handleDeviceChange,
       setPreferredDtype: handleDtypeChange,

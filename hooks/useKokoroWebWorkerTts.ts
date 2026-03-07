@@ -198,6 +198,7 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
   const isPlaybackActiveRef = useRef<boolean>(false);
   const streamingAudioRef = useRef<Float32Array[]>([]);
   const streamingStartTimeRef = useRef<number>(0);
+  const scheduledSourceNodesRef = useRef<AudioBufferSourceNode[]>([]);
 
   // Complete list of all Kokoro voices from Hugging Face
   const voices = [
@@ -304,6 +305,12 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
     isPlaybackActiveRef.current = true;
     setIsPlaying(true);
 
+    // Stop any previously scheduled streaming nodes to prevent overlap if restarted quickly
+    scheduledSourceNodesRef.current.forEach(node => {
+      try { node.stop(); } catch (e) { }
+    });
+    scheduledSourceNodesRef.current = [];
+
     try {
       if (!audioContextRef.current) {
         audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
@@ -351,9 +358,11 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
           requestAnimationFrame(trackStreamingProgress);
         }
       };
-      trackStreamingProgress();
 
-      playStreamingChunks(chunkIndex, targetSample - currentSample);
+      trackStreamingProgress();
+      if (audioContextRef.current) {
+        playStreamingChunks(chunkIndex, targetSample - currentSample, audioContextRef.current.currentTime);
+      }
 
     } catch (error) {
       console.error('Error starting streaming playback:', error);
@@ -362,9 +371,12 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
     }
   }, []);
 
-  // Play streaming chunks sequentially
-  const playStreamingChunks = useCallback(async (startChunkIndex: number = 0, offsetSamples: number = 0) => {
-    if (!isPlaybackActiveRef.current) return;
+  // Play streaming chunks sequentially using precise AudioContext scheduling
+  const playStreamingChunks = useCallback(async (startChunkIndex: number = 0, offsetSamples: number = 0, initialNextTime?: number) => {
+    if (!isPlaybackActiveRef.current || !audioContextRef.current) return;
+
+    let nextPlayTime = initialNextTime || audioContextRef.current.currentTime;
+    let chunksProcessed = 0;
 
     for (let i = startChunkIndex; i < streamingAudioRef.current.length && isPlaybackActiveRef.current; i++) {
       const chunk = streamingAudioRef.current[i];
@@ -374,79 +386,62 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
 
       if (actualChunk.length === 0) continue;
 
-      // Check if we're still supposed to be playing before each chunk
-      if (!isPlaybackActiveRef.current) {
-        console.log('🛑 Streaming playback stopped');
-        return;
-      }
+      const audioBuffer = audioContextRef.current.createBuffer(1, actualChunk.length, sampleRateRef.current);
+      audioBuffer.getChannelData(0).set(actualChunk);
 
-      await new Promise<void>((resolve) => {
-        if (!audioContextRef.current || !isPlaybackActiveRef.current) {
-          resolve();
-          return;
-        }
+      const source = audioContextRef.current.createBufferSource();
+      source.buffer = audioBuffer;
+      try {
+        source.playbackRate.value = playbackRateRef.current;
+      } catch { }
+      source.connect(audioContextRef.current.destination);
+      scheduledSourceNodesRef.current.push(source);
 
-        const audioBuffer = audioContextRef.current.createBuffer(1, actualChunk.length, sampleRateRef.current);
-        audioBuffer.getChannelData(0).set(actualChunk);
+      // Ensure we don't schedule in the past
+      nextPlayTime = Math.max(audioContextRef.current.currentTime, nextPlayTime);
 
-        const source = audioContextRef.current.createBufferSource();
-        source.buffer = audioBuffer;
-        try {
-          source.playbackRate.value = playbackRateRef.current;
-        } catch { }
-        source.connect(audioContextRef.current.destination);
+      source.start(nextPlayTime);
+      console.log(`🎵 Scheduled streaming chunk ${i + 1}/${streamingAudioRef.current.length} at ${nextPlayTime.toFixed(2)}s`);
 
-        // Store the source so we can stop it if needed
-        completeAudioSourceRef.current = source;
+      // Calculate duration of this chunk considering playback rate
+      const chunkDuration = (actualChunk.length / sampleRateRef.current) / playbackRateRef.current;
+      nextPlayTime += chunkDuration;
 
-        let chunkEnded = false;
-        source.onended = () => {
-          if (!chunkEnded) {
-            chunkEnded = true;
-            completeAudioSourceRef.current = null;
-            resolve();
-          }
-        };
-
-        // If playback is stopped while this chunk is playing, stop immediately
-        const checkStop = () => {
-          if (!isPlaybackActiveRef.current && !chunkEnded) {
-            chunkEnded = true;
-            try {
-              source.stop();
-            } catch (e) {
-              // Already stopped
-            }
-            completeAudioSourceRef.current = null;
-            resolve();
-          } else if (isPlaybackActiveRef.current && !chunkEnded) {
-            setTimeout(checkStop, 50);
-          }
-        };
-        checkStop();
-
-        source.start();
-        console.log(`🎵 Playing streaming chunk ${i + 1}/${streamingAudioRef.current.length}`);
-      });
-
+      chunksProcessed++;
       offsetSamples = 0; // Reset offset after first chunk
     }
 
+    const nextStartIndex = startChunkIndex + chunksProcessed;
+
     // Check if we need to wait for more chunks or if synthesis is complete
-    if (isPlaybackActiveRef.current && currentSynthesisRef.current) {
-      // Still synthesizing, wait a bit and check for new chunks
-      setTimeout(() => {
-        if (isPlaybackActiveRef.current) {
-          playStreamingChunks(streamingAudioRef.current.length);
+    if (isPlaybackActiveRef.current) {
+      if (currentSynthesisRef.current && !synthesisComplete) {
+        // Still synthesizing, check for new chunks shortly
+        setTimeout(() => {
+          if (isPlaybackActiveRef.current) {
+            playStreamingChunks(nextStartIndex, 0, nextPlayTime);
+          }
+        }, 100);
+      } else if (nextStartIndex >= streamingAudioRef.current.length) {
+        // Synthesis complete and all chunks scheduled.
+        // We wait for the scheduled time to pass before declaring playback ended.
+        const timeRemaining = nextPlayTime - audioContextRef.current.currentTime;
+        if (timeRemaining > 0) {
+          setTimeout(() => {
+            if (isPlaybackActiveRef.current) {
+              console.log('🏁 Streaming playback completed naturally');
+              setIsPlaying(false);
+              isPlaybackActiveRef.current = false;
+            }
+          }, timeRemaining * 1000);
+        } else {
+          console.log('🏁 Streaming playback completed');
+          setIsPlaying(false);
+          isPlaybackActiveRef.current = false;
         }
-      }, 100);
-    } else if (isPlaybackActiveRef.current) {
-      // Synthesis complete, end of audio
-      console.log('🏁 Streaming playback completed');
-      setIsPlaying(false);
-      isPlaybackActiveRef.current = false;
+      }
     }
-  }, []);
+  }, [synthesisComplete]);
 
   // Play complete audio buffer from a specific time.
   // Reads from completeAudioBufferRef (always fresh) instead of React state
@@ -576,6 +571,12 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
 
       setIsPlaying(false);
       isPlaybackActiveRef.current = false; // Stop streaming playback
+
+      // Also explicitly stop any currently scheduled streaming audio nodes
+      scheduledSourceNodesRef.current.forEach(node => {
+        try { node.stop(); } catch (e) { }
+      });
+      scheduledSourceNodesRef.current = [];
 
       // Clear progress updates when paused
       if (progressIntervalRef.current) {
@@ -1252,6 +1253,12 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
 
     // Stop continuous playback
     isPlaybackActiveRef.current = false;
+
+    // Stop any currently scheduled streaming audio nodes
+    scheduledSourceNodesRef.current.forEach(node => {
+      try { node.stop(); } catch (e) { }
+    });
+    scheduledSourceNodesRef.current = [];
 
     // Stop current audio playback
     if (sourceNodeRef.current) {
