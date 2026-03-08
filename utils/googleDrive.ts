@@ -14,7 +14,7 @@ interface DriveHelpers {
   fetchTextSets: () => Promise<TextSet[] | null>;
 }
 
-const fileName = 'verbareader_text_sets.json';
+const fileName = 'pdftoaudio_text_sets.json';
 let gapiLoaded = false;
 
 export const driveHelpers: DriveHelpers = {

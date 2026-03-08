@@ -1,1 +1,1 @@
-export const BRAND_NAME = 'VerbaReader';
+export const BRAND_NAME = 'PDFtoAudio';
