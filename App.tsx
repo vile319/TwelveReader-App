@@ -52,10 +52,12 @@ const AppContent: FC = () => {
       </div>
 
       {/* Popup Ad */}
-      <AdSensePopup
-        adSlot="1122334455"
-        showInterval={10} // Show every 10 minutes
-      />
+      {!state.isPremium && (
+        <AdSensePopup
+          adSlot="1122334455"
+          showInterval={10} // Show every 10 minutes
+        />
+      )}
     </div>
   );
 };

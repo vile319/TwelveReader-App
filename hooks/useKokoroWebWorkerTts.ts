@@ -5,6 +5,42 @@ void React;
 import { KokoroTTS } from 'kokoro-js';
 import { configureOnnxRuntimeForIOS } from '../utils/onnxIosConfig';
 
+// Helper to create WAV for HTMLAudioElement
+const floatToWav = (float32Array: Float32Array, sampleRate: number): Blob => {
+  const wav = new ArrayBuffer(44 + float32Array.length * 2);
+  const view = new DataView(wav);
+
+  const writeString = (view: DataView, offset: number, string: string) => {
+    for (let i = 0; i < string.length; i++) {
+      view.setUint8(offset + i, string.charCodeAt(i));
+    }
+  };
+
+  writeString(view, 0, 'RIFF');
+  view.setUint32(4, 36 + float32Array.length * 2, true);
+  writeString(view, 8, 'WAVE');
+  writeString(view, 12, 'fmt ');
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true);
+  view.setUint16(22, 1, true);
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, sampleRate * 2, true);
+  view.setUint16(32, 2, true);
+  view.setUint16(34, 16, true);
+  writeString(view, 36, 'data');
+  view.setUint32(40, float32Array.length * 2, true);
+
+  const length = float32Array.length;
+  let offset = 44;
+  for (let i = 0; i < length; i++) {
+    const s = Math.max(-1, Math.min(1, float32Array[i]));
+    view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
+    offset += 2;
+  }
+
+  return new Blob([wav], { type: 'audio/wav' });
+};
+
 // === HuggingFace Space TTS API URL ===
 const HF_TTS_API_URL = 'https://oronto-kokoro-tts-api.hf.space';
 
@@ -70,7 +106,6 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
 
   // New scrubbing state
   const [completeAudioBuffer, setCompleteAudioBuffer] = useState<Float32Array | null>(null);
-  const [completeAudioSampleRate, setCompleteAudioSampleRate] = useState<number>(24000);
   const [currentTime, setCurrentTime] = useState<number>(0);
   // Always-fresh ref mirror of currentTime — use this inside async/stale-closure contexts
   const currentTimeRef = useRef<number>(0);
@@ -172,7 +207,8 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
 
   // Enhanced audio refs for scrubbing
   const completeAudioSourceRef = useRef<AudioBufferSourceNode | null>(null);
-  const playbackStartTimeRef = useRef<number>(0);
+  const completeHtmlAudioRef = useRef<HTMLAudioElement | null>(null);
+  const completeAudioUrlRef = useRef<string | null>(null);
   const playbackOffsetRef = useRef<number>(0);
   const seekTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const progressIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -199,6 +235,7 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
   const streamingStartTimeRef = useRef<number>(0);
   const scheduledSourceNodesRef = useRef<AudioBufferSourceNode[]>([]);
   const streamingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const streamInvocationIdRef = useRef<number>(0);
 
   // Complete list of all Kokoro voices from Hugging Face
   const voices = [
@@ -282,6 +319,11 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
     setCurrentTimeBoth(clampedTime);
     playbackOffsetRef.current = clampedTime;
 
+    // Keep the underlying HTML node in sync so paused scrubbing works correctly
+    if (completeHtmlAudioRef.current && !isStreaming) {
+      completeHtmlAudioRef.current.currentTime = clampedTime;
+    }
+
     // If was playing, restart from new position with debouncing
     if (wasPlaying) {
       seekTimeoutRef.current = setTimeout(() => {
@@ -289,7 +331,7 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
         if (isStreaming && clampedTime < synthesizedDuration) {
           // For streaming, restart streaming playback from position
           startStreamingFromPosition(clampedTime);
-        } else if (completeAudioBuffer) {
+        } else if (completeAudioBufferRef.current || completeHtmlAudioRef.current) {
           // For complete audio, use complete playback
           playCompleteAudio(clampedTime);
         }
@@ -309,6 +351,8 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
     console.log(`🎵 Starting streaming playback from ${startTime.toFixed(2)}s`);
     isPlaybackActiveRef.current = true;
     setIsPlaying(true);
+
+    const currentStreamId = ++streamInvocationIdRef.current;
 
     // Stop any previously scheduled streaming nodes to prevent overlap if restarted quickly
     scheduledSourceNodesRef.current.forEach(node => {
@@ -366,7 +410,7 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
 
       trackStreamingProgress();
       if (audioContextRef.current) {
-        playStreamingChunks(chunkIndex, targetSample - currentSample, audioContextRef.current.currentTime);
+        playStreamingChunks(chunkIndex, targetSample - currentSample, audioContextRef.current.currentTime, currentStreamId);
       }
 
     } catch (error) {
@@ -377,8 +421,9 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
   }, []);
 
   // Play streaming chunks sequentially using precise AudioContext scheduling
-  const playStreamingChunks = useCallback(async (startChunkIndex: number = 0, offsetSamples: number = 0, initialNextTime?: number) => {
+  const playStreamingChunks = useCallback(async (startChunkIndex: number = 0, offsetSamples: number = 0, initialNextTime?: number, streamId?: number) => {
     if (!isPlaybackActiveRef.current || !audioContextRef.current) return;
+    if (streamId !== undefined && streamId !== streamInvocationIdRef.current) return;
 
     let nextPlayTime = initialNextTime || audioContextRef.current.currentTime;
     let chunksProcessed = 0;
@@ -427,7 +472,7 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
         }
         streamingTimeoutRef.current = setTimeout(() => {
           if (isPlaybackActiveRef.current) {
-            playStreamingChunks(nextStartIndex, 0, nextPlayTime);
+            playStreamingChunks(nextStartIndex, 0, nextPlayTime, streamId);
           }
         }, 100);
       } else if (nextStartIndex >= streamingAudioRef.current.length) {
@@ -455,96 +500,67 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
   // Reads from completeAudioBufferRef (always fresh) instead of React state
   // (state may still be null when called mid-synthesis due to async React updates).
   const playCompleteAudio = useCallback(async (startTime: number = 0) => {
-    const buf = completeAudioBufferRef.current;
-    const rate = completeAudioSampleRateRef.current;
-    if (!buf || !audioContextRef.current) return;
+    const audio = completeHtmlAudioRef.current;
+    if (!audio) return;
 
-    console.log(`🎵 Playing complete audio from ${startTime.toFixed(2)}s`);
+    console.log(`🎵 Playing complete HTML audio from ${startTime.toFixed(2)}s`);
     isPlaybackActiveRef.current = true;
     setIsPlaying(true);
 
-    // Stop any currently playing source before starting new one
-    if (completeAudioSourceRef.current) {
-      intentionalStopRef.current = true;
-      try { completeAudioSourceRef.current.stop(); } catch { }
-      completeAudioSourceRef.current = null;
-    }
+    intentionalStopRef.current = true;
+    audio.pause();
+    intentionalStopRef.current = false;
+
     if (progressIntervalRef.current) {
       clearInterval(progressIntervalRef.current);
       progressIntervalRef.current = null;
     }
 
     try {
-      if (audioContextRef.current.state === 'suspended') {
-        await audioContextRef.current.resume();
-      }
-
-      const audioBuffer = audioContextRef.current.createBuffer(1, buf.length, rate);
-      audioBuffer.getChannelData(0).set(buf);
-
-      const source = audioContextRef.current.createBufferSource();
-      source.buffer = audioBuffer;
-      try { source.playbackRate.value = playbackRateRef.current; } catch { }
-      source.connect(audioContextRef.current.destination);
-
-      completeAudioSourceRef.current = source;
-      playbackStartTimeRef.current = audioContextRef.current.currentTime;
-      playbackOffsetRef.current = startTime;
+      audio.currentTime = startTime;
+      audio.playbackRate = playbackRateRef.current;
+      audio.preservesPitch = true;
 
       const progressAnimationRef = { current: 0 };
       const updateProgress = () => {
-        // Stop the loop if the source was stopped (intentional or natural end)
-        if (!completeAudioSourceRef.current || !audioContextRef.current) return;
+        if (!isPlaybackActiveRef.current) return;
 
-        const elapsed = audioContextRef.current.currentTime - playbackStartTimeRef.current;
-        const currentPos = playbackOffsetRef.current + elapsed * playbackRateRef.current;
-
-        // Update word highlight every frame for tight sync
+        const currentPos = audio.currentTime;
         updateCurrentWordIndex(currentPos);
 
-        // Update displayed time at ~20fps to avoid React re-render thrash
         const now = performance.now();
         if (now - lastTimeUpdateRef.current > 50) {
           lastTimeUpdateRef.current = now;
           setCurrentTimeBoth(currentPos);
         }
-
-        // Always continue the loop while source is alive; onended handles the clean end state
         progressAnimationRef.current = requestAnimationFrame(updateProgress);
       };
 
-      // Remove the setInterval backup — rAF above handles all updates.
-
-      source.onended = () => {
-        // If stopped intentionally (pause/seek), skip end-of-audio handling.
+      audio.onended = () => {
         if (intentionalStopRef.current) {
           intentionalStopRef.current = false;
           return;
         }
         const finalDuration = durationRef.current;
-        console.log(`🏁 Audio ended naturally at ${finalDuration.toFixed(2)}s — ready to restart`);
+        console.log(`🏁 Audio ended naturally at ${finalDuration.toFixed(2)}s`);
         setIsPlaying(false);
+        isPlaybackActiveRef.current = false;
         setCurrentTimeBoth(finalDuration);
         updateCurrentWordIndex(finalDuration);
-        playbackOffsetRef.current = finalDuration;
-        completeAudioSourceRef.current = null;
+
         if (progressAnimationRef.current) {
           cancelAnimationFrame(progressAnimationRef.current);
-          progressAnimationRef.current = 0;
         }
       };
 
-      // Start playing from offset
-      source.start(0, startTime);
+      await audio.play();
       progressAnimationRef.current = requestAnimationFrame(updateProgress);
-
-      console.log(`▶️ Started complete audio playback from ${startTime.toFixed(2)}s`);
+      console.log(`▶️ Started HTML audio from ${startTime.toFixed(2)}s`);
 
     } catch (error) {
-      console.error('Error playing complete audio:', error);
+      console.error('Error playing complete HTML audio:', error);
       setIsPlaying(false);
     }
-    // Note: deps intentionally omit completeAudioBuffer/Rate — we read from refs instead.
   }, [duration, updateCurrentWordIndex]);
 
   // Keep playCompleteAudioRef in sync whenever playCompleteAudio is re-created.
@@ -567,14 +583,12 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
         console.log(`⏸️ Pausing streaming at ${pausedTime.toFixed(2)}s`);
         setCurrentTimeBoth(pausedTime);
         playbackOffsetRef.current = pausedTime;
-      } else if (completeAudioSourceRef.current && audioContextRef.current) {
-        // For complete audio mode
-        const elapsed = audioContextRef.current.currentTime - playbackStartTimeRef.current;
-        const currentPos = playbackOffsetRef.current + elapsed * playbackRateRef.current;
-        const pausedTime = Math.max(0, Math.min(currentPos, duration));
-        console.log(`⏸️ Pausing complete audio at ${pausedTime.toFixed(2)}s`);
+      } else if (completeHtmlAudioRef.current && !isStreaming) {
+        const pausedTime = completeHtmlAudioRef.current.currentTime;
+        console.log(`⏸️ Pausing complete HTML audio at ${pausedTime.toFixed(2)}s`);
+        intentionalStopRef.current = true;
+        completeHtmlAudioRef.current.pause();
         setCurrentTimeBoth(pausedTime);
-        playbackOffsetRef.current = pausedTime;
       }
 
       setIsPlaying(false);
@@ -597,15 +611,10 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
         progressIntervalRef.current = null;
       }
 
-      // Set flag BEFORE stop() so onended skips end-of-audio handling
-      if (completeAudioSourceRef.current) {
+      // Set flag BEFORE pause() so onended skips end-of-audio handling
+      if (completeHtmlAudioRef.current) {
         intentionalStopRef.current = true;
-        try {
-          completeAudioSourceRef.current.stop();
-        } catch (e) {
-          console.log('Audio source already stopped');
-        }
-        completeAudioSourceRef.current = null;
+        completeHtmlAudioRef.current.pause();
       }
 
       console.log('⏸️ Paused - all playback stopped');
@@ -626,7 +635,7 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
 
       if (isStreaming && !atEnd && currentTime < synthesizedDuration) {
         startStreamingFromPosition(startPosition);
-      } else if (completeAudioBufferRef.current) {
+      } else if (completeAudioBufferRef.current || completeHtmlAudioRef.current) {
         // Use ref (always fresh) instead of potentially-stale React state
         isPlaybackActiveRef.current = true;
         playCompleteAudio(startPosition);
@@ -941,6 +950,20 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
     }
 
     setCompleteAudioBuffer(null);
+    completeAudioBufferRef.current = null;
+
+    // Completely destroy the previous loaded HTML/WAV object to prevent fallback bugs
+    if (completeHtmlAudioRef.current) {
+      completeHtmlAudioRef.current.pause();
+      completeHtmlAudioRef.current.removeAttribute('src');
+      completeHtmlAudioRef.current.load();
+      completeHtmlAudioRef.current = null;
+    }
+    if (completeAudioUrlRef.current) {
+      URL.revokeObjectURL(completeAudioUrlRef.current);
+      completeAudioUrlRef.current = null;
+    }
+
     setCurrentTimeBoth(0);
     setDurationBoth(0);
     setSynthesizedDuration(0);
@@ -1198,7 +1221,6 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
 
       // Store complete audio for scrubbing and switch from streaming to complete mode
       setCompleteAudioBuffer(combinedAudio);
-      setCompleteAudioSampleRate(sampleRate);
       // Mirror into refs immediately — React state updates are async, so these refs
       // ensure playCompleteAudio (called right below) sees the correct values.
       completeAudioBufferRef.current = combinedAudio;
@@ -1207,6 +1229,12 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
       setSynthesizedDuration(combinedAudio.length / sampleRate);
 
       // Stop streaming playback before switching to complete mode
+      if (streamingTimeoutRef.current) {
+        clearTimeout(streamingTimeoutRef.current);
+        streamingTimeoutRef.current = null;
+      }
+      streamInvocationIdRef.current++; // Force kill any pending playStreamingChunks macros
+
       const wasPlaying = isPlaybackActiveRef.current;
       isPlaybackActiveRef.current = false;
 
@@ -1217,13 +1245,23 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
       scheduledSourceNodesRef.current = [];
 
       // Stop any current streaming audio source
-      if (completeAudioSourceRef.current) {
-        try {
-          completeAudioSourceRef.current.stop();
-        } catch (e) {
-          console.log('Streaming audio source already stopped');
+      if (completeHtmlAudioRef.current) {
+        completeHtmlAudioRef.current.pause();
+      }
+
+      try {
+        const wavBlob = floatToWav(combinedAudio, sampleRate);
+        const url = URL.createObjectURL(wavBlob);
+        if (completeAudioUrlRef.current) {
+          URL.revokeObjectURL(completeAudioUrlRef.current);
         }
-        completeAudioSourceRef.current = null;
+        completeAudioUrlRef.current = url;
+        const audio = new Audio(url);
+        audio.preservesPitch = true;
+        audio.playbackRate = playbackRateRef.current;
+        completeHtmlAudioRef.current = audio;
+      } catch (e) {
+        console.error("Failed to generate WAV URL", e);
       }
 
       setIsStreaming(false); // Switch from streaming to complete mode
@@ -1296,16 +1334,25 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
       sourceNodeRef.current = null;
     }
 
-    // Stop complete audio playback
-    if (completeAudioSourceRef.current) {
+    // Stop complete HTML audio playback
+    if (completeHtmlAudioRef.current) {
       try {
-        console.log('🛑 Stopping complete audio source');
-        completeAudioSourceRef.current.stop();
-      } catch (e) {
-        console.log('🛑 Complete audio source already stopped:', e);
-      }
-      completeAudioSourceRef.current = null;
+        console.log('🛑 Stopping complete HTML audio source');
+        intentionalStopRef.current = true;
+        completeHtmlAudioRef.current.pause();
+        completeHtmlAudioRef.current.currentTime = 0;
+        completeHtmlAudioRef.current.removeAttribute('src');
+        completeHtmlAudioRef.current.load();
+        completeHtmlAudioRef.current = null;
+      } catch (e) { }
     }
+
+    if (completeAudioUrlRef.current) {
+      URL.revokeObjectURL(completeAudioUrlRef.current);
+      completeAudioUrlRef.current = null;
+    }
+
+    completeAudioBufferRef.current = null;
 
     // Close AudioContext to release resources (important on memory-constrained devices)
     if (audioContextRef.current) {
@@ -1324,6 +1371,8 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
     setDurationBoth(0);
     setCanScrub(false);
 
+    // Completely abort any pending first-chunk autoplay triggers
+    setIsFirstChunkReady(false);
     // Reset word highlighting
     setWordTimings([]);
     setCurrentWordIndex(-1);
@@ -1629,11 +1678,12 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
 
   // Utility: get combined audio buffer as WAV Blob
   const getAudioBlob = useCallback((): Blob | null => {
-    if (!completeAudioBuffer) return null;
+    const audioDataBuffer = completeAudioBufferRef.current;
+    if (!audioDataBuffer) return null;
 
     const numChannels = 1;
-    const sampleRate = completeAudioSampleRate;
-    const numSamples = completeAudioBuffer.length;
+    const sampleRate = completeAudioSampleRateRef.current;
+    const numSamples = audioDataBuffer.length;
 
     const buffer = new ArrayBuffer(44 + numSamples * 2);
     const view = new DataView(buffer);
@@ -1662,17 +1712,17 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
     // Write PCM samples
     let pos = 44;
     for (let i = 0; i < numSamples; i++) {
-      let sample = Math.max(-1, Math.min(1, completeAudioBuffer[i]));
+      let sample = Math.max(-1, Math.min(1, audioDataBuffer[i]));
       sample = sample < 0 ? sample * 0x8000 : sample * 0x7FFF;
       view.setInt16(pos, sample, true);
       pos += 2;
     }
 
     return new Blob([view], { type: 'audio/wav' });
-  }, [completeAudioBuffer, completeAudioSampleRate]);
+  }, [completeAudioBufferRef, completeAudioSampleRateRef]);
 
   // Load audio WAV blob back into player (for saved books)
-  const loadAudioFromBlob = useCallback(async (blob: Blob) => {
+  const loadAudioFromBlob = useCallback(async (blob: Blob, savedWordTimings?: Array<{ word: string, start: number, end: number }>) => {
     if (!blob) return;
     if (!audioContextRef.current) {
       audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
@@ -1683,14 +1733,42 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
       const channelData = audioBuffer.getChannelData(0);
       const floatData = new Float32Array(channelData.length);
       floatData.set(channelData);
+
+      // Also generate the WAV ObjectURL for the HTMLAudioElement scrub patch
+      if (completeHtmlAudioRef.current) {
+        completeHtmlAudioRef.current.pause();
+      }
+      try {
+        const wavBlob = floatToWav(floatData, audioBuffer.sampleRate);
+        const url = URL.createObjectURL(wavBlob);
+        if (completeAudioUrlRef.current) {
+          URL.revokeObjectURL(completeAudioUrlRef.current);
+        }
+        completeAudioUrlRef.current = url;
+        const audio = new Audio(url);
+        audio.preservesPitch = true;
+        audio.playbackRate = playbackRateRef.current;
+        completeHtmlAudioRef.current = audio;
+      } catch (e) {
+        console.error("Failed to generate WAV URL for loaded blob", e);
+      }
+
       setCompleteAudioBuffer(floatData);
-      setCompleteAudioSampleRate(audioBuffer.sampleRate);
+      completeAudioSampleRateRef.current = audioBuffer.sampleRate;
       setDurationBoth(audioBuffer.duration); // Use setDurationBoth for safety
       setCurrentTimeBoth(0);
       setCanScrub(true);
       setIsStreaming(false);
       setSynthesisComplete(true);
-      setWordTimings([]);
+
+      // Use specifically saved wordTimings if available
+      if (savedWordTimings && savedWordTimings.length > 0) {
+        setWordTimings(savedWordTimings);
+      } else {
+        setWordTimings([]);
+        console.warn("No word timings were attached to this saved audio file. Word highlighting will be disabled during playback.");
+      }
+
       setCurrentWordIndex(-1);
       console.log('📚 Loaded saved audio book');
     } catch (err) {
@@ -1752,8 +1830,8 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
 
     // Apply new rate to any actively playing sources
     try {
-      if (completeAudioSourceRef.current) {
-        completeAudioSourceRef.current.playbackRate.value = rate;
+      if (completeHtmlAudioRef.current) {
+        completeHtmlAudioRef.current.playbackRate = rate;
       }
       if (sourceNodeRef.current) {
         sourceNodeRef.current.playbackRate.value = rate;
@@ -1761,7 +1839,7 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
     } catch (e) {
       console.warn('⚠️ Unable to set playbackRate on current source:', e);
     }
-  }, [sourceNodeRef, completeAudioSourceRef]);
+  }, [sourceNodeRef]);
 
   return {
     speak,

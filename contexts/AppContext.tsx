@@ -127,7 +127,11 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       return localStorage.getItem('twelvereader-signed-in-email');
     } catch { return null; }
   });
-  const [isPremium, setIsPremium] = useState<boolean>(false);
+  const [isPremium, setIsPremium] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('twelvereader-is-premium') === 'true';
+    } catch { return false; }
+  });
 
   // Reading progress map { setId: { audioTime: number; scrollTop: number } }
   const [readingProgress, setReadingProgress] = useState<Record<string, { audioTime: number; scrollTop: number }>>(() => {
@@ -160,6 +164,23 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     if (!textToRead) {
       setToast({ title: 'No Text', message: 'Please enter some text or upload a PDF to read.', type: 'info' });
       return;
+    }
+
+    // Check if we already have the exact audio generated/loaded for this text
+    if (tts.synthesisComplete && tts.canScrub && currentSetId) {
+      const currentSet = savedTextSets.find(s => s.id === currentSetId);
+      if (currentSet && currentSet.text.trim() === textToRead) {
+        console.log('🎵 Audio already loaded for this text, transitioning to player view...');
+        setIsReading(true);
+        setCurrentSentence(textToRead);
+
+        // Let the AudioPlayer component handle actual playback state,
+        // but if it's not playing, we can kick it off
+        if (!tts.isPlaying) {
+          tts.togglePlayPause();
+        }
+        return;
+      }
     }
 
     // Reset generation progress
@@ -432,7 +453,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
   const saveCurrentTextSet = async (title?: string, suppressPrompt: boolean = false): Promise<boolean> => {
     const cleaned = inputText.trim();
     if (!cleaned) {
-      if (!suppressPrompt) alert('Nothing to save. Please enter or load some text first.');
+      if (!suppressPrompt) setToast({ title: 'Notice', message: 'Nothing to save. Please enter or load some text first.', type: 'info' });
       return false;
     }
 
@@ -453,11 +474,23 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
           console.error('Failed to save audio blob:', e);
         }
       }
+
+      // Also ensure exact word timings are saved/synced for existing items 
+      if (tts.wordTimings && tts.wordTimings.length > 0) {
+        try {
+          await localDB.saveTimings(existingSet.id, tts.wordTimings);
+          if (googleDriveLinked && driveSync.hasToken()) {
+            driveSync.uploadTimings(existingSet.id, tts.wordTimings).catch(e => console.error('Failed to sync timings (existing)', e));
+          }
+        } catch (e) {
+          console.error('Failed to save timings (existing):', e);
+        }
+      }
       if (!existingSet.audioGenerated && tts.synthesisComplete) {
         setSavedTextSets((prev: TextSet[]) => prev.map(s => s.id === existingSet.id ? { ...s, audioGenerated: true } : s));
       }
       if (!suppressPrompt) {
-        alert('This text is already saved in your Library!');
+        setToast({ title: 'Library Updated', message: 'This text and its exact word timings were already saved in your Library!', type: 'success' });
       }
       return true;
     }
@@ -478,6 +511,18 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       lastPosition: tts.currentTime,
       audioGenerated: tts.synthesisComplete,
     };
+
+    // Save timings separately
+    if (tts.wordTimings && tts.wordTimings.length > 0) {
+      try {
+        await localDB.saveTimings(newSet.id, tts.wordTimings);
+        if (googleDriveLinked && driveSync.hasToken()) {
+          driveSync.uploadTimings(newSet.id, tts.wordTimings).catch(e => console.error('Failed to sync timings', e));
+        }
+      } catch (e) {
+        console.error('Failed to save timings:', e);
+      }
+    }
 
     // Save audio blob to IndexedDB if it exists
     const blob = tts.getAudioBlob();
@@ -530,6 +575,12 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
   const loadTextSet = async (id: string) => {
     const set = savedTextSets.find((s: TextSet) => s.id === id);
     if (!set) return;
+
+    // Stop any currently generating background TTS before switching contexts
+    if (isReading || isGenerating || tts.isLoading) {
+      handleStopReading();
+    }
+
     updateInputText(set.text);
     setCurrentSetId(id);
 
@@ -555,8 +606,17 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
 
       if (blob) {
         console.log('Loaded audio blob, size:', blob.size);
+
+        let loadedTimings = await localDB.getTimings(id);
+        if (!loadedTimings && googleDriveLinked && driveSync.hasToken()) {
+          loadedTimings = await driveSync.fetchTimings(id);
+          if (loadedTimings) {
+            await localDB.saveTimings(id, loadedTimings);
+          }
+        }
+
         // Restore the audio into the TTS engine so it's ready to play without regenerating
-        await tts.loadAudioFromBlob(blob);
+        await tts.loadAudioFromBlob(blob, loadedTimings || undefined);
       }
     } catch (e) {
       console.error('Failed to load audio blob:', e);
@@ -570,13 +630,12 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
   };
 
   const deleteTextSet = async (id: string) => {
-    if (!confirm('Delete this saved text permanently?')) return;
-
-    // Remove blob from IndexedDB
+    // Remove blob and timings from IndexedDB
     try {
       await localDB.deleteAudioBlob(id);
+      await localDB.deleteTimings(id);
     } catch (e) {
-      console.error('Failed to delete audio blob:', e);
+      console.error('Failed to delete audio/timings:', e);
     }
 
     setSavedTextSets((prev: TextSet[]) => prev.filter((s: TextSet) => s.id !== id));
@@ -587,6 +646,10 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       return copy;
     });
     if (currentSetId === id) {
+      // If deleting the active document, stop any background generation
+      if (isReading || isGenerating || tts.isLoading) {
+        handleStopReading();
+      }
       setCurrentSetId(null);
       updateInputText('');
     }
@@ -715,23 +778,41 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     scope: 'email profile',
     onSuccess: async (tokenResponse: any) => {
       try {
-        const res = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
-          headers: { Authorization: `Bearer ${tokenResponse.access_token}` },
+        setToast({ title: 'Signing In...', message: 'Verifying premium status...', type: 'info' });
+
+        const res = await fetch('/api/checkPremium', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ accessToken: tokenResponse.access_token }),
         });
-        if (!res.ok) throw new Error('Failed to fetch user info');
+
+        if (!res.ok) {
+          const errorData = await res.json().catch(() => ({}));
+          throw new Error(errorData.error || 'Failed to verify account');
+        }
+
         const data = await res.json();
+
         if (data && data.email) {
           setUserEmail(data.email);
           localStorage.setItem('twelvereader-signed-in-email', data.email);
-          // TODO: Check Stripe API here
-          // setIsPremium(true) if valid
-          setToast({ title: 'Signed In', message: `Successfully signed in as ${data.email}`, type: 'success' });
+
+          setIsPremium(data.isPremium);
+          localStorage.setItem('twelvereader-is-premium', String(data.isPremium));
+
+          if (data.isPremium) {
+            setToast({ title: 'Premium Active ✨', message: `Welcome back, ${data.email}`, type: 'success' });
+          } else {
+            setToast({ title: 'Signed In', message: `Successfully signed in as ${data.email}`, type: 'success' });
+          }
         }
       } catch (err) {
         console.error("Identity login failed:", err);
         setToast({ title: 'Sign In Failed', message: 'Failed to sign in. Please try again.', type: 'error' });
         setUserEmail(null);
+        setIsPremium(false);
         localStorage.removeItem('twelvereader-signed-in-email');
+        localStorage.removeItem('twelvereader-is-premium');
       }
     },
     onError: (errorResponse: any) => {
@@ -749,6 +830,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     setUserEmail(null);
     setIsPremium(false);
     localStorage.removeItem('twelvereader-signed-in-email');
+    localStorage.removeItem('twelvereader-is-premium');
   };
 
   // Sync to Drive whenever savedTextSets change

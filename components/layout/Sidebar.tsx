@@ -1,4 +1,4 @@
-import { type FC, useState } from 'react';
+import { type FC, useState, useEffect } from 'react';
 import { useAppContext } from '../../contexts/AppContext';
 import ModelSelector from '../ModelSelector';
 import { BRAND_NAME } from '../../utils/branding';
@@ -8,6 +8,36 @@ const Sidebar: FC = () => {
   const { state, actions, tts } = useAppContext();
   const [showSettings, setShowSettings] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+
+  useEffect(() => {
+    const handleBeforeInstallPrompt = (e: any) => {
+      // Prevent the mini-infobar from appearing on mobile
+      e.preventDefault();
+      // Stash the event so it can be triggered later.
+      setDeferredPrompt(e);
+    };
+
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    };
+  }, []);
+
+  const handleInstallClick = () => {
+    if (deferredPrompt) {
+      deferredPrompt.prompt();
+      deferredPrompt.userChoice.then((choiceResult: any) => {
+        if (choiceResult.outcome === 'accepted') {
+          console.log('User accepted the A2HS prompt');
+        } else {
+          console.log('User dismissed the A2HS prompt');
+        }
+        setDeferredPrompt(null);
+      });
+    }
+  };
 
   return (
     <>
@@ -97,7 +127,15 @@ const Sidebar: FC = () => {
 
                   {!state.isPremium && (
                     <button
-                      onClick={() => { setShowUserMenu(false); alert('Stripe Checkout coming soon...'); }}
+                      onClick={() => {
+                        setShowUserMenu(false);
+                        const paymentLink = import.meta.env.VITE_STRIPE_PAYMENT_LINK || '#';
+                        if (paymentLink === '#') {
+                          actions.setToast({ title: 'Coming Soon', message: 'Premium checkout is not yet configured.', type: 'info' });
+                        } else {
+                          window.open(`${paymentLink}?prefilled_email=${encodeURIComponent(state.userEmail || '')}`, '_blank');
+                        }
+                      }}
                       className="w-full text-left px-4 py-2 hover:bg-slate-800 transition-colors text-amber-400 hover:text-amber-300 text-sm flex items-center gap-2 font-medium"
                     >
                       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4"><path fillRule="evenodd" d="M10.868 2.884c-.321-.772-1.415-.772-1.736 0l-1.83 4.401-4.753.381c-.833.067-1.171 1.107-.536 1.651l3.62 3.102-1.106 4.637c-.194.813.691 1.456 1.405 1.02L10 15.591l4.069 2.485c.713.436 1.598-.207 1.404-1.02l-1.106-4.637 3.62-3.102c.635-.544.297-1.584-.536-1.65l-4.752-.382-1.831-4.401Z" clipRule="evenodd" /></svg>
@@ -180,6 +218,15 @@ const Sidebar: FC = () => {
 
             {/* Debug & Cache info (Moved from old sidebar) */}
             <div className="space-y-4 pt-6 border-t border-slate-800">
+              {deferredPrompt && (
+                <button
+                  onClick={handleInstallClick}
+                  className="w-full p-3 rounded-lg bg-indigo-600/20 text-indigo-300 text-sm font-medium hover:bg-indigo-600/30 border border-indigo-500/30 transition-colors flex items-center justify-center gap-2"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" /></svg>
+                  Install App (Offline Mode)
+                </button>
+              )}
               <button onClick={actions.handleShowHelp} className="w-full p-3 rounded-lg bg-slate-800 text-slate-300 text-sm font-medium hover:bg-slate-700 transition-colors flex items-center justify-center gap-2">
                 <span>❓</span> Help & Tutorials
               </button>

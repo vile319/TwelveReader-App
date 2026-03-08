@@ -10,6 +10,8 @@ export class GoogleDriveSync {
     private folderId: string | null = null;
     private readonly FOLDER_NAME = 'TwelveReader Sync';
     private readonly FILE_NAME = 'twelvereader_data.json';
+    private fileIdCache = new Map<string, string>();
+    private syncMutex: Promise<void> | null = null;
 
     constructor(accessToken?: string) {
         if (accessToken) {
@@ -65,20 +67,45 @@ export class GoogleDriveSync {
         return this.folderId!;
     }
 
-    private async getFileId(folderId: string, fileName: string = this.FILE_NAME): Promise<string | null> {
+    private async getFileId(folderId: string, fileName: string = this.FILE_NAME, retries = 3): Promise<string | null> {
         if (!this.accessToken) throw new Error("Not authenticated");
 
+        const cacheKey = `${folderId}-${fileName}`;
+        if (this.fileIdCache.has(cacheKey)) {
+            return this.fileIdCache.get(cacheKey)!;
+        }
+
         const query = encodeURIComponent(`name='${fileName}' and '${folderId}' in parents and trashed=false`);
-        const res = await fetch(`https://www.googleapis.com/drive/v3/files?q=${query}&spaces=drive`, {
-            headers: { Authorization: `Bearer ${this.accessToken}` }
-        });
 
-        if (res.status === 401) throw new Error('Google Drive token expired');
-        if (!res.ok) return null;
+        for (let attempt = 0; attempt < retries; attempt++) {
+            const res = await fetch(`https://www.googleapis.com/drive/v3/files?q=${query}&spaces=drive`, {
+                headers: { Authorization: `Bearer ${this.accessToken}` }
+            });
 
-        const data = await res.json();
-        if (data.files && data.files.length > 0) {
-            return data.files[0].id;
+            if (res.status === 401) throw new Error('Google Drive token expired');
+            if (!res.ok) {
+                if (attempt < retries - 1) {
+                    await new Promise(r => setTimeout(r, 1000));
+                    continue;
+                }
+                return null;
+            }
+
+            const data = await res.json();
+            if (data.files && data.files.length > 0) {
+                const id = data.files[0].id;
+                this.fileIdCache.set(cacheKey, id);
+                return id;
+            }
+
+            // If we didn't find the main json, Google Drive's index might just be lagging behind a recent creation. Wait 1s and retry.
+            // Don't bother retrying for audio blobs as they are created dynamically and are fine to be null exactly once.
+            if (fileName === this.FILE_NAME && attempt < retries - 1) {
+                await new Promise(r => setTimeout(r, 1500));
+                continue;
+            } else {
+                break;
+            }
         }
         return null;
     }
@@ -113,6 +140,11 @@ export class GoogleDriveSync {
 
         if (res.status === 401) throw new Error('Google Drive token expired');
         if (!res.ok) throw new Error('Failed to upload audio blob to Google Drive');
+
+        const data = await res.json();
+        if (data.id) {
+            this.fileIdCache.set(`${folderId}-${fileName}`, data.id);
+        }
     }
 
     async fetchAudioBlob(id: string): Promise<Blob | null> {
@@ -134,25 +166,21 @@ export class GoogleDriveSync {
         return await res.blob();
     }
 
-    async uploadSyncData(sets: TextSet[], progress: Record<string, ReadingProgressEntry> = {}): Promise<void> {
+    async uploadTimings(id: string, timings: any[]): Promise<void> {
         if (!this.accessToken) return;
 
         const folderId = await this.getFolderId();
-        const fileId = await this.getFileId(folderId, this.FILE_NAME);
+        const fileName = `${id}_timings.json`;
+        const fileId = await this.getFileId(folderId, fileName);
 
-        const payload: SyncData = {
-            textSets: sets,
-            readingProgress: progress
-        };
-        const fileContent = JSON.stringify(payload);
         const metadata = {
-            name: this.FILE_NAME,
-            parents: fileId ? undefined : [folderId] // Only specify parents on creation
+            name: fileName,
+            parents: fileId ? undefined : [folderId]
         };
 
         const form = new FormData();
         form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
-        form.append('file', new Blob([fileContent], { type: 'application/json' }));
+        form.append('file', new Blob([JSON.stringify(timings)], { type: 'application/json' }));
 
         const url = fileId
             ? `https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=multipart`
@@ -166,7 +194,87 @@ export class GoogleDriveSync {
             body: form
         });
 
-        if (!res.ok) throw new Error('Failed to upload sync data to Google Drive');
+        if (res.status === 401) throw new Error('Google Drive token expired');
+        if (!res.ok) throw new Error('Failed to upload timings to Google Drive');
+
+        const data = await res.json();
+        if (data.id) {
+            this.fileIdCache.set(`${folderId}-${fileName}`, data.id);
+        }
+    }
+
+    async fetchTimings(id: string): Promise<any[] | null> {
+        if (!this.accessToken) return null;
+
+        const folderId = await this.getFolderId();
+        const fileName = `${id}_timings.json`;
+        const fileId = await this.getFileId(folderId, fileName);
+
+        if (!fileId) return null;
+
+        const res = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
+            headers: { Authorization: `Bearer ${this.accessToken}` }
+        });
+
+        if (res.status === 401) throw new Error('Google Drive token expired');
+        if (!res.ok) return null;
+
+        return await res.json();
+    }
+
+    async uploadSyncData(sets: TextSet[], progress: Record<string, ReadingProgressEntry> = {}): Promise<void> {
+        if (!this.accessToken) return;
+
+        // If a sync is already in progress, wait for it to finish so we don't duplicate files
+        if (this.syncMutex) {
+            await this.syncMutex;
+        }
+
+        let resolveMutex: () => void;
+        this.syncMutex = new Promise(resolve => {
+            resolveMutex = resolve;
+        });
+
+        try {
+            const folderId = await this.getFolderId();
+            const fileId = await this.getFileId(folderId, this.FILE_NAME);
+
+            const payload: SyncData = {
+                textSets: sets,
+                readingProgress: progress
+            };
+            const fileContent = JSON.stringify(payload);
+            const metadata = {
+                name: this.FILE_NAME,
+                parents: fileId ? undefined : [folderId] // Only specify parents on creation
+            };
+
+            const form = new FormData();
+            form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+            form.append('file', new Blob([fileContent], { type: 'application/json' }));
+
+            const url = fileId
+                ? `https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=multipart`
+                : 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart';
+
+            const method = fileId ? 'PATCH' : 'POST';
+
+            const res = await fetch(url, {
+                method,
+                headers: { Authorization: `Bearer ${this.accessToken}` },
+                body: form
+            });
+
+            if (!res.ok) throw new Error('Failed to upload sync data to Google Drive');
+
+            const data = await res.json();
+            if (data.id) {
+                this.fileIdCache.set(`${folderId}-${this.FILE_NAME}`, data.id);
+            }
+        } finally {
+            resolveMutex!();
+            this.syncMutex = null;
+        }
     }
 
     async fetchSyncData(): Promise<SyncData | null> {
@@ -176,6 +284,9 @@ export class GoogleDriveSync {
         const fileId = await this.getFileId(folderId, this.FILE_NAME);
 
         if (!fileId) return null;
+
+        // Ensure cache is populated even if `getFileId` fetched it fresh
+        this.fileIdCache.set(`${folderId}-${this.FILE_NAME}`, fileId);
 
         const res = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
             headers: { Authorization: `Bearer ${this.accessToken}` }

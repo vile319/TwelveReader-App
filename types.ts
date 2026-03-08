@@ -57,6 +57,7 @@ export interface TextSet {
   lastPosition?: number; // seconds into the audio where the user left off
   /** Indicates if audio has been generated for this text set */
   audioGenerated?: boolean;
+  wordTimings?: WordTiming[];
 }
 
 export interface ReadingProgressEntry {
@@ -209,7 +210,7 @@ export interface AppContextType {
     currentWordIndex: number;
     synthesisComplete: boolean;
     getAudioBlob: () => Blob | null;
-    loadAudioFromBlob: (blob: Blob) => Promise<void>;
+    loadAudioFromBlob: (blob: Blob, wordTimings?: WordTiming[]) => Promise<void>;
     isReady: boolean;
     setPlaybackRate: (rate: number) => void;
     playbackRate: number;
