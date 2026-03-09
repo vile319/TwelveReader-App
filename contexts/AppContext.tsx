@@ -437,22 +437,32 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     const initDevice = async () => {
       const preferences = modelManager.getPreferences();
       if (preferences.preferredDevice === 'auto') {
-        let defaultDevice: 'webgpu' | 'serverless' = 'serverless';
-        // Check for WebGPU
-        if (typeof navigator !== 'undefined' && (navigator as any).gpu) {
-          try {
-            const adapter = await (navigator as any).gpu.requestAdapter();
-            if (adapter) {
-              defaultDevice = 'webgpu';
-              console.log('✅ WebGPU supported: defaulting new user to webgpu processing.');
+        let defaultDevice: 'webgpu' | 'serverless' | 'wasm' = 'serverless';
+        let defaultModel = 'kokoro-82m-fp32';
+
+        // 1. Check if offline (no internet) - forces CPU mode
+        if (typeof navigator !== 'undefined' && !navigator.onLine) {
+          console.log('📡 Offline detected: defaulting to local CPU mode (wasm) with Q8 model.');
+          defaultDevice = 'wasm';
+          defaultModel = 'kokoro-82m-q8';
+        } else {
+          // 2. Online: check for WebGPU
+          if (typeof navigator !== 'undefined' && (navigator as any).gpu) {
+            try {
+              const adapter = await (navigator as any).gpu.requestAdapter();
+              if (adapter) {
+                defaultDevice = 'webgpu';
+                console.log('✅ WebGPU supported: defaulting new user to webgpu processing.');
+              }
+            } catch (e) {
+              console.log('WebGPU detection failed, defaulting to serverless.', e);
             }
-          } catch (e) {
-            console.log('WebGPU detection failed, defaulting to serverless.', e);
           }
         }
 
         setPreferredDevice(defaultDevice);
-        modelManager.savePreferences({ preferredDevice: defaultDevice });
+        setSelectedModel(defaultModel);
+        modelManager.savePreferences({ preferredDevice: defaultDevice, selectedModel: defaultModel });
       }
     };
     initDevice();

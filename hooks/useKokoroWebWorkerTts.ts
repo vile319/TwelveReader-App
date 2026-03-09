@@ -4,6 +4,7 @@ import React, { useState, useCallback, useRef, useEffect } from 'react';
 void React;
 import { KokoroTTS } from 'kokoro-js';
 import { configureOnnxRuntimeForIOS } from '../utils/onnxIosConfig';
+import { modelManager } from '../utils/modelManager';
 
 // Helper to create WAV for HTMLAudioElement
 const floatToWav = (float32Array: Float32Array, sampleRate: number): Blob => {
@@ -813,6 +814,11 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
           } else if (progress.status === 'ready') {
             const loadTime = ((performance.now() - modelLoadStart) / 1000).toFixed(1);
             console.log(`⏱️ Model loaded in ${loadTime}s`);
+
+            // Mark the model as cached in our local state Manager so the UI updates
+            if (selectedModel) {
+              modelManager.updateModelCacheStatus(selectedModel, true);
+            }
           }
         }
       });
