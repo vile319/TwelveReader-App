@@ -31,7 +31,7 @@ interface ModelSelectorProps {
 const AVAILABLE_MODELS: ModelConfig[] = [
   {
     id: 'kokoro-82m-fp32',
-    name: 'Kokoro 82M (FP32)',
+    name: 'Voice Engine (FP32)',
     description: 'Full precision – highest quality, GPU recommended',
     size: '310MB',
     quality: 'high',
@@ -44,7 +44,7 @@ const AVAILABLE_MODELS: ModelConfig[] = [
   },
   {
     id: 'kokoro-82m-fp16',
-    name: 'Kokoro 82M (FP16)',
+    name: 'Voice Engine (FP16)',
     description: 'Half precision – high quality, GPU recommended',
     size: '156MB',
     quality: 'high',
@@ -56,7 +56,7 @@ const AVAILABLE_MODELS: ModelConfig[] = [
   },
   {
     id: 'kokoro-82m-q8',
-    name: 'Kokoro 82M (Q8)',
+    name: 'Voice Engine (Q8)',
     description: '8-bit quantised – balanced quality and speed',
     size: '82MB',
     quality: 'balanced',
@@ -68,7 +68,7 @@ const AVAILABLE_MODELS: ModelConfig[] = [
   },
   {
     id: 'kokoro-82m-q4',
-    name: 'Kokoro 82M (Q4)',
+    name: 'Voice Engine (Q4)',
     description: '4-bit quantised – fastest, works on all devices',
     size: '290MB',
     quality: 'fast',
@@ -79,7 +79,7 @@ const AVAILABLE_MODELS: ModelConfig[] = [
   },
   {
     id: 'kokoro-82m-q4f16',
-    name: 'Kokoro 82M (Q4F16)',
+    name: 'Voice Engine (Q4F16)',
     description: '4-bit with FP16 fallback – good balance',
     size: '147MB',
     quality: 'fast',

@@ -41,8 +41,8 @@ const ModelWarningModal: React.FC = () => {
           color: '#a0a0a0',
           lineHeight: '1.4'
         }}>
-          The <strong>{modelInfo?.name || 'Local Speech'}</strong> model ({sizeText}) needs to be securely downloaded to your browser cache.
-          This is a one-time process to enable offline, private text-to-speech that never leaves your device.
+          A <strong>high-quality voice engine</strong> ({sizeText}) needs to be securely downloaded to your browser cache.
+          This one-time process enables offline, private text-to-speech that never leaves your device.
         </p>
         <div style={{
           display: 'flex',
