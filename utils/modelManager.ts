@@ -161,6 +161,65 @@ export class ModelManager {
       .map(status => status.modelId);
   }
 
+  // Scan the browser Cache API directly to see what actually exists, repairing any broken localStorage states
+  public async verifyCacheStatus(): Promise<void> {
+    try {
+      if (typeof window === 'undefined' || !('caches' in window)) return;
+
+      const cacheNames = await caches.keys();
+      const relevantCaches = cacheNames.filter(name =>
+        name.includes('model') || name.includes('kokoro') || name.includes('transformers')
+      );
+
+      const allModels = getAllModels();
+      const foundModels = new Set<string>();
+
+      for (const cacheName of relevantCaches) {
+        const cache = await caches.open(cacheName);
+        const requests = await cache.keys();
+        for (const req of requests) {
+          allModels.forEach(model => {
+            if (req.url.includes(model.filename)) {
+              foundModels.add(model.id);
+            }
+          });
+        }
+      }
+
+      let stateChanged = false;
+      allModels.forEach(model => {
+        const isActuallyCached = foundModels.has(model.id);
+        const existingStatus = this.getModelCacheStatus(model.id);
+
+        if (!existingStatus || existingStatus.isDownloaded !== isActuallyCached) {
+          // Update the internal state array directly to avoid spamming localStorage repeatedly
+          const existingIndex = this.cacheStatus.findIndex(status => status.modelId === model.id);
+          const cacheEntry: ModelCacheStatus = {
+            modelId: model.id,
+            isDownloaded: isActuallyCached,
+            downloadDate: isActuallyCached ? Date.now() : 0,
+            fileSize: existingStatus?.fileSize ?? 0,
+            lastAccessed: Date.now()
+          };
+
+          if (existingIndex >= 0) {
+            this.cacheStatus[existingIndex] = cacheEntry;
+          } else {
+            this.cacheStatus.push(cacheEntry);
+          }
+          stateChanged = true;
+        }
+      });
+
+      if (stateChanged) {
+        localStorage.setItem(MODEL_CACHE_STATUS_KEY, JSON.stringify(this.cacheStatus));
+        console.log(`🔄 Synced cache UI state with browser Cache APIs. Found ${foundModels.size} models physically cached.`);
+      }
+    } catch (error) {
+      console.warn('Failed to verify actual cache status:', error);
+    }
+  }
+
   // Cache cleanup
   public async cleanupModelCache(modelId: string): Promise<void> {
     try {

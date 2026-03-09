@@ -17,6 +17,9 @@ export const useModelManager = () => {
   }, []);
 
   const refreshModelData = useCallback(async () => {
+    // Scan the literal Browser Cache API to ensure `downloadedModels` is accurate
+    await modelManager.verifyCacheStatus();
+
     const downloaded = modelManager.getDownloadedModels();
     const keepLocal = modelManager.getAllKeepLocalSettings();
     const cacheInfo = await modelManager.getCacheSize();
@@ -34,7 +37,7 @@ export const useModelManager = () => {
   const updateModelCacheStatus = useCallback((modelId: string, isDownloaded: boolean, fileSize?: number) => {
     modelManager.updateModelCacheStatus(modelId, isDownloaded, fileSize);
     if (isDownloaded) {
-      setDownloadedModels((prev: string[]) => 
+      setDownloadedModels((prev: string[]) =>
         prev.includes(modelId) ? prev : [...prev, modelId]
       );
     } else {
