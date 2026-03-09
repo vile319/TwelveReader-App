@@ -35,10 +35,10 @@ export default defineConfig(({ mode }) => {
         },
         workbox: {
           globPatterns: ['**/*.{js,css,html,ico,png,svg,wasm,onnx}'],
-          maximumFileSizeToCacheInBytes: 100 * 1024 * 1024, // 100MB to allow for ONNX models if local
+          maximumFileSizeToCacheInBytes: 500 * 1024 * 1024, // 500MB to allow for ONNX models if local
           runtimeCaching: [
             {
-              urlPattern: /^https:\/\/huggingface\.co\/.*$/i,
+              urlPattern: /^https:\/\/(.*\.)?huggingface\.co\/.*$/i,
               handler: 'CacheFirst',
               options: {
                 cacheName: 'kokoro-models-cache',

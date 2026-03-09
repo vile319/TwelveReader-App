@@ -1,6 +1,4 @@
-import { ModelConfig } from '../components/ModelSelector';
-
-// Local storage keys
+import { ModelConfig, getModelInfo, getAllModels } from '../components/ModelSelector';// Local storage keys
 const MODEL_PREFERENCES_KEY = 'twelvereader-model-preferences-v2'; // bumped to reset old local-mode defaults
 const MODEL_KEEP_LOCAL_KEY = 'twelvereader-model-keep-local';
 const MODEL_CACHE_STATUS_KEY = 'twelvereader-model-cache-status';
@@ -170,32 +168,39 @@ export class ModelManager {
       this.cacheStatus = this.cacheStatus.filter(status => status.modelId !== modelId);
       localStorage.setItem(MODEL_CACHE_STATUS_KEY, JSON.stringify(this.cacheStatus));
 
-      // Clear browser cache for this model
+      // Get the specific filename for this model so we don't delete other variants
+      const modelConfig = getModelInfo(modelId);
+      const filename = modelConfig?.filename;
+
+      if (!filename) {
+        console.warn(`Could not find config for model ${modelId} during cleanup`);
+        return;
+      }
+
+      // Clear browser cache for this model specifically
       if (typeof window !== 'undefined' && 'caches' in window) {
         const cacheNames = await caches.keys();
         const modelCaches = cacheNames.filter(name =>
-          name.includes('model') ||
-          name.includes('kokoro') ||
-          name.includes(modelId)
+          name.includes('model') || name.includes('kokoro')
         );
 
         for (const cacheName of modelCaches) {
           const cache = await caches.open(cacheName);
           const requests = await cache.keys();
 
-          // Remove files related to this model
+          // Only delete the specific ONNX file for this model variant, plus related JSONs
           for (const request of requests) {
-            if (request.url.includes(modelId) ||
-              request.url.includes('onnx') ||
-              request.url.includes('bin') ||
-              request.url.includes('json')) {
+            if (
+              request.url.includes(filename) ||
+              (request.url.includes('.json') && request.url.includes('Kokoro-82M-ONNX'))
+            ) {
               await cache.delete(request);
             }
           }
         }
       }
 
-      console.log(`🧹 Cleaned up cache for model: ${modelId}`);
+      console.log(`🧹 Cleaned up cache for model: ${modelId} (${filename})`);
     } catch (error) {
       console.warn('Failed to cleanup model cache:', error);
     }
@@ -263,16 +268,28 @@ export class ModelManager {
           name.includes('model') || name.includes('kokoro')
         );
 
+        // Get all possible valid filenames from our config
+        const validFilenames = getAllModels().map((m: any) => m.filename);
+
         for (const cacheName of modelCaches) {
           const cache = await caches.open(cacheName);
           const requests = await cache.keys();
 
           for (const request of requests) {
-            const response = await cache.match(request);
-            if (response) {
-              const blob = await response.blob();
-              totalSize += blob.size;
-              fileCount++;
+            // Only count if it's one of our known ONNX models or related JSON
+            const isKnownModelFile = validFilenames.some((fn: any) => request.url.includes(fn));
+            const isJsonConfig = request.url.includes('.json') && request.url.includes('Kokoro-82M-ONNX');
+
+            // Also transformers.js caches wasm files, which we should count
+            const isWasmEnv = request.url.includes('.wasm');
+
+            if (isKnownModelFile || isJsonConfig || isWasmEnv) {
+              const response = await cache.match(request);
+              if (response) {
+                const blob = await response.blob();
+                totalSize += blob.size;
+                fileCount++;
+              }
             }
           }
         }
