@@ -175,6 +175,8 @@ const ModelSelector: FC<ModelSelectorProps> = ({
         return AVAILABLE_MODELS.find(m => m.dtype === 'q8') || AVAILABLE_MODELS[2];
       case 'cpu':
         return AVAILABLE_MODELS.find(m => m.dtype === 'q8') || AVAILABLE_MODELS[2];
+      case 'serverless':
+        return AVAILABLE_MODELS.find(m => m.dtype === 'fp32') || AVAILABLE_MODELS[0];
       default:
         return AVAILABLE_MODELS[0];
     }
@@ -210,7 +212,8 @@ const ModelSelector: FC<ModelSelectorProps> = ({
   // After the useEffect for loading preferences, add this new useEffect for device fallback
   useEffect(() => {
     if (gpuCheckComplete && !gpuAvailable && preferredDevice === 'webgpu') {
-      const newDevice = 'wasm';
+      const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
+      const newDevice = isOnline ? 'serverless' : 'wasm';
       setPreferredDevice(newDevice);
       const bestModel = getBestModelForDevice(newDevice);
       onModelChange(bestModel.id);

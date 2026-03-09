@@ -440,24 +440,44 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
         let defaultDevice: 'webgpu' | 'serverless' | 'wasm' = 'serverless';
         let defaultModel = 'kokoro-82m-fp32';
 
-        // 1. Check if offline (no internet) - forces CPU mode
-        if (typeof navigator !== 'undefined' && !navigator.onLine) {
-          console.log('📡 Offline detected: defaulting to local CPU mode (wasm) with Q8 model.');
+        let hasGpu = false;
+        let isGoodGpu = false;
+
+        if (typeof navigator !== 'undefined' && (navigator as any).gpu) {
+          try {
+            const adapter = await (navigator as any).gpu.requestAdapter();
+            if (adapter) {
+              hasGpu = true;
+              isGoodGpu = !adapter.isFallbackAdapter;
+
+              // Check for particularly weak mobile GPUs based on limits if needed
+              if (adapter.limits && adapter.limits.maxStorageBufferBindingSize < 128 * 1024 * 1024) {
+                isGoodGpu = false;
+              }
+            }
+          } catch (e) {
+            console.log('WebGPU detection failed.', e);
+          }
+        }
+
+        const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
+
+        if (hasGpu && isGoodGpu) {
+          defaultDevice = 'webgpu';
+          defaultModel = 'kokoro-82m-fp32';
+          console.log('✅ Good WebGPU supported: defaulting to webgpu processing.');
+        } else if (isOnline) {
+          defaultDevice = 'serverless';
+          defaultModel = 'kokoro-82m-fp32';
+          console.log('☁️ Defaulting to serverless processing (GPU is unavailable or poor).');
+        } else if (hasGpu) {
+          defaultDevice = 'webgpu';
+          defaultModel = 'kokoro-82m-q8';
+          console.log('📡 Offline detected with weak GPU: defaulting to local webgpu with Q8 model.');
+        } else {
           defaultDevice = 'wasm';
           defaultModel = 'kokoro-82m-q8';
-        } else {
-          // 2. Online: check for WebGPU
-          if (typeof navigator !== 'undefined' && (navigator as any).gpu) {
-            try {
-              const adapter = await (navigator as any).gpu.requestAdapter();
-              if (adapter) {
-                defaultDevice = 'webgpu';
-                console.log('✅ WebGPU supported: defaulting new user to webgpu processing.');
-              }
-            } catch (e) {
-              console.log('WebGPU detection failed, defaulting to serverless.', e);
-            }
-          }
+          console.log('📡 Offline detected and no GPU: defaulting to local CPU mode (wasm) with Q8 model.');
         }
 
         setPreferredDevice(defaultDevice);
