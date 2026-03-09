@@ -227,7 +227,7 @@ const ModelSelector: FC<ModelSelectorProps> = ({
           value={preferredDevice}
           onChange={handleDeviceChange}
           disabled={disabled}
-          className={`w-full p-2 bg-slate-700 border border-slate-600 rounded text-slate-200 text-sm transition-colors ${disabled ? 'opacity-50 cursor-not-allowed' : 'hover:border-slate-500 focus:border-purple-500 focus:ring-1 focus:ring-purple-500'
+          className={`w-full p-2 bg-[#111827] border border-slate-700 rounded-sm text-slate-200 text-sm font-semibold transition-colors ${disabled ? 'opacity-50 cursor-not-allowed' : 'hover:border-slate-500 focus:border-blue-500 focus:ring-1 focus:ring-blue-500'
             }`}
         >
           <option value="serverless">
@@ -263,9 +263,9 @@ const ModelSelector: FC<ModelSelectorProps> = ({
             return (
               <div
                 key={model.id}
-                className={`p-3 rounded-lg border cursor-pointer transition-all duration-200 ${isSelected
-                  ? 'border-blue-500 bg-blue-500/10 shadow-md'
-                  : 'border-slate-600 bg-slate-700 hover:border-slate-500 hover:bg-slate-600'
+                className={`p-3 rounded-sm border cursor-pointer transition-all duration-200 ${isSelected
+                  ? 'border-blue-500 bg-blue-500/10'
+                  : 'border-slate-700 bg-[#111827] hover:border-slate-500'
                   } ${disabled ? 'cursor-not-allowed opacity-50' : ''}`}
                 onClick={() => !disabled && handleModelChange(model.id)}
               >
@@ -275,12 +275,12 @@ const ModelSelector: FC<ModelSelectorProps> = ({
                     <div className="flex items-center gap-1.5 flex-wrap mb-0.5">
                       <span className="font-medium text-slate-200 text-sm">{model.name}</span>
                       {model.isDefault && (
-                        <span className="px-1.5 py-0.5 text-xs bg-blue-500 text-white rounded-full">Default</span>
+                        <span className="px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider bg-blue-600 text-white rounded-sm">Default</span>
                       )}
                       {model.recommended && (
-                        <span className="px-1.5 py-0.5 text-xs bg-green-500/20 text-green-400 border border-green-500/30 rounded-full">⭐ rec</span>
+                        <span className="px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded-sm">⭐ rec</span>
                       )}
-                      <span className={`px-1.5 py-0.5 text-xs border rounded-full ${qCls}`}>{qLabel}</span>
+                      <span className={`px-1.5 py-0.5 text-[10px] uppercase font-bold tracking-wider border rounded-sm ${qCls}`}>{qLabel}</span>
                     </div>
                     <p className="text-xs text-slate-400 mb-1.5 leading-snug">{model.description}</p>
                     {/* Stats row */}

@@ -39,10 +39,6 @@ const AdSenseBanner: FC<AdSenseBannerProps> = ({
       style={{
         textAlign: 'center',
         margin: '16px 0',
-        padding: '8px',
-        backgroundColor: '#1a1e26',
-        borderRadius: '8px',
-        border: '1px solid #2d3748',
         ...style
       }}
     >

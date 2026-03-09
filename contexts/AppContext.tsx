@@ -151,7 +151,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
   // Initialize TTS hook
   const tts = useKokoroWebWorkerTts({
     onError: handleTtsError,
-    enabled: modelAccepted,
+    enabled: modelAccepted || preferredDevice === 'serverless',
     selectedModel,
     preferredDevice: preferredDevice as 'webgpu' | 'wasm' | 'cpu' | 'serverless',
     preferredDtype

@@ -45,16 +45,16 @@ const Sidebar: FC = () => {
 
         {/* Left: Branding & Status */}
         <div className="flex items-center gap-4">
-          <h1 className="text-xl font-bold tracking-tight bg-gradient-to-br from-indigo-400 to-purple-400 bg-clip-text text-transparent">
+          <h1 className="text-xl font-bold tracking-widest text-[#a3b1c6] uppercase">
             {BRAND_NAME}
           </h1>
           <div className="hidden sm:flex items-center gap-2">
             <span className={cn(
-              "w-2 h-2 rounded-full",
-              state.model.isReady ? "bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]" : "bg-amber-500 animate-pulse"
+              "w-2 h-2 rounded-sm",
+              state.model.isReady ? "bg-emerald-500" : "bg-amber-500 animate-pulse"
             )} />
-            <span className="text-xs font-medium text-slate-400">
-              {state.model.isReady ? "Ready" : "Loading Engine"}
+            <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
+              {state.model.isReady ? "Ready" : "Engine Standby"}
             </span>
           </div>
         </div>
@@ -65,7 +65,7 @@ const Sidebar: FC = () => {
             <select
               value={state.selectedVoice}
               onChange={(e) => actions.setSelectedVoice(e.target.value)}
-              className="appearance-none bg-slate-900/50 border border-slate-700/50 text-slate-300 text-sm font-medium py-1.5 pl-4 pr-8 rounded-full cursor-pointer hover:bg-slate-800 transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+              className="appearance-none bg-[#111827] border border-slate-700 text-slate-300 text-xs font-bold uppercase tracking-wide py-1.5 pl-4 pr-8 rounded-sm cursor-pointer hover:bg-slate-800 transition-colors focus:outline-none focus:border-blue-500"
             >
               {tts.voices.map((voice) => (
                 <option key={voice.name} value={voice.name}>
@@ -89,19 +89,19 @@ const Sidebar: FC = () => {
             <button
               onClick={() => state.userEmail ? setShowUserMenu(!showUserMenu) : actions.loginUser()}
               className={cn(
-                "flex items-center gap-2 px-4 py-2 rounded-full font-medium text-sm transition-all border",
+                "flex items-center gap-2 px-4 py-1.5 rounded-sm font-bold text-xs uppercase tracking-wider transition-all border",
                 state.userEmail
-                  ? "bg-slate-800 text-slate-200 border-slate-700 hover:bg-slate-700"
-                  : "bg-indigo-600 border-indigo-500 text-white hover:bg-indigo-500 hover:border-indigo-400 shadow-md shadow-indigo-900/20"
+                  ? "bg-[#111827] text-slate-200 border-slate-700 hover:bg-slate-800"
+                  : "bg-blue-600 border-blue-500 text-white hover:bg-blue-500 hover:border-blue-400"
               )}
               title="Manage Account"
             >
               {state.userEmail ? (
                 <>
-                  <div className="w-5 h-5 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-500 flex items-center justify-center text-white text-xs font-bold uppercase overflow-hidden ring-2 ring-slate-800">
+                  <div className="w-5 h-5 rounded-sm bg-blue-600 flex items-center justify-center text-white text-xs font-bold uppercase overflow-hidden ring-1 ring-slate-800">
                     {state.userEmail.charAt(0)}
                   </div>
-                  {state.isPremium && <span className="ml-1 text-xs text-amber-400 font-bold tracking-wider">PRO</span>}
+                  {state.isPremium && <span className="ml-1 text-[10px] text-amber-400 font-bold tracking-widest pl-1 border-l border-slate-700">PRO</span>}
                 </>
               ) : (
                 <>
@@ -115,7 +115,7 @@ const Sidebar: FC = () => {
             {showUserMenu && state.userEmail && (
               <>
                 <div className="fixed inset-0 z-40" onClick={() => setShowUserMenu(false)} />
-                <div className="absolute top-full mt-2 right-0 w-56 bg-slate-900 border border-slate-800 rounded-xl shadow-2xl py-1 z-50 animate-in fade-in slide-in-from-top-2">
+                <div className="absolute top-full mt-2 right-0 w-56 bg-[#0f172a] border border-slate-700 rounded-sm shadow-2xl py-1 z-50 animate-in fade-in slide-in-from-top-2">
                   <div className="px-4 py-3 border-b border-slate-800/50 mb-1 flex flex-col items-center">
                     <p className="text-sm font-semibold text-slate-200 truncate w-full text-center">{state.userEmail}</p>
                     {state.isPremium ? (
@@ -159,10 +159,10 @@ const Sidebar: FC = () => {
           <button
             onClick={() => setShowSettings(!showSettings)}
             className={cn(
-              "flex items-center gap-2 px-3 py-2 rounded-full transition-all text-sm font-medium border",
+              "flex items-center gap-2 px-4 py-1.5 rounded-sm transition-all text-xs font-bold uppercase tracking-wider border",
               showSettings
-                ? "bg-indigo-500 text-white border-indigo-400 shadow-lg shadow-indigo-500/20"
-                : "bg-slate-800/50 text-slate-400 border-slate-700/50 hover:text-indigo-400 hover:bg-slate-800"
+                ? "bg-emerald-600 text-white border-emerald-500"
+                : "bg-[#111827] text-slate-400 border-slate-700 hover:text-white hover:bg-slate-800 hover:border-slate-600"
             )}
             title="Engine Settings"
           >
@@ -178,8 +178,8 @@ const Sidebar: FC = () => {
       {/* Slide-over Settings Panel */}
       {showSettings && (
         <div className="fixed inset-0 z-50 flex justify-end">
-          <div className="absolute inset-0 bg-slate-950/60 backdrop-blur-sm" onClick={() => setShowSettings(false)} />
-          <div className="relative w-full max-w-sm h-full bg-slate-900 border-l border-slate-800 shadow-2xl p-6 overflow-y-auto transform transition-transform animate-in slide-in-from-right duration-200">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setShowSettings(false)} />
+          <div className="relative w-full max-w-sm h-full bg-[#0f172a] border-l border-slate-700 shadow-2xl p-6 overflow-y-auto transform transition-transform animate-in slide-in-from-right duration-200">
             <div className="flex items-center justify-between mb-8">
               <h2 className="text-xl font-bold text-slate-200">Engine Settings</h2>
               <button onClick={() => setShowSettings(false)} className="p-2 text-slate-400 hover:text-white rounded-full hover:bg-slate-800 transition-colors">
@@ -238,10 +238,10 @@ const Sidebar: FC = () => {
       {/* Global Toast Notification */}
       {state.toast && (
         <div className={cn(
-          "fixed top-6 right-6 z-50 backdrop-blur p-4 rounded-xl shadow-2xl max-w-sm animate-in slide-in-from-top flex justify-between items-start gap-4 border",
-          state.toast.type === 'error' ? "bg-red-950/90 border-red-500/50 text-red-100 shadow-red-900/20" :
-            state.toast.type === 'success' ? "bg-emerald-950/90 border-emerald-500/50 text-emerald-100 shadow-emerald-900/20" :
-              "bg-slate-900/90 border-indigo-500/50 text-indigo-100 shadow-indigo-900/20"
+          "fixed top-6 right-6 z-50 p-4 rounded-sm shadow-2xl max-w-sm animate-in slide-in-from-top flex justify-between items-start gap-4 border",
+          state.toast.type === 'error' ? "bg-red-950 border-red-500/80 text-red-100" :
+            state.toast.type === 'success' ? "bg-emerald-950 border-emerald-500/80 text-emerald-100" :
+              "bg-[#0f172a] border-blue-500/80 text-blue-100"
         )}>
           <div>
             {state.toast.title && <h4 className="font-semibold mb-1 text-white">{state.toast.title}</h4>}

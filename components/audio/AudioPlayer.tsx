@@ -37,10 +37,9 @@ const AudioPlayer: FC = () => {
 
         {/* Playback Controls */}
         <div className={cn('flex items-center gap-4 shrink-0', disabled && 'opacity-50 pointer-events-none')}>
-          {/* Skip Back */}
           <button
             onClick={actions.skipBackward}
-            className="px-3 py-1.5 rounded-full text-slate-400 hover:text-white hover:bg-slate-800 transition-all flex items-center gap-1.5 text-sm font-medium"
+            className="px-3 py-1.5 rounded-sm text-slate-400 hover:text-white hover:bg-slate-800 transition-all flex items-center gap-1.5 text-xs font-bold uppercase tracking-widest"
             title="Skip back 15s"
           >
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M9 15 3 9m0 0 6-6M3 9h12a6 6 0 0 1 0 12h-3" /></svg>
@@ -59,8 +58,8 @@ const AudioPlayer: FC = () => {
             }}
             disabled={!state.inputText.trim() && !state.audio.canScrub}
             className={cn(
-              "w-12 h-12 rounded-full flex items-center justify-center transition-all",
-              state.isReading && state.audio.isLoading ? "bg-slate-800 text-slate-400" : "bg-white text-black hover:scale-105 shadow-xl shadow-white/10"
+              "w-12 h-12 rounded-sm flex items-center justify-center transition-all border",
+              state.isReading && state.audio.isLoading ? "bg-slate-800 text-slate-400 border-slate-700" : "bg-white text-black hover:bg-gray-200 border-transparent shadow-none"
             )}
             title={state.audio.isPlaying ? 'Pause' : (safeCurrentTime >= safeDuration - 0.3 && safeDuration > 0 ? 'Restart' : 'Play')}
           >
@@ -78,7 +77,7 @@ const AudioPlayer: FC = () => {
           {/* Skip Forward */}
           <button
             onClick={actions.skipForward}
-            className="px-3 py-1.5 rounded-full text-slate-400 hover:text-white hover:bg-slate-800 transition-all flex items-center gap-1.5 text-sm font-medium"
+            className="px-3 py-1.5 rounded-sm text-slate-400 hover:text-white hover:bg-slate-800 transition-all flex items-center gap-1.5 text-xs font-bold uppercase tracking-widest"
             title="Skip forward 15s"
           >
             15s
@@ -95,7 +94,7 @@ const AudioPlayer: FC = () => {
           <div className="relative flex-1 group h-8 flex items-center">
             <div
               className={cn(
-                'w-full h-1.5 bg-slate-800 rounded-full relative overflow-hidden transition-all group-hover:h-2',
+                'w-full h-2 bg-slate-800 rounded-sm relative overflow-hidden transition-all group-hover:h-3',
                 disabled ? 'opacity-50' : '',
                 state.audio.canScrub ? 'cursor-pointer' : 'cursor-not-allowed'
               )}
@@ -121,7 +120,7 @@ const AudioPlayer: FC = () => {
             >
               {/* Progress Fill */}
               <div
-                className="absolute left-0 top-0 h-full bg-indigo-500 rounded-full transition-[width] duration-100 ease-out"
+                className="absolute left-0 top-0 h-full bg-blue-500 rounded-sm transition-[width] duration-100 ease-out"
                 style={{ width: `${progressPercent}%` }}
               />
 
@@ -160,13 +159,13 @@ const AudioPlayer: FC = () => {
             onClick={actions.handleDownloadAudio}
             disabled={!state.audio.synthesisComplete}
             className={cn(
-              'px-3 py-1.5 rounded-full transition-colors flex items-center gap-1.5 text-sm font-medium',
+              'px-3 py-1.5 rounded-sm transition-colors flex items-center gap-1.5 text-xs font-bold uppercase tracking-widest',
               state.audio.synthesisComplete ? 'text-slate-400 hover:text-white hover:bg-slate-800' : 'text-slate-700 cursor-not-allowed'
             )}
             title="Download Audio (.wav)"
           >
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" /></svg>
-            Download
+            WAV
           </button>
 
           <div className="relative" onClick={(e) => e.stopPropagation()}>
@@ -177,7 +176,7 @@ const AudioPlayer: FC = () => {
               }}
               disabled={state.isSyncingToDrive}
               className={cn(
-                'px-3 py-1.5 rounded-full transition-colors relative flex items-center gap-1.5 text-sm font-medium',
+                'px-3 py-1.5 rounded-sm transition-colors relative flex items-center gap-1.5 text-xs font-bold uppercase tracking-widest',
                 state.googleDriveLinked ? 'text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 hover:bg-emerald-500/20' : 'text-slate-400 hover:text-white hover:bg-slate-800'
               )}
               title={state.googleDriveLinked ? 'Manage Google Drive Sync' : 'Link Google Drive'}
@@ -201,7 +200,7 @@ const AudioPlayer: FC = () => {
             </button>
 
             {showDriveMenu && state.googleDriveLinked && (
-              <div className="absolute bottom-full right-0 mb-2 w-48 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl py-1 z-50 animate-in slide-in-from-bottom-2 fade-in duration-200">
+              <div className="absolute bottom-full right-0 mb-2 w-48 bg-[#0f172a] border border-slate-700 rounded-sm shadow-2xl py-1 z-50 animate-in slide-in-from-bottom-2 fade-in duration-200">
                 <button
                   onClick={() => {
                     actions.forceSyncDrive();
