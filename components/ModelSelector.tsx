@@ -302,7 +302,6 @@ const ModelSelector: FC<ModelSelectorProps> = ({
                     {/* Stats row */}
                     <div className="flex items-center gap-3 text-xs">
                       <span className="text-slate-500">📦 {model.size}</span>
-                      <span className="text-slate-500">{model.dtype.toUpperCase()}</span>
                       {/* Download status — always shown */}
                       {isDownloaded ? (
                         <span className="text-emerald-400 font-medium">✓ Cached</span>
