@@ -247,12 +247,10 @@ export class ModelManager {
           const cache = await caches.open(cacheName);
           const requests = await cache.keys();
 
-          // Only delete the specific ONNX file for this model variant, plus related JSONs
+          // ONLY delete the ONNX payload file. The small configs (.json) and WASM binaries 
+          // are shared between all Kokoro variants and MUST be kept if they plan to use another variant.
           for (const request of requests) {
-            if (
-              request.url.includes(filename) ||
-              (request.url.includes('.json') && request.url.includes('Kokoro-82M-ONNX'))
-            ) {
+            if (request.url.endsWith(filename)) {
               await cache.delete(request);
             }
           }

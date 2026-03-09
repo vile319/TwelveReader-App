@@ -1,10 +1,15 @@
 import React from 'react';
 import { useAppContext } from '../../contexts/AppContext';
 
+import { getModelInfo } from '../../components/ModelSelector';
+
 const ModelWarningModal: React.FC = () => {
   const { state, actions } = useAppContext();
 
   if (!state.model.showModelWarning) return null;
+
+  const modelInfo = getModelInfo(state.model.selectedModel);
+  const sizeText = modelInfo?.size || '~100MB';
 
   return (
     <div style={{
@@ -28,21 +33,21 @@ const ModelWarningModal: React.FC = () => {
         textAlign: 'center'
       }}>
         <h2 style={{ marginBottom: '12px', color: '#e5e5e5' }}>
-          Download Speech Model
+          Enable Local Speech Engine
         </h2>
-        <p style={{ 
-          fontSize: '14px', 
+        <p style={{
+          fontSize: '14px',
           marginBottom: '24px',
           color: '#a0a0a0',
           lineHeight: '1.4'
         }}>
-          The speech model (~100&nbsp;MB) needs to be downloaded the first time. 
-          This enables offline, private text-to-speech on your device.
+          The <strong>{modelInfo?.name || 'Local Speech'}</strong> model ({sizeText}) needs to be securely downloaded to your browser cache.
+          This is a one-time process to enable offline, private text-to-speech that never leaves your device.
         </p>
-        <div style={{ 
-          display: 'flex', 
-          gap: '12px', 
-          justifyContent: 'center' 
+        <div style={{
+          display: 'flex',
+          gap: '12px',
+          justifyContent: 'center'
         }}>
           <button
             onClick={actions.handleAcceptModelDownload}
@@ -97,7 +102,7 @@ const ModelWarningModal: React.FC = () => {
           color: '#718096',
           lineHeight: '1.3'
         }}>
-          💡 <strong>Privacy:</strong> Your text and audio never leave your device.
+          💡 <strong>Privacy Note:</strong> Local models guarantee your text never leaves your device. Cloud processing (if selected) requires sending text securely to external servers.
         </div>
       </div>
     </div>
