@@ -445,19 +445,29 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
 
         if (typeof navigator !== 'undefined' && (navigator as any).gpu) {
           try {
+            console.log('🔍 [initDevice] navigator.gpu found, requesting adapter...');
             const adapter = await (navigator as any).gpu.requestAdapter();
             if (adapter) {
+              console.log('🔍 [initDevice] adapter received.', {
+                isFallback: adapter.isFallbackAdapter,
+                maxStorage: adapter.limits?.maxStorageBufferBindingSize
+              });
               hasGpu = true;
               isGoodGpu = !adapter.isFallbackAdapter;
 
               // Check for particularly weak mobile GPUs based on limits if needed
               if (adapter.limits && adapter.limits.maxStorageBufferBindingSize < 128 * 1024 * 1024) {
+                console.log('⚠️ [initDevice] GPU rejected due to low maxStorageBufferBindingSize:', adapter.limits.maxStorageBufferBindingSize);
                 isGoodGpu = false;
               }
+            } else {
+              console.log('❌ [initDevice] requestAdapter returned null.');
             }
           } catch (e) {
-            console.log('WebGPU detection failed.', e);
+            console.log('❌ [initDevice] WebGPU detection failed during requestAdapter.', e);
           }
+        } else {
+          console.log('❌ [initDevice] navigator.gpu is undefined.');
         }
 
         const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;

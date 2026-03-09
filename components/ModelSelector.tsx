@@ -131,15 +131,26 @@ const ModelSelector: FC<ModelSelectorProps> = ({
   // Check GPU availability on mount
   useEffect(() => {
     const checkGPU = async () => {
+      console.log('🔍 [ModelSelector] Checking GPU availability...');
       if (typeof navigator !== 'undefined' && (navigator as any).gpu) {
         try {
           const adapter = await (navigator as any).gpu.requestAdapter();
-          setGpuAvailable(!!adapter);
+          if (adapter) {
+            console.log('🔍 [ModelSelector] adapter received.', {
+              isFallback: adapter.isFallbackAdapter,
+              maxStorage: adapter.limits?.maxStorageBufferBindingSize
+            });
+            setGpuAvailable(true);
+          } else {
+            console.log('❌ [ModelSelector] requestAdapter returned null.');
+            setGpuAvailable(false);
+          }
         } catch (e) {
-          console.warn('GPU detection failed:', e);
+          console.warn('❌ [ModelSelector] GPU detection failed:', e);
           setGpuAvailable(false);
         }
       } else {
+        console.log('❌ [ModelSelector] navigator.gpu is undefined.');
         setGpuAvailable(false);
       }
       setGpuCheckComplete(true);
