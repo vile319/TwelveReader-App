@@ -55,13 +55,15 @@ if (typeof window !== 'undefined') {
       const { env } = await import('@huggingface/transformers');
       console.log('🔧 Configuring transformers.js caching...');
 
-      // Respect user preference for model caching (defaults to ON)
-      const keepCached = localStorage.getItem('keepModelCached') !== 'false';
-      env.useBrowserCache = keepCached;
+      // By default, transformers.js caches everything in the Cache API.
+      // We rely on the ModelManager `cleanupUnwantedModels` to purge models the user didn't check
+      // "Keep cached" for upon refresh, rather than disabling caching at the global library level
+      // which breaks downloading entirely.
+      env.useBrowserCache = true;
 
       // Optional: Also enable file system cache if available
       if (env.backends && env.backends.onnx) {
-        env.backends.onnx.useBrowserCache = keepCached;
+        env.backends.onnx.useBrowserCache = true;
       }
 
       console.log('✅ Browser cache enabled for transformers.js');

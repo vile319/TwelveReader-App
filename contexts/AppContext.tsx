@@ -432,6 +432,11 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     }
   }, [tts.isReady, pendingRead, tts.speak]);
 
+  // Clean up unwanted cached models on mount
+  useEffect(() => {
+    modelManager.cleanupUnwantedModels();
+  }, []);
+
   // Init default device automatically based on hardware support
   useEffect(() => {
     const initDevice = async () => {
