@@ -74,7 +74,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
   });
   const [preferredDevice, setPreferredDevice] = useState<'webgpu' | 'wasm' | 'cpu' | 'serverless'>(() => {
     const preferences = modelManager.getPreferences();
-    return preferences.preferredDevice;
+    return preferences.preferredDevice === 'auto' ? 'serverless' : (preferences.preferredDevice as 'webgpu' | 'wasm' | 'cpu' | 'serverless');
   });
   const [preferredDtype, setPreferredDtype] = useState<'fp32' | 'fp16' | 'q8' | 'q4' | 'q4f16'>('fp32');
   const [autoSelect, setAutoSelect] = useState(false);
@@ -431,6 +431,32 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       })();
     }
   }, [tts.isReady, pendingRead, tts.speak]);
+
+  // Init default device automatically based on hardware support
+  useEffect(() => {
+    const initDevice = async () => {
+      const preferences = modelManager.getPreferences();
+      if (preferences.preferredDevice === 'auto') {
+        let defaultDevice: 'webgpu' | 'serverless' = 'serverless';
+        // Check for WebGPU
+        if (typeof navigator !== 'undefined' && (navigator as any).gpu) {
+          try {
+            const adapter = await (navigator as any).gpu.requestAdapter();
+            if (adapter) {
+              defaultDevice = 'webgpu';
+              console.log('✅ WebGPU supported: defaulting new user to webgpu processing.');
+            }
+          } catch (e) {
+            console.log('WebGPU detection failed, defaulting to serverless.', e);
+          }
+        }
+
+        setPreferredDevice(defaultDevice);
+        modelManager.savePreferences({ preferredDevice: defaultDevice });
+      }
+    };
+    initDevice();
+  }, []);
 
   // -------- Cloud sync helpers --------
   const handleDriveError = (e: any, context: string) => {

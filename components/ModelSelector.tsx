@@ -1,5 +1,6 @@
 import { type FC, useState, useEffect, type ChangeEvent, useCallback } from 'react';
 import { modelManager } from '../utils/modelManager';
+import { useModelManager } from '../hooks/useModelManager';
 
 export interface ModelConfig {
   id: string;
@@ -117,10 +118,14 @@ const ModelSelector: FC<ModelSelectorProps> = ({
   onModelKeepLocalChange
 }: ModelSelectorProps) => {
   const [preferredDevice, setPreferredDevice] = useState<'webgpu' | 'wasm' | 'cpu' | 'serverless'>(
-    () => modelManager.getPreferences().preferredDevice as 'webgpu' | 'wasm' | 'cpu' | 'serverless'
+    () => {
+      const pref = modelManager.getPreferences().preferredDevice;
+      return pref === 'auto' ? 'serverless' : (pref as 'webgpu' | 'wasm' | 'cpu' | 'serverless');
+    }
   );
   const [gpuAvailable, setGpuAvailable] = useState(false);
-  const [downloadedModels, setDownloadedModels] = useState<Set<string>>(new Set());
+  const { downloadedModels: downloadedModelIds } = useModelManager();
+  const downloadedModels = new Set(downloadedModelIds);
 
   // Check GPU availability on mount
   useEffect(() => {
@@ -139,16 +144,6 @@ const ModelSelector: FC<ModelSelectorProps> = ({
     };
 
     checkGPU();
-  }, []);
-
-  // Check for downloaded models using model manager
-  useEffect(() => {
-    const checkDownloadedModels = () => {
-      const downloadedModelIds = modelManager.getDownloadedModels();
-      setDownloadedModels(new Set(downloadedModelIds));
-    };
-
-    checkDownloadedModels();
   }, []);
 
   // Load preferences from model manager on mount

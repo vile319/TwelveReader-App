@@ -16,7 +16,7 @@ const OnboardingModal: React.FC<OnboardingModalProps> = ({ isOpen, onClose }) =>
       content: (
         <div>
           <p style={{ fontSize: '16px', lineHeight: '1.6', marginBottom: '16px' }}>
-            Transform any text into natural speech with AI-powered voices. 
+            Transform any text into natural speech with AI-powered voices.
             Perfect for studying, accessibility, or just enjoying content hands-free.
           </p>
           <div style={{
@@ -26,8 +26,7 @@ const OnboardingModal: React.FC<OnboardingModalProps> = ({ isOpen, onClose }) =>
             padding: '12px',
             fontSize: '14px'
           }}>
-            <strong>🔒 Privacy First:</strong> Everything runs locally in your browser. 
-            Your text and audio never leave your device.
+            <strong>☁️ Zero Setup & 🔒 Local Privacy:</strong> Use our high-speed Cloud models instantly, or switch to fully Local processing where your data never leaves your device.
           </div>
         </div>
       )
@@ -85,9 +84,9 @@ const OnboardingModal: React.FC<OnboardingModalProps> = ({ isOpen, onClose }) =>
           <p style={{ fontSize: '16px', lineHeight: '1.6', marginBottom: '16px' }}>
             Select from 65+ international AI voices including:
           </p>
-          <div style={{ 
-            display: 'grid', 
-            gridTemplateColumns: 'repeat(2, 1fr)', 
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(2, 1fr)',
             gap: '12px',
             marginBottom: '16px'
           }}>
@@ -222,8 +221,8 @@ const OnboardingModal: React.FC<OnboardingModalProps> = ({ isOpen, onClose }) =>
           <div style={{ fontSize: '48px', marginBottom: '12px' }}>
             {currentStepData.icon}
           </div>
-          <h2 style={{ 
-            fontSize: '20px', 
+          <h2 style={{
+            fontSize: '20px',
             fontWeight: '700',
             margin: 0,
             color: '#e5e5e5'

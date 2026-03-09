@@ -7,7 +7,7 @@ const MODEL_CACHE_STATUS_KEY = 'twelvereader-model-cache-status';
 
 export interface ModelPreferences {
   selectedModel: string;
-  preferredDevice: 'webgpu' | 'wasm' | 'cpu' | 'serverless';
+  preferredDevice: 'webgpu' | 'wasm' | 'cpu' | 'serverless' | 'auto';
   lastUpdated: number;
 }
 
@@ -50,7 +50,7 @@ export class ModelManager {
         const parsed = JSON.parse(saved);
         return {
           selectedModel: parsed.selectedModel ?? 'kokoro-82m-fp32',
-          preferredDevice: parsed.preferredDevice ?? 'serverless',
+          preferredDevice: parsed.preferredDevice ?? 'auto',
           lastUpdated: parsed.lastUpdated ?? Date.now()
         };
       }
@@ -60,7 +60,7 @@ export class ModelManager {
 
     return {
       selectedModel: 'kokoro-82m-fp32',
-      preferredDevice: 'serverless',
+      preferredDevice: 'auto',
       lastUpdated: Date.now()
     };
   }
