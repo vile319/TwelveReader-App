@@ -124,6 +124,7 @@ const ModelSelector: FC<ModelSelectorProps> = ({
     }
   );
   const [gpuAvailable, setGpuAvailable] = useState(false);
+  const [gpuCheckComplete, setGpuCheckComplete] = useState(false);
   const { downloadedModels: downloadedModelIds } = useModelManager();
   const downloadedModels = new Set(downloadedModelIds);
 
@@ -141,6 +142,7 @@ const ModelSelector: FC<ModelSelectorProps> = ({
       } else {
         setGpuAvailable(false);
       }
+      setGpuCheckComplete(true);
     };
 
     checkGPU();
@@ -207,14 +209,14 @@ const ModelSelector: FC<ModelSelectorProps> = ({
 
   // After the useEffect for loading preferences, add this new useEffect for device fallback
   useEffect(() => {
-    if (!gpuAvailable && preferredDevice === 'webgpu') {
+    if (gpuCheckComplete && !gpuAvailable && preferredDevice === 'webgpu') {
       const newDevice = 'wasm';
       setPreferredDevice(newDevice);
       const bestModel = getBestModelForDevice(newDevice);
       onModelChange(bestModel.id);
       savePreferences(bestModel.id, newDevice);
     }
-  }, [gpuAvailable, preferredDevice, savePreferences, onModelChange, getBestModelForDevice]);
+  }, [gpuCheckComplete, gpuAvailable, preferredDevice, savePreferences, onModelChange, getBestModelForDevice]);
 
   return (
     <div className="space-y-4">
