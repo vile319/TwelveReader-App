@@ -240,7 +240,7 @@ export class ModelManager {
       if (typeof window !== 'undefined' && 'caches' in window) {
         const cacheNames = await caches.keys();
         const modelCaches = cacheNames.filter(name =>
-          name.includes('model') || name.includes('kokoro')
+          name.includes('model') || name.includes('kokoro') || name.includes('transformers')
         );
 
         for (const cacheName of modelCaches) {
@@ -324,7 +324,7 @@ export class ModelManager {
       if (typeof window !== 'undefined' && 'caches' in window) {
         const cacheNames = await caches.keys();
         const modelCaches = cacheNames.filter(name =>
-          name.includes('model') || name.includes('kokoro')
+          name.includes('model') || name.includes('kokoro') || name.includes('transformers')
         );
 
         // Get all possible valid filenames from our config
@@ -383,7 +383,7 @@ export class ModelManager {
       if (typeof window !== 'undefined' && 'caches' in window) {
         const cacheNames = await caches.keys();
         const modelCaches = cacheNames.filter(name =>
-          name.includes('model') || name.includes('kokoro')
+          name.includes('model') || name.includes('kokoro') || name.includes('transformers')
         );
 
         for (const cacheName of modelCaches) {
