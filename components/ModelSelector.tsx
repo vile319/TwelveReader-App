@@ -135,6 +135,7 @@ const ModelSelector: FC<ModelSelectorProps> = ({
   }, [preferredDeviceProp]);
   const [gpuAvailable, setGpuAvailable] = useState(false);
   const [gpuCheckComplete, setGpuCheckComplete] = useState(false);
+  const [gpuUnavailableReason, setGpuUnavailableReason] = useState<string | null>(null);
   const { downloadedModels: downloadedModelIds } = useModelManager();
   const downloadedModels = new Set(downloadedModelIds);
 
@@ -153,7 +154,8 @@ const ModelSelector: FC<ModelSelectorProps> = ({
         console.log(`❌ [ModelSelector] WebGPU not usable. Reason: ${caps.reason}`);
       }
 
-      setGpuAvailable(caps.hasWebGPU);
+      setGpuAvailable(caps.canUseLocalGpu);
+      setGpuUnavailableReason(caps.localGpuUnavailableReason ?? null);
       setGpuCheckComplete(true);
     };
 
@@ -163,7 +165,11 @@ const ModelSelector: FC<ModelSelectorProps> = ({
   // Load preferences from model manager on mount
   useEffect(() => {
     const preferences = modelManager.getPreferences();
-    setPreferredDevice(preferences.preferredDevice as 'webgpu' | 'wasm' | 'cpu' | 'serverless');
+    setPreferredDevice(
+      preferences.preferredDevice === 'auto'
+        ? 'serverless'
+        : (preferences.preferredDevice as 'webgpu' | 'wasm' | 'cpu' | 'serverless')
+    );
 
     // Use the saved model if exists
     if (preferences.selectedModel) {
@@ -266,6 +272,14 @@ const ModelSelector: FC<ModelSelectorProps> = ({
     savePreferences
   ]);
 
+  const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
+  const fallbackDevice: 'serverless' | 'wasm' = isOnline ? 'serverless' : 'wasm';
+  const effectiveSelectValue =
+    effectiveDevice === 'webgpu' && !gpuAvailable ? fallbackDevice : effectiveDevice;
+  const localGpuMessage = gpuCheckComplete && !gpuAvailable
+    ? `${gpuUnavailableReason ?? 'Local GPU is unavailable on this browser/device.'} ${isOnline ? 'Using Cloud instead.' : 'Falling back to Local CPU.'}`
+    : null;
+
   return (
     <div className="space-y-4">
       {/* Device Selection */}
@@ -274,7 +288,7 @@ const ModelSelector: FC<ModelSelectorProps> = ({
           Processing mode
         </label>
         <select
-          value={effectiveDevice === 'webgpu' && !gpuAvailable ? 'serverless' : effectiveDevice}
+          value={effectiveSelectValue}
           onChange={handleDeviceChange}
           disabled={disabled}
           className={`w-full p-2 bg-[#111827] border border-slate-700 rounded-sm text-slate-200 text-sm font-semibold transition-colors ${disabled ? 'opacity-50 cursor-not-allowed' : 'hover:border-slate-500 focus:border-blue-500 focus:ring-1 focus:ring-blue-500'
@@ -285,6 +299,8 @@ const ModelSelector: FC<ModelSelectorProps> = ({
           </option>
           {gpuAvailable ? (
             <option value="webgpu">Local GPU — WebGPU</option>
+          ) : gpuCheckComplete ? (
+            <option value="webgpu" disabled>Local GPU — WebGPU (unavailable)</option>
           ) : null}
           <option value="wasm">
             Local CPU — offline (may not work on iPhone)
@@ -293,6 +309,11 @@ const ModelSelector: FC<ModelSelectorProps> = ({
             Local CPU (native) — offline (may not work on iPhone)
           </option>
         </select>
+        {localGpuMessage && (
+          <p className="text-xs text-slate-400">
+            {localGpuMessage}
+          </p>
+        )}
         {(effectiveDevice === 'wasm' || effectiveDevice === 'cpu' || effectiveDevice === 'webgpu') && (
           <p className="text-xs text-amber-400 flex items-center gap-1">
             Local mode works offline but may crash on iPhone. Use cloud for best experience.

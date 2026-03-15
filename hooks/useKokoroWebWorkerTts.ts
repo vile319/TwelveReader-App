@@ -699,11 +699,11 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
       // Validate device availability
       if (preferredDevice === 'webgpu') {
         const caps = await detectGpuCapabilities();
-        if (caps.hasWebGPU) {
+        if (caps.canUseLocalGpu) {
           return { device: preferredDevice, dtype: preferredDtype };
         }
 
-        console.warn(`⚠️ WebGPU requested but not usable (${caps.reason}), falling back to WASM`);
+        console.warn(`⚠️ WebGPU requested but not usable. ${caps.localGpuUnavailableReason ?? `Reason: ${caps.reason}`} Falling back to WASM.`);
         return { device: 'wasm', dtype: preferredDtype };
       }
 
@@ -712,14 +712,14 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
 
     // Auto-detection logic (fallback)
     const caps = await detectGpuCapabilities();
-    if (caps.hasWebGPU) {
+    if (caps.canUseLocalGpu) {
       console.log('✅ WebGPU available. Using stable fp32 model.', {
         isFallback: caps.isFallbackAdapter,
         maxStorage: caps.maxStorageBufferBindingSize
       });
       return { device: 'webgpu', dtype: 'fp32' };
     } else {
-      console.log(`⚠️ WebGPU auto-detect: not usable (${caps.reason}), falling back to WASM.`);
+      console.log(`⚠️ WebGPU auto-detect: ${caps.localGpuUnavailableReason ?? `not usable (${caps.reason})`}. Falling back to WASM.`);
     }
 
     // Fallback path – CPU (WASM) back-end with quantised model to conserve memory

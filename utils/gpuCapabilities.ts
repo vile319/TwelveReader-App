@@ -8,23 +8,66 @@ export type WebGpuSupportReason =
 export interface GpuCapabilities {
   hasWebGPU: boolean;
   isGoodWebGPU: boolean;
+  canUseLocalGpu: boolean;
   isFallbackAdapter: boolean;
   maxStorageBufferBindingSize?: number;
   reason: WebGpuSupportReason;
   hasWebGL: boolean;
+  localGpuUnavailableReason?: string;
 }
 
 /** Cached promise so all callers get the same GPU detection result (avoids race). */
 let gpuCapabilitiesPromise: Promise<GpuCapabilities> | null = null;
+const MIN_STORAGE_BUFFER_BYTES = 128 * 1024 * 1024;
+
+function getLocalGpuUnavailableReason({
+  reason,
+  isFallbackAdapter,
+  maxStorageBufferBindingSize
+}: {
+  reason: WebGpuSupportReason;
+  isFallbackAdapter: boolean;
+  maxStorageBufferBindingSize?: number;
+}): string {
+  if (reason === 'navigator-undefined') {
+    return 'Local GPU is unavailable while the app is still loading.';
+  }
+
+  if (reason === 'no-navigator-gpu') {
+    return 'Local GPU is unavailable in this browser/device.';
+  }
+
+  if (reason === 'request-adapter-null' || reason === 'request-adapter-error') {
+    return 'Local GPU is unavailable because WebGPU could not be initialized.';
+  }
+
+  if (isFallbackAdapter) {
+    return 'Local GPU is unavailable because only a fallback WebGPU adapter was found.';
+  }
+
+  if (
+    typeof maxStorageBufferBindingSize === 'number' &&
+    maxStorageBufferBindingSize < MIN_STORAGE_BUFFER_BYTES
+  ) {
+    return 'Local GPU is unavailable because this device does not meet the minimum WebGPU memory limits.';
+  }
+
+  return 'Local GPU is unavailable on this browser/device.';
+}
 
 function detectGpuCapabilitiesImpl(): Promise<GpuCapabilities> {
   if (typeof window === 'undefined' || typeof navigator === 'undefined') {
     return Promise.resolve({
       hasWebGPU: false,
       isGoodWebGPU: false,
+      canUseLocalGpu: false,
       isFallbackAdapter: false,
       reason: 'navigator-undefined',
-      hasWebGL: false
+      hasWebGL: false,
+      localGpuUnavailableReason: getLocalGpuUnavailableReason({
+        reason: 'navigator-undefined',
+        isFallbackAdapter: false
+      })
     });
   }
 
@@ -51,8 +94,6 @@ function detectGpuCapabilitiesImpl(): Promise<GpuCapabilities> {
             (adapter.limits &&
               (adapter.limits as any).maxStorageBufferBindingSize) ??
             undefined;
-
-          const MIN_STORAGE_BUFFER_BYTES = 128 * 1024 * 1024;
 
           isFallbackAdapter = !!adapter.isFallbackAdapter;
           const meetsLimit =
@@ -86,13 +127,23 @@ function detectGpuCapabilitiesImpl(): Promise<GpuCapabilities> {
       // Ignore WebGL probing errors; hasWebGL stays false.
     }
 
+    const canUseLocalGpu = hasWebGPU && isGoodWebGPU;
+
     return {
       hasWebGPU,
       isGoodWebGPU,
+      canUseLocalGpu,
       isFallbackAdapter,
       maxStorageBufferBindingSize,
       reason,
-      hasWebGL
+      hasWebGL,
+      localGpuUnavailableReason: canUseLocalGpu
+        ? undefined
+        : getLocalGpuUnavailableReason({
+          reason,
+          isFallbackAdapter,
+          maxStorageBufferBindingSize
+        })
     };
   };
 

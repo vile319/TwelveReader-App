@@ -455,9 +455,6 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
 
         const gpuCaps = await detectGpuCapabilities();
 
-        const hasGpu = gpuCaps.hasWebGPU;
-        const isGoodGpu = gpuCaps.isGoodWebGPU;
-
         if (!gpuCaps.hasWebGPU) {
           console.log(`❌ [initDevice] WebGPU not usable. Reason: ${gpuCaps.reason}`);
         } else {
@@ -469,22 +466,18 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
 
         const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
 
-        if (hasGpu && isGoodGpu) {
+        if (gpuCaps.canUseLocalGpu) {
           defaultDevice = 'webgpu';
           defaultModel = 'kokoro-82m-fp32';
-          console.log('✅ Good WebGPU supported: defaulting to webgpu processing.');
+          console.log('✅ Local GPU supported: defaulting to webgpu processing.');
         } else if (isOnline) {
           defaultDevice = 'serverless';
           defaultModel = 'kokoro-82m-fp32';
-          console.log('☁️ Defaulting to serverless processing (GPU is unavailable or poor).');
-        } else if (hasGpu) {
-          defaultDevice = 'webgpu';
-          defaultModel = 'kokoro-82m-q8';
-          console.log('📡 Offline detected with weak GPU: defaulting to local webgpu with Q8 model.');
+          console.log(`☁️ Defaulting to serverless processing. ${gpuCaps.localGpuUnavailableReason ?? 'Local GPU is unavailable.'}`);
         } else {
           defaultDevice = 'wasm';
           defaultModel = 'kokoro-82m-q8';
-          console.log('📡 Offline detected and no GPU: defaulting to local CPU mode (wasm) with Q8 model.');
+          console.log(`📡 Offline detected. Defaulting to local CPU mode (wasm). ${gpuCaps.localGpuUnavailableReason ?? 'Local GPU is unavailable.'}`);
         }
 
         setPreferredDevice(defaultDevice);
