@@ -274,7 +274,7 @@ const ModelSelector: FC<ModelSelectorProps> = ({
           Processing mode
         </label>
         <select
-          value={effectiveDevice}
+          value={effectiveDevice === 'webgpu' && !gpuAvailable ? 'serverless' : effectiveDevice}
           onChange={handleDeviceChange}
           disabled={disabled}
           className={`w-full p-2 bg-[#111827] border border-slate-700 rounded-sm text-slate-200 text-sm font-semibold transition-colors ${disabled ? 'opacity-50 cursor-not-allowed' : 'hover:border-slate-500 focus:border-blue-500 focus:ring-1 focus:ring-blue-500'
@@ -283,9 +283,9 @@ const ModelSelector: FC<ModelSelectorProps> = ({
           <option value="serverless">
             Cloud (recommended — best quality)
           </option>
-          <option value="webgpu" disabled={!gpuAvailable}>
-            Local GPU — WebGPU {!gpuAvailable && '(Not available)'}
-          </option>
+          {gpuAvailable ? (
+            <option value="webgpu">Local GPU — WebGPU</option>
+          ) : null}
           <option value="wasm">
             Local CPU — offline (may not work on iPhone)
           </option>
