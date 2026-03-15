@@ -727,8 +727,8 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
     return { device: 'wasm', dtype: 'q8' };
   }, [forceWasmMode, preferredDevice, preferredDtype]);
 
-  // Initialize TTS model
-  const initializeTts = useCallback(async () => {
+  // Initialize TTS model. Optional getIsCancelled: when effect re-runs (e.g. preference change), in-flight init should stop updating state.
+  const initializeTts = useCallback(async (getIsCancelled?: () => boolean) => {
     setIsLoading(true);
     setStatus('Initializing model...');
 
@@ -738,6 +738,7 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
     } catch (error) {
       console.warn('⚠️ iOS configuration failed, continuing with defaults:', error);
     }
+    if (getIsCancelled?.()) return;
 
     // All device and dtype decision logic is now consolidated in detectWebGPU.
     // Use iOS-optimized settings if available (now bypassing local WASM entirely)
@@ -750,6 +751,7 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
 
     if (!wantsLocal) {
       // Default path: Cloud TTS via HuggingFace Space
+      if (getIsCancelled?.()) return;
       console.log('☁️ Using HuggingFace Space TTS (full quality, all devices)...');
       setIsReady(true);
       setCurrentDevice('serverless');
@@ -760,6 +762,7 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
 
     // Local WASM path — user explicitly wants offline/local
     if (isIOS) {
+      if (getIsCancelled?.()) return;
       // Warn iOS users that local processing may crash or be very slow
       console.warn('⚠️ iOS + Local WASM: This may not work on your device. Consider using Cloud mode.');
       setStatus('⚠️ Local mode may not work on iPhone — Cloud mode is recommended');
@@ -767,6 +770,7 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
 
 
     const { device, dtype } = await detectWebGPU();
+    if (getIsCancelled?.()) return;
 
     console.log(`🚀 Initializing Kokoro TTS with ${device} and ${dtype}...`);
 
@@ -792,11 +796,13 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
         }
       }
 
+      if (getIsCancelled?.()) return null;
       const modelLoadStart = performance.now();
       const tts = await KokoroTTS.from_pretrained('onnx-community/Kokoro-82M-ONNX', {
         dtype: dtype,
         device: device,
         progress_callback: (progress: { status: string; progress?: number }) => {
+          if (getIsCancelled?.()) return;
           if (progress.status === 'progress') {
             const percent = Math.round(Math.min((progress.progress ?? 0) * 100, 100));
             const deviceLabel = device === 'webgpu' ? 'GPU' : 'CPU';
@@ -813,6 +819,7 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
         }
       });
 
+      if (getIsCancelled?.()) return null;
       ttsRef.current = tts;
       setIsReady(true);
       setCurrentDevice(device);
@@ -821,11 +828,13 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
       setStatus(`${deviceEmoji} Kokoro AI ready - ${deviceLabel} with all international voices!`);
       return tts;
     } catch (error: any) {
+      if (getIsCancelled?.()) return null;
       console.error('Failed to load Kokoro model:', error);
 
       // If WebGPU failed, try WASM fallback
       if (error.message && (error.message.includes('webgpu') || error.message.includes('WebGPU'))) {
         console.warn('WebGPU failed, falling back to CPU...');
+        if (getIsCancelled?.()) return null;
         setStatus('⚠️ GPU failed, trying CPU fallback...');
 
         try {
@@ -833,6 +842,7 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
             dtype: 'q8',
             device: 'wasm',
             progress_callback: (progress: { status: string; progress?: number }) => {
+              if (getIsCancelled?.()) return;
               if (progress.status === 'progress') {
                 const percent = Math.round(Math.min((progress.progress ?? 0) * 100, 100));
                 setStatus(`CPU fallback - Downloading: ${percent}%`);
@@ -840,6 +850,7 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
             }
           });
 
+          if (getIsCancelled?.()) return null;
           ttsRef.current = tts;
           setIsReady(true);
           setCurrentDevice('wasm');
@@ -861,18 +872,26 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
         throw error;
       }
     } finally {
-      setIsLoading(false);
+      if (!getIsCancelled?.()) {
+        setIsLoading(false);
+      }
     }
-  }, [onError, detectWebGPU]);
+  }, [onError, detectWebGPU, preferredDevice]);
 
   // Initialize when enabled flips true or model configuration changes.
   // Cloud/serverless mode initializes immediately without needing model download consent.
   // Local WASM/WebGPU mode requires explicit user consent (enabled flag).
+  // When preference changes mid-download, cleanup sets cancelled so in-flight init stops updating state.
   useEffect(() => {
+    let cancelled = false;
+    const getIsCancelled = () => cancelled;
     const isCloudMode = !preferredDevice || preferredDevice === 'serverless';
     if (isCloudMode || enabled) {
-      initializeTts();
+      initializeTts(getIsCancelled);
     }
+    return () => {
+      cancelled = true;
+    };
   }, [enabled, selectedModel, preferredDevice, preferredDtype, initializeTts]);
 
   // Chunk text for better TTS processing
