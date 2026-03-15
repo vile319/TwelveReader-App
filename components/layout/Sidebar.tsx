@@ -210,20 +210,43 @@ const Sidebar: FC = () => {
                   Processing mode and backend
                 </p>
                 <p className="text-[11px] text-slate-500">
-                  Currently using{' '}
-                  <span className="font-semibold text-slate-200">
-                    {state.model.currentDevice === 'webgpu' && 'Local GPU (WebGPU)'}
-                    {state.model.currentDevice === 'wasm' && 'Local CPU (WASM)'}
-                    {state.model.currentDevice === 'cpu' && 'Local CPU Native'}
-                    {state.model.currentDevice === 'serverless' && 'Cloud (Serverless)'}
-                    {state.model.currentDevice === null && 'Detecting...'}
-                  </span>
-                  {' '}based on your selection below.
+                  {state.model.currentDevice === null ? (
+                    <>Detecting...</>
+                  ) : state.model.currentDevice === state.model.preferredDevice ? (
+                    <>
+                      Currently using{' '}
+                      <span className="font-semibold text-slate-200">
+                        {state.model.currentDevice === 'webgpu' && 'Local GPU (WebGPU)'}
+                        {state.model.currentDevice === 'wasm' && 'Local CPU (WASM)'}
+                        {state.model.currentDevice === 'cpu' && 'Local CPU Native'}
+                        {state.model.currentDevice === 'serverless' && 'Cloud (Serverless)'}
+                      </span>
+                      .
+                    </>
+                  ) : (state.model.preferredDevice === 'webgpu' || state.model.preferredDevice === 'wasm' || state.model.preferredDevice === 'cpu') && state.model.currentDevice === 'serverless' ? (
+                    <>
+                      Currently using{' '}
+                      <span className="font-semibold text-slate-200">Cloud (Serverless)</span>
+                      {' '}&mdash; local mode requires a model download.
+                    </>
+                  ) : (
+                    <>
+                      Currently using{' '}
+                      <span className="font-semibold text-slate-200">
+                        {state.model.currentDevice === 'webgpu' && 'Local GPU (WebGPU)'}
+                        {state.model.currentDevice === 'wasm' && 'Local CPU (WASM)'}
+                        {state.model.currentDevice === 'cpu' && 'Local CPU Native'}
+                        {state.model.currentDevice === 'serverless' && 'Cloud (Serverless)'}
+                      </span>
+                      .
+                    </>
+                  )}
                 </p>
               </div>
               <ModelSelector
                 selectedModel={state.model.selectedModel}
                 onModelChange={actions.setSelectedModel}
+                preferredDevice={state.model.preferredDevice}
                 onDeviceChange={actions.setPreferredDevice}
                 onDtypeChange={actions.setPreferredDtype}
                 disabled={state.audio.isLoading}

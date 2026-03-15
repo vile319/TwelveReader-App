@@ -368,6 +368,8 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
 
   const handleCancelModelDownload = () => {
     setShowModelWarning(false);
+    setPreferredDevice('serverless');
+    modelManager.savePreferences({ preferredDevice: 'serverless' });
   };
 
   const handleDownloadAudio = () => {
@@ -393,7 +395,11 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
   const handleDeviceChange = useCallback((device: 'webgpu' | 'wasm' | 'cpu' | 'serverless') => {
     setPreferredDevice(device);
     modelManager.savePreferences({ preferredDevice: device });
-  }, []);
+    const isLocal = device === 'webgpu' || device === 'wasm' || device === 'cpu';
+    if (isLocal && !modelAccepted) {
+      setShowModelWarning(true);
+    }
+  }, [modelAccepted]);
 
   const handleDtypeChange = useCallback((dtype: 'fp32' | 'fp16' | 'q8' | 'q4' | 'q4f16') => {
     setPreferredDtype(dtype);

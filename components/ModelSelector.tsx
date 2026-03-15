@@ -21,6 +21,7 @@ export interface ModelConfig {
 interface ModelSelectorProps {
   selectedModel: string;
   onModelChange: (modelId: string) => void;
+  preferredDevice?: 'webgpu' | 'wasm' | 'cpu' | 'serverless';
   disabled?: boolean;
   onDeviceChange?: (device: 'webgpu' | 'wasm' | 'cpu' | 'serverless') => void;
   onDtypeChange?: (dtype: 'fp32' | 'fp16' | 'q8' | 'q4' | 'q4f16') => void;
@@ -112,6 +113,7 @@ export const getRecommendedModels = (device: 'webgpu' | 'wasm' | 'cpu' | 'server
 const ModelSelector: FC<ModelSelectorProps> = ({
   selectedModel,
   onModelChange,
+  preferredDevice: preferredDeviceProp,
   disabled = false,
   onDeviceChange,
   onDtypeChange,
@@ -124,6 +126,13 @@ const ModelSelector: FC<ModelSelectorProps> = ({
       return pref === 'auto' ? 'serverless' : (pref as 'webgpu' | 'wasm' | 'cpu' | 'serverless');
     }
   );
+  const effectiveDevice = preferredDeviceProp ?? preferredDevice;
+
+  useEffect(() => {
+    if (preferredDeviceProp !== undefined) {
+      setPreferredDevice(preferredDeviceProp);
+    }
+  }, [preferredDeviceProp]);
   const [gpuAvailable, setGpuAvailable] = useState(false);
   const [gpuCheckComplete, setGpuCheckComplete] = useState(false);
   const { downloadedModels: downloadedModelIds } = useModelManager();
@@ -217,9 +226,9 @@ const ModelSelector: FC<ModelSelectorProps> = ({
 
       // Persist the chosen model, but keep the device preference
       // controlled solely by the Processing Mode dropdown.
-      savePreferences(modelId, preferredDevice);
+      savePreferences(modelId, effectiveDevice);
     },
-    [onDtypeChange, onModelChange, preferredDevice, savePreferences]
+    [onDtypeChange, onModelChange, effectiveDevice, savePreferences]
   );
 
   const getQualityBadge = useCallback((quality: string) => {
@@ -233,7 +242,7 @@ const ModelSelector: FC<ModelSelectorProps> = ({
 
   // After the useEffect for loading preferences, add this new useEffect for device fallback
   useEffect(() => {
-    if (gpuCheckComplete && !gpuAvailable && preferredDevice === 'webgpu') {
+    if (gpuCheckComplete && !gpuAvailable && effectiveDevice === 'webgpu') {
       const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
       const newDevice: 'serverless' | 'wasm' = isOnline ? 'serverless' : 'wasm';
 
@@ -249,7 +258,7 @@ const ModelSelector: FC<ModelSelectorProps> = ({
   }, [
     gpuCheckComplete,
     gpuAvailable,
-    preferredDevice,
+    effectiveDevice,
     getBestModelForDevice,
     onDeviceChange,
     onDtypeChange,
@@ -265,7 +274,7 @@ const ModelSelector: FC<ModelSelectorProps> = ({
           Processing mode
         </label>
         <select
-          value={preferredDevice}
+          value={effectiveDevice}
           onChange={handleDeviceChange}
           disabled={disabled}
           className={`w-full p-2 bg-[#111827] border border-slate-700 rounded-sm text-slate-200 text-sm font-semibold transition-colors ${disabled ? 'opacity-50 cursor-not-allowed' : 'hover:border-slate-500 focus:border-blue-500 focus:ring-1 focus:ring-blue-500'
@@ -284,7 +293,7 @@ const ModelSelector: FC<ModelSelectorProps> = ({
             Local CPU (native) — offline (may not work on iPhone)
           </option>
         </select>
-        {(preferredDevice === 'wasm' || preferredDevice === 'cpu' || preferredDevice === 'webgpu') && (
+        {(effectiveDevice === 'wasm' || effectiveDevice === 'cpu' || effectiveDevice === 'webgpu') && (
           <p className="text-xs text-amber-400 flex items-center gap-1">
             Local mode works offline but may crash on iPhone. Use cloud for best experience.
           </p>
