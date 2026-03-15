@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import useKokoroWebWorkerTts from '../hooks/useKokoroWebWorkerTts';
 import { BRAND_NAME } from '../utils/branding';
 import { AppContextType, AppState, AppToast, SampleText, TextSet } from '../types';
@@ -390,14 +390,14 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     tts.seekToTime(time);
   };
 
-  const handleDeviceChange = (device: 'webgpu' | 'wasm' | 'cpu' | 'serverless') => {
+  const handleDeviceChange = useCallback((device: 'webgpu' | 'wasm' | 'cpu' | 'serverless') => {
     setPreferredDevice(device);
     modelManager.savePreferences({ preferredDevice: device });
-  };
+  }, []);
 
-  const handleDtypeChange = (dtype: 'fp32' | 'fp16' | 'q8' | 'q4' | 'q4f16') => {
+  const handleDtypeChange = useCallback((dtype: 'fp32' | 'fp16' | 'q8' | 'q4' | 'q4f16') => {
     setPreferredDtype(dtype);
-  };
+  }, []);
 
   const handleCloseOnboarding = () => {
     setShowOnboarding(false);
@@ -1003,6 +1003,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     model: {
       isReady: tts.isReady,
       status: tts.status,
+      currentDevice: tts.currentDevice,
       modelAccepted,
       showModelWarning,
       normalizeAudio: false,

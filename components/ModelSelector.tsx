@@ -33,7 +33,7 @@ const AVAILABLE_MODELS: ModelConfig[] = [
   {
     id: 'kokoro-82m-fp32',
     name: 'Voice Engine (FP32)',
-    description: 'Full precision – highest quality, GPU recommended',
+    description: 'Full precision – highest quality (runs best with GPU or Cloud)',
     size: '310MB',
     quality: 'high',
     url: 'onnx-community/Kokoro-82M-ONNX',
@@ -46,7 +46,7 @@ const AVAILABLE_MODELS: ModelConfig[] = [
   {
     id: 'kokoro-82m-fp16',
     name: 'Voice Engine (FP16)',
-    description: 'Half precision – high quality, GPU recommended',
+    description: 'Half precision – high quality (GPU-optimized, falls back to CPU if needed)',
     size: '156MB',
     quality: 'high',
     url: 'onnx-community/Kokoro-82M-ONNX',
@@ -163,12 +163,18 @@ const ModelSelector: FC<ModelSelectorProps> = ({
   }, [onModelChange]);
 
   // Save preferences using model manager
-  const savePreferences = useCallback((newSelectedModel: string, newPreferredDevice: 'webgpu' | 'wasm' | 'cpu' | 'serverless') => {
-    modelManager.savePreferences({
-      selectedModel: newSelectedModel,
-      preferredDevice: newPreferredDevice
-    });
-  }, []);
+  const savePreferences = useCallback(
+    (
+      newSelectedModel: string,
+      newPreferredDevice: 'webgpu' | 'wasm' | 'cpu' | 'serverless'
+    ) => {
+      modelManager.savePreferences({
+        selectedModel: newSelectedModel,
+        preferredDevice: newPreferredDevice
+      });
+    },
+    []
+  );
 
   const getBestModelForDevice = useCallback((device: string): ModelConfig => {
     switch (device) {
@@ -185,23 +191,36 @@ const ModelSelector: FC<ModelSelectorProps> = ({
     }
   }, []);
 
-  const handleDeviceChange = useCallback((e: ChangeEvent<HTMLSelectElement>) => {
-    const device = e.target.value as 'webgpu' | 'wasm' | 'cpu' | 'serverless';
-    setPreferredDevice(device);
-    const bestModel = getBestModelForDevice(device);
-    onModelChange(bestModel.id);
-    savePreferences(bestModel.id, device);
-    onDeviceChange?.(device);
-  }, [savePreferences, onDeviceChange, onModelChange, getBestModelForDevice]);
+  const handleDeviceChange = useCallback(
+    (e: ChangeEvent<HTMLSelectElement>) => {
+      const device = e.target.value as 'webgpu' | 'wasm' | 'cpu' | 'serverless';
+      setPreferredDevice(device);
 
-  const handleModelChange = useCallback((modelId: string) => {
-    onModelChange(modelId);
-    const model = AVAILABLE_MODELS.find(m => m.id === modelId);
-    if (model) {
-      onDtypeChange?.(model.dtype);
-    }
-    savePreferences(modelId, preferredDevice);
-  }, [preferredDevice, savePreferences, onModelChange, onDtypeChange]);
+      const bestModel = getBestModelForDevice(device);
+      onModelChange(bestModel.id);
+      onDtypeChange?.(bestModel.dtype);
+
+      savePreferences(bestModel.id, device);
+      onDeviceChange?.(device);
+    },
+    [getBestModelForDevice, onDeviceChange, onDtypeChange, onModelChange, savePreferences]
+  );
+
+  const handleModelChange = useCallback(
+    (modelId: string) => {
+      onModelChange(modelId);
+
+      const model = AVAILABLE_MODELS.find(m => m.id === modelId);
+      if (model) {
+        onDtypeChange?.(model.dtype);
+      }
+
+      // Persist the chosen model, but keep the device preference
+      // controlled solely by the Processing Mode dropdown.
+      savePreferences(modelId, preferredDevice);
+    },
+    [onDtypeChange, onModelChange, preferredDevice, savePreferences]
+  );
 
   const getQualityBadge = useCallback((quality: string) => {
     switch (quality) {
@@ -216,13 +235,27 @@ const ModelSelector: FC<ModelSelectorProps> = ({
   useEffect(() => {
     if (gpuCheckComplete && !gpuAvailable && preferredDevice === 'webgpu') {
       const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
-      const newDevice = isOnline ? 'serverless' : 'wasm';
+      const newDevice: 'serverless' | 'wasm' = isOnline ? 'serverless' : 'wasm';
+
       setPreferredDevice(newDevice);
+
       const bestModel = getBestModelForDevice(newDevice);
       onModelChange(bestModel.id);
+      onDtypeChange?.(bestModel.dtype);
+
       savePreferences(bestModel.id, newDevice);
+      onDeviceChange?.(newDevice);
     }
-  }, [gpuCheckComplete, gpuAvailable, preferredDevice, savePreferences, onModelChange, getBestModelForDevice]);
+  }, [
+    gpuCheckComplete,
+    gpuAvailable,
+    preferredDevice,
+    getBestModelForDevice,
+    onDeviceChange,
+    onDtypeChange,
+    onModelChange,
+    savePreferences
+  ]);
 
   return (
     <div className="space-y-4">

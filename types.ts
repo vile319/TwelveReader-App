@@ -39,6 +39,8 @@ export interface AudioState {
 export interface ModelState {
   isReady: boolean;
   status: string;
+  /** Actual runtime backend chosen by the TTS hook */
+  currentDevice?: 'webgpu' | 'wasm' | 'cpu' | 'serverless' | null;
   modelAccepted: boolean;
   showModelWarning: boolean;
   normalizeAudio: boolean;

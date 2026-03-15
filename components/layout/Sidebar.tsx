@@ -205,6 +205,21 @@ const Sidebar: FC = () => {
 
             {/* Models */}
             <div className="mb-8">
+              <div className="mb-3 space-y-1">
+                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">
+                  Processing Mode
+                </p>
+                <p className="text-[11px] text-slate-500">
+                  Active backend:{' '}
+                  <span className="font-semibold text-slate-200">
+                    {state.model.currentDevice === 'webgpu' && 'Local GPU (WebGPU)'}
+                    {state.model.currentDevice === 'wasm' && 'Local CPU (WASM)'}
+                    {state.model.currentDevice === 'cpu' && 'Local CPU Native'}
+                    {state.model.currentDevice === 'serverless' && 'Cloud (Serverless)'}
+                    {state.model.currentDevice === null && 'Detecting...'}
+                  </span>
+                </p>
+              </div>
               <ModelSelector
                 selectedModel={state.model.selectedModel}
                 onModelChange={actions.setSelectedModel}
