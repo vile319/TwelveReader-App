@@ -41,6 +41,8 @@ export interface ModelState {
   status: string;
   /** Actual runtime backend chosen by the TTS hook */
   currentDevice?: 'webgpu' | 'wasm' | 'cpu' | 'serverless' | null;
+  detectedHardwareLabel: string;
+  detectedHardwareReason?: string | null;
   modelAccepted: boolean;
   showModelWarning: boolean;
   normalizeAudio: boolean;

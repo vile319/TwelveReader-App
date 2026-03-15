@@ -80,6 +80,8 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
   const [preferredDtype, setPreferredDtype] = useState<'fp32' | 'fp16' | 'q8' | 'q4' | 'q4f16'>('fp32');
   const [autoSelect, setAutoSelect] = useState(false);
   const [keepLocal, setKeepLocal] = useState(true);
+  const [detectedHardwareLabel, setDetectedHardwareLabel] = useState('Detecting...');
+  const [detectedHardwareReason, setDetectedHardwareReason] = useState<string | null>(null);
   const [modelKeepLocal, setModelKeepLocal] = useState<Record<string, boolean>>(() => {
     return modelManager.getAllKeepLocalSettings();
   });
@@ -443,6 +445,25 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
   // Clean up unwanted cached models on mount
   useEffect(() => {
     modelManager.cleanupUnwantedModels();
+  }, []);
+
+  useEffect(() => {
+    const loadDetectedHardware = async () => {
+      const gpuCaps = await detectGpuCapabilities();
+
+      if (gpuCaps.canUseLocalGpu) {
+        setDetectedHardwareLabel('GPU (WebGPU) + CPU');
+        setDetectedHardwareReason(null);
+        return;
+      }
+
+      setDetectedHardwareLabel('CPU only');
+      setDetectedHardwareReason(
+        gpuCaps.localGpuUnavailableReason ?? 'Local GPU is unavailable on this browser/device.'
+      );
+    };
+
+    loadDetectedHardware();
   }, []);
 
   // Init default device automatically based on hardware support
@@ -1003,6 +1024,8 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       isReady: tts.isReady,
       status: tts.status,
       currentDevice: tts.currentDevice,
+      detectedHardwareLabel,
+      detectedHardwareReason,
       modelAccepted,
       showModelWarning,
       normalizeAudio: false,

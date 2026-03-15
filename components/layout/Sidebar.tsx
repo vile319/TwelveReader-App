@@ -1,4 +1,5 @@
-import { type FC, useState, useEffect } from 'react';
+import React, { type FC, useState, useEffect } from 'react';
+void React;
 import { useAppContext } from '../../contexts/AppContext';
 import ModelSelector from '../ModelSelector';
 import { BRAND_NAME } from '../../utils/branding';
@@ -210,37 +211,55 @@ const Sidebar: FC = () => {
                   Processing mode and backend
                 </p>
                 <p className="text-[11px] text-slate-500">
-                  {state.model.currentDevice === null ? (
-                    <>Detecting...</>
-                  ) : state.model.currentDevice === state.model.preferredDevice ? (
-                    <>
-                      Currently using{' '}
-                      <span className="font-semibold text-slate-200">
-                        {state.model.currentDevice === 'webgpu' && 'Local GPU (WebGPU)'}
-                        {state.model.currentDevice === 'wasm' && 'Local CPU (WASM)'}
-                        {state.model.currentDevice === 'cpu' && 'Local CPU Native'}
-                        {state.model.currentDevice === 'serverless' && 'Cloud (Serverless)'}
-                      </span>
-                      .
-                    </>
-                  ) : (state.model.preferredDevice === 'webgpu' || state.model.preferredDevice === 'wasm' || state.model.preferredDevice === 'cpu') && state.model.currentDevice === 'serverless' ? (
-                    <>
-                      Currently using{' '}
-                      <span className="font-semibold text-slate-200">Cloud (Serverless)</span>
-                      {' '}&mdash; local mode requires a model download.
-                    </>
-                  ) : (
-                    <>
-                      Currently using{' '}
-                      <span className="font-semibold text-slate-200">
-                        {state.model.currentDevice === 'webgpu' && 'Local GPU (WebGPU)'}
-                        {state.model.currentDevice === 'wasm' && 'Local CPU (WASM)'}
-                        {state.model.currentDevice === 'cpu' && 'Local CPU Native'}
-                        {state.model.currentDevice === 'serverless' && 'Cloud (Serverless)'}
-                      </span>
-                      .
-                    </>
-                  )}
+                  Detected{' '}
+                  <span className="font-semibold text-slate-200">{state.model.detectedHardwareLabel}</span>
+                  .
+                </p>
+                {state.model.detectedHardwareReason ? (
+                  <p className="text-[11px] text-slate-500">
+                    {state.model.detectedHardwareReason}
+                  </p>
+                ) : null}
+                <p className="text-[11px] text-slate-500">
+                  {(() => {
+                    const currentDeviceLabel =
+                      state.model.currentDevice === 'webgpu'
+                        ? 'Local GPU (WebGPU)'
+                        : state.model.currentDevice === 'wasm'
+                          ? 'Local CPU (WASM)'
+                          : state.model.currentDevice === 'cpu'
+                            ? 'Local CPU Native'
+                            : state.model.currentDevice === 'serverless'
+                              ? 'Cloud'
+                              : null;
+
+                    if (state.model.currentDevice === null) {
+                      return <>Detecting...</>;
+                    }
+
+                    if (
+                      (state.model.preferredDevice === 'webgpu' ||
+                        state.model.preferredDevice === 'wasm' ||
+                        state.model.preferredDevice === 'cpu') &&
+                      state.model.currentDevice === 'serverless'
+                    ) {
+                      return (
+                        <>
+                          Engine{' '}
+                          <span className="font-semibold text-slate-200">Cloud</span>
+                          {' '}&mdash; local mode requires a model download.
+                        </>
+                      );
+                    }
+
+                    return (
+                      <>
+                        Engine{' '}
+                        <span className="font-semibold text-slate-200">{currentDeviceLabel}</span>
+                        .
+                      </>
+                    );
+                  })()}
                 </p>
               </div>
               <ModelSelector

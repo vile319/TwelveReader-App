@@ -13,6 +13,16 @@ const TextInputPanel: FC = () => {
   const [saveTitle, setSaveTitle] = useState('');
   const [isSaved, setIsSaved] = useState(false);
   const [resumePrompt, setResumePrompt] = useState<{ id: string; time: number } | null>(null);
+  const currentDeviceLabel =
+    state.model.currentDevice === 'webgpu'
+      ? 'Local GPU (WebGPU)'
+      : state.model.currentDevice === 'wasm'
+        ? 'Local CPU (WASM)'
+        : state.model.currentDevice === 'cpu'
+          ? 'Local CPU Native'
+          : state.model.currentDevice === 'serverless'
+            ? 'Cloud'
+            : 'Detecting...';
 
   const handleSave = async () => {
     let success = false;
@@ -284,16 +294,24 @@ const TextInputPanel: FC = () => {
               </div>
             </div>
           ) : !state.isReading ? (
-            <button
-              onClick={() => {
-                actions.primeAudioContext();
-                actions.handleStartReading();
-              }}
-              className="px-10 py-3.5 rounded-sm font-bold tracking-widest uppercase text-white shadow-none transition-all bg-blue-600 hover:bg-blue-500 active:bg-blue-700 flex items-center gap-2"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5"><path fillRule="evenodd" d="M4.5 5.653c0-1.427 1.529-2.33 2.779-1.643l11.54 6.347c1.295.712 1.295 2.573 0 3.286L7.28 19.99c-1.25.687-2.779-.217-2.779-1.643V5.653Z" clipRule="evenodd" /></svg>
-              Listen
-            </button>
+            <div className="flex flex-col items-center gap-2">
+              <button
+                onClick={() => {
+                  actions.primeAudioContext();
+                  actions.handleStartReading();
+                }}
+                className="px-10 py-3.5 rounded-sm font-bold tracking-widest uppercase text-white shadow-none transition-all bg-blue-600 hover:bg-blue-500 active:bg-blue-700 flex items-center gap-2"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5"><path fillRule="evenodd" d="M4.5 5.653c0-1.427 1.529-2.33 2.779-1.643l11.54 6.347c1.295.712 1.295 2.573 0 3.286L7.28 19.99c-1.25.687-2.779-.217-2.779-1.643V5.653Z" clipRule="evenodd" /></svg>
+                Listen
+              </button>
+              <p className="text-xs text-slate-400">
+                Detected: <span className="font-semibold text-slate-200">{state.model.detectedHardwareLabel}</span>
+              </p>
+              <p className="text-xs text-slate-400">
+                Engine: <span className="font-semibold text-slate-200">{currentDeviceLabel}</span>
+              </p>
+            </div>
           ) : null}
         </div>
       )}

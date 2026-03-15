@@ -99,6 +99,21 @@ type Alignment = {
   end_time: number;   // seconds
 };
 
+const getRuntimeBackendLabel = (device: 'webgpu' | 'wasm' | 'cpu' | 'serverless' | null) => {
+  switch (device) {
+    case 'webgpu':
+      return 'Local GPU (WebGPU)';
+    case 'wasm':
+      return 'Local CPU (WASM)';
+    case 'cpu':
+      return 'Local CPU Native';
+    case 'serverless':
+      return 'Cloud';
+    default:
+      return null;
+  }
+};
+
 const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokoro-82m-fp32', preferredDevice, preferredDtype }: UseKokoroWebWorkerTtsProps) => {
   const [isReady, setIsReady] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -755,7 +770,7 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
       console.log('☁️ Using HuggingFace Space TTS (full quality, all devices)...');
       setIsReady(true);
       setCurrentDevice('serverless');
-      setStatus('☁️ Cloud Kokoro AI ready (best quality)');
+      setStatus('Ready - generating with Cloud');
       setIsLoading(false);
       return;
     }
@@ -823,9 +838,7 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
       ttsRef.current = tts;
       setIsReady(true);
       setCurrentDevice(device);
-      const deviceEmoji = device === 'webgpu' ? '⚡' : '🖥️';
-      const deviceLabel = device === 'webgpu' ? 'GPU-accelerated' : 'CPU-optimized';
-      setStatus(`${deviceEmoji} Kokoro AI ready - ${deviceLabel} with all international voices!`);
+      setStatus(`Ready - generating with ${getRuntimeBackendLabel(device)}`);
       return tts;
     } catch (error: any) {
       if (getIsCancelled?.()) return null;
@@ -854,7 +867,7 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
           ttsRef.current = tts;
           setIsReady(true);
           setCurrentDevice('wasm');
-          setStatus('🔄 CPU fallback successful - Kokoro AI ready with all voices!');
+          setStatus(`Ready - generating with ${getRuntimeBackendLabel('wasm')}`);
           return tts;
         } catch (fallbackError: any) {
           console.error('CPU fallback also failed:', fallbackError);
@@ -1404,8 +1417,12 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
     }
 
     setIsPlaying(false);
-    setStatus(isReady ? '🚀 Kokoro AI ready - All international voices available!' : 'Loading Kokoro model...');
-  }, [isReady]);
+    setStatus(
+      isReady && currentDevice
+        ? `Ready - generating with ${getRuntimeBackendLabel(currentDevice)}`
+        : 'Loading Kokoro model...'
+    );
+  }, [currentDevice, isReady]);
 
   // Debug mode controls
   const enableDebugMode = useCallback(() => {
