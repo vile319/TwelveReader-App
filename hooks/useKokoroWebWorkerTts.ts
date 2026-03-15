@@ -6,6 +6,13 @@ import { KokoroTTS } from 'kokoro-js';
 import { configureOnnxRuntimeForIOS } from '../utils/onnxIosConfig';
 import { modelManager } from '../utils/modelManager';
 import { detectGpuCapabilities } from '../utils/gpuCapabilities';
+import {
+  getCompatibleDtypeForDevice,
+  inferPreferredDtype,
+  mapPreferredDeviceToRuntimeDevice,
+  type ModelDtype,
+  type PreferredDevice
+} from '../utils/modelRuntime';
 
 // Helper to create WAV for HTMLAudioElement
 const floatToWav = (float32Array: Float32Array, sampleRate: number): Blob => {
@@ -97,6 +104,21 @@ type Alignment = {
   word: string;
   start_time: number; // seconds
   end_time: number;   // seconds
+};
+
+type AudioDiagnostics = {
+  label: string;
+  sampleRate: number;
+  samples: number;
+  duration: number;
+  peak: number;
+  rms: number;
+  dcOffset: number;
+  clippedSamples: number;
+  invalidSamples: number;
+  zeroCrossingRate: number;
+  preview: number[];
+  suspicionReason: string | null;
 };
 
 const getRuntimeBackendLabel = (device: 'webgpu' | 'wasm' | 'cpu' | 'serverless' | null) => {
@@ -699,48 +721,158 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
     return audioData;
   }, [normalizeAudio]);
 
-  // Detect if WebGPU is available and choose the best configuration
-  const detectWebGPU = useCallback(async (): Promise<{ device: 'webgpu' | 'wasm' | 'cpu' | 'serverless'; dtype: 'fp32' | 'fp16' | 'q8' | 'q4' | 'q4f16' }> => {
-    // Honour explicit WASM override first
-    if (forceWasmMode) {
-      console.log('🔧 Forcing WASM mode as requested.');
-      return { device: 'wasm', dtype: 'q8' };
-    }
+  const analyzeAudioData = useCallback((audioData: Float32Array, sampleRate: number, label: string): AudioDiagnostics => {
+    let peak = 0;
+    let rmsSum = 0;
+    let sum = 0;
+    let clippedSamples = 0;
+    let invalidSamples = 0;
+    let zeroCrossings = 0;
+    let previous = 0;
+    let hasPrevious = false;
 
-    // Use user preferences if provided
-    if (preferredDevice && preferredDtype) {
-      console.log(`🔧 Using user preferences: ${preferredDevice} with ${preferredDtype}`);
+    for (let i = 0; i < audioData.length; i++) {
+      const sample = audioData[i];
 
-      // Validate device availability
-      if (preferredDevice === 'webgpu') {
-        const caps = await detectGpuCapabilities();
-        if (caps.canUseLocalGpu) {
-          return { device: preferredDevice, dtype: preferredDtype };
-        }
-
-        console.warn(`⚠️ WebGPU requested but not usable. ${caps.localGpuUnavailableReason ?? `Reason: ${caps.reason}`} Falling back to WASM.`);
-        return { device: 'wasm', dtype: preferredDtype };
+      if (!Number.isFinite(sample)) {
+        invalidSamples++;
+        continue;
       }
 
-      return { device: preferredDevice, dtype: preferredDtype };
+      const abs = Math.abs(sample);
+      if (abs > peak) peak = abs;
+      if (abs >= 0.995) clippedSamples++;
+      rmsSum += sample * sample;
+      sum += sample;
+
+      if (hasPrevious && ((previous >= 0 && sample < 0) || (previous < 0 && sample >= 0))) {
+        zeroCrossings++;
+      }
+
+      previous = sample;
+      hasPrevious = true;
     }
 
-    // Auto-detection logic (fallback)
-    const caps = await detectGpuCapabilities();
-    if (caps.canUseLocalGpu) {
-      console.log('✅ WebGPU available. Using stable fp32 model.', {
-        isFallback: caps.isFallbackAdapter,
-        maxStorage: caps.maxStorageBufferBindingSize
-      });
-      return { device: 'webgpu', dtype: 'fp32' };
-    } else {
-      console.log(`⚠️ WebGPU auto-detect: ${caps.localGpuUnavailableReason ?? `not usable (${caps.reason})`}. Falling back to WASM.`);
+    const samples = audioData.length;
+    const rms = samples > 0 ? Math.sqrt(rmsSum / samples) : 0;
+    const dcOffset = samples > 0 ? sum / samples : 0;
+    const zeroCrossingRate = samples > 1 ? zeroCrossings / (samples - 1) : 0;
+
+    let suspicionReason: string | null = null;
+    if (invalidSamples > 0) {
+      suspicionReason = `contains ${invalidSamples} invalid samples`;
+    } else if (sampleRate < 8000 || sampleRate > 96000) {
+      suspicionReason = `unexpected sample rate ${sampleRate}Hz`;
+    } else if (peak < 0.00001) {
+      suspicionReason = 'audio is effectively silent';
+    } else if (clippedSamples / Math.max(samples, 1) > 0.1) {
+      suspicionReason = 'heavily clipped output';
+    } else if (peak > 0.98 && rms > 0.35 && zeroCrossingRate > 0.3) {
+      suspicionReason = 'looks like broadband noise/static';
     }
 
-    // Fallback path – CPU (WASM) back-end with quantised model to conserve memory
-    console.log('➡️ WebGPU not available or failed, using CPU (wasm) with q8 model.');
-    return { device: 'wasm', dtype: 'q8' };
-  }, [forceWasmMode, preferredDevice, preferredDtype]);
+    return {
+      label,
+      sampleRate,
+      samples,
+      duration: sampleRate > 0 ? samples / sampleRate : 0,
+      peak,
+      rms,
+      dcOffset,
+      clippedSamples,
+      invalidSamples,
+      zeroCrossingRate,
+      preview: Array.from(audioData.slice(0, 8)).map((sample) => Number(sample.toFixed(5))),
+      suspicionReason,
+    };
+  }, []);
+
+  const validateAudioData = useCallback((
+    audioData: Float32Array,
+    sampleRate: number,
+    label: string,
+    options?: { failOnSuspicion?: boolean }
+  ) => {
+    const diagnostics = analyzeAudioData(audioData, sampleRate, label);
+
+    console.log(`🔎 Audio diagnostics [${label}]`, diagnostics);
+
+    if (diagnostics.suspicionReason) {
+      console.warn(`⚠️ Suspicious audio detected for ${label}: ${diagnostics.suspicionReason}`);
+      if (options?.failOnSuspicion) {
+        throw new Error(`Generated audio looks corrupt (${diagnostics.suspicionReason})`);
+      }
+    }
+
+    return diagnostics;
+  }, [analyzeAudioData]);
+
+  const resolveRuntimeConfig = useCallback(async (): Promise<{
+    device: 'webgpu' | 'wasm' | 'serverless';
+    dtype: ModelDtype;
+    requestedDevice: PreferredDevice | undefined;
+    requestedDtype: ModelDtype;
+    warning?: string;
+  }> => {
+    const requestedDevice = preferredDevice;
+    const requestedDtype = preferredDtype ?? inferPreferredDtype(selectedModel);
+
+    if (forceWasmMode) {
+      return {
+        device: 'wasm',
+        dtype: 'q8',
+        requestedDevice,
+        requestedDtype,
+        warning: 'Force WASM mode is enabled; using q8 on WASM.'
+      };
+    }
+
+    const mappedDevice = mapPreferredDeviceToRuntimeDevice(requestedDevice ?? 'serverless');
+
+    if (!mappedDevice || mappedDevice === 'serverless') {
+      return {
+        device: 'serverless',
+        dtype: 'fp32',
+        requestedDevice,
+        requestedDtype
+      };
+    }
+
+    if (mappedDevice === 'webgpu') {
+      const caps = await detectGpuCapabilities();
+      if (caps.canUseLocalGpu) {
+        return {
+          device: 'webgpu',
+          dtype: getCompatibleDtypeForDevice('webgpu', requestedDtype, selectedModel),
+          requestedDevice,
+          requestedDtype
+        };
+      }
+
+      const fallbackDevice = 'wasm' as const;
+      return {
+        device: fallbackDevice,
+        dtype: getCompatibleDtypeForDevice(fallbackDevice, undefined, selectedModel),
+        requestedDevice,
+        requestedDtype,
+        warning: `WebGPU requested but unavailable. ${caps.localGpuUnavailableReason ?? `Reason: ${caps.reason}`} Falling back to WASM.`
+      };
+    }
+
+    const resolvedDevice = mappedDevice === 'wasm' ? 'wasm' : 'serverless';
+    const resolvedDtype = getCompatibleDtypeForDevice(resolvedDevice, requestedDtype, selectedModel);
+    const warning = requestedDevice === 'cpu'
+      ? 'Browser CPU mode maps to WASM at runtime.'
+      : undefined;
+
+    return {
+      device: resolvedDevice,
+      dtype: resolvedDtype,
+      requestedDevice,
+      requestedDtype,
+      warning
+    };
+  }, [forceWasmMode, preferredDevice, preferredDtype, selectedModel]);
 
   // Initialize TTS model. Optional getIsCancelled: when effect re-runs (e.g. preference change), in-flight init should stop updating state.
   const initializeTts = useCallback(async (getIsCancelled?: () => boolean) => {
@@ -755,7 +887,7 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
     }
     if (getIsCancelled?.()) return;
 
-    // All device and dtype decision logic is now consolidated in detectWebGPU.
+    // All device and dtype decision logic is now consolidated in resolveRuntimeConfig.
     // Use iOS-optimized settings if available (now bypassing local WASM entirely)
     const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
 
@@ -770,7 +902,7 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
       console.log('☁️ Using HuggingFace Space TTS (full quality, all devices)...');
       setIsReady(true);
       setCurrentDevice('serverless');
-      setStatus('Ready - generating with Cloud');
+      setStatus('Ready - generating with Cloud [fp32]');
       setIsLoading(false);
       return;
     }
@@ -784,10 +916,21 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
     }
 
 
-    const { device, dtype } = await detectWebGPU();
+    const runtimeConfig = await resolveRuntimeConfig();
     if (getIsCancelled?.()) return;
 
-    console.log(`🚀 Initializing Kokoro TTS with ${device} and ${dtype}...`);
+    const { device, dtype, warning, requestedDevice, requestedDtype } = runtimeConfig;
+
+    if (warning) {
+      console.warn(`⚠️ ${warning}`);
+      setStatus(warning);
+    }
+
+    console.log(`🚀 Initializing Kokoro TTS with ${device} and ${dtype}...`, {
+      selectedModel,
+      requestedDevice,
+      requestedDtype
+    });
 
     try {
       // Check if cache is available
@@ -838,7 +981,7 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
       ttsRef.current = tts;
       setIsReady(true);
       setCurrentDevice(device);
-      setStatus(`Ready - generating with ${getRuntimeBackendLabel(device)}`);
+      setStatus(`Ready - generating with ${getRuntimeBackendLabel(device)} [${dtype}]`);
       return tts;
     } catch (error: any) {
       if (getIsCancelled?.()) return null;
@@ -867,7 +1010,7 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
           ttsRef.current = tts;
           setIsReady(true);
           setCurrentDevice('wasm');
-          setStatus(`Ready - generating with ${getRuntimeBackendLabel('wasm')}`);
+          setStatus(`Ready - generating with ${getRuntimeBackendLabel('wasm')} [q8]`);
           return tts;
         } catch (fallbackError: any) {
           console.error('CPU fallback also failed:', fallbackError);
@@ -889,7 +1032,7 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
         setIsLoading(false);
       }
     }
-  }, [onError, detectWebGPU, preferredDevice]);
+  }, [onError, resolveRuntimeConfig, preferredDevice, selectedModel]);
 
   // Initialize when enabled flips true or model configuration changes.
   // Cloud/serverless mode initializes immediately without needing model download consent.
@@ -1079,7 +1222,7 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
               audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
             }
             const decodedBuffer = await audioContextRef.current.decodeAudioData(arrayBuffer);
-            audioData = decodedBuffer.getChannelData(0); // Assuming mono output
+            audioData = new Float32Array(decodedBuffer.getChannelData(0)); // Copy out of AudioBuffer for stable downstream processing
             // IMPORTANT: use the rate from the decoded buffer (which is the AudioContext's actual rate after resampling)
             // This ensures all timing math (duration, word timings, progress) uses the right denominator
             sampleRate = decodedBuffer.sampleRate;
@@ -1132,23 +1275,16 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
             continue; // Skip this chunk and continue
           }
 
-          // Debug audio sample rate and scaling - avoid stack overflow with large arrays
-          let peak = 0;
-          let rmsSum = 0;
-          for (let j = 0; j < audioData!.length; j++) {
-            const abs = Math.abs(audioData![j]);
-            if (abs > peak) peak = abs;
-            rmsSum += audioData![j] * audioData![j];
-          }
-          const rms = Math.sqrt(rmsSum / audioData!.length);
+          const diagnostics = validateAudioData(
+            audioData,
+            sampleRate,
+            `${isServerless ? 'cloud-decoded' : 'local-generated'} chunk ${i + 1}`,
+            { failOnSuspicion: !isServerless }
+          );
 
-          console.log(`🎵 Chunk ${i + 1} audio info:`, {
-            samples: audioData!.length,
-            sampleRate: sampleRate,
-            duration: (audioData!.length / sampleRate).toFixed(3) + 's',
-            peak: peak.toFixed(4),
-            rms: rms.toFixed(4)
-          });
+          if (diagnostics.suspicionReason && isServerless) {
+            setStatus(`⚠️ Cloud audio looks suspicious: ${diagnostics.suspicionReason}`);
+          }
 
           // Apply normalization if enabled
           audioData = normalizeAudioData(audioData!);
@@ -1246,6 +1382,17 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
       console.log(`   Total audio: ${combinedAudio.length} samples at ${sampleRate}Hz`);
       console.log(`   Duration: ${(combinedAudio.length / sampleRate).toFixed(1)}s`);
       console.log(`   Time: ${synthTime.toFixed(0)}ms`);
+
+      const combinedDiagnostics = validateAudioData(
+        combinedAudio,
+        sampleRate,
+        'combined-export',
+        { failOnSuspicion: !isServerless }
+      );
+
+      if (combinedDiagnostics.suspicionReason && isServerless) {
+        setStatus(`⚠️ Exported cloud audio looks suspicious: ${combinedDiagnostics.suspicionReason}`);
+      }
 
       // Store complete audio for scrubbing and switch from streaming to complete mode
       setCompleteAudioBuffer(combinedAudio);

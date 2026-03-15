@@ -2,6 +2,9 @@ import React, { type FC, useState, useEffect, type ChangeEvent, useCallback } fr
 import { modelManager } from '../utils/modelManager';
 import { useModelManager } from '../hooks/useModelManager';
 import { detectGpuCapabilities } from '../utils/gpuCapabilities';
+import { getDefaultModelForDevice, type ModelDtype } from '../utils/modelRuntime';
+
+void React;
 
 export interface ModelConfig {
   id: string;
@@ -181,11 +184,13 @@ const ModelSelector: FC<ModelSelectorProps> = ({
   const savePreferences = useCallback(
     (
       newSelectedModel: string,
-      newPreferredDevice: 'webgpu' | 'wasm' | 'cpu' | 'serverless'
+      newPreferredDevice: 'webgpu' | 'wasm' | 'cpu' | 'serverless',
+      newPreferredDtype: ModelDtype
     ) => {
       modelManager.savePreferences({
         selectedModel: newSelectedModel,
-        preferredDevice: newPreferredDevice
+        preferredDevice: newPreferredDevice,
+        preferredDtype: newPreferredDtype
       });
     },
     []
@@ -215,7 +220,7 @@ const ModelSelector: FC<ModelSelectorProps> = ({
       onModelChange(bestModel.id);
       onDtypeChange?.(bestModel.dtype);
 
-      savePreferences(bestModel.id, device);
+      savePreferences(bestModel.id, device, bestModel.dtype);
       onDeviceChange?.(device);
     },
     [getBestModelForDevice, onDeviceChange, onDtypeChange, onModelChange, savePreferences]
@@ -228,13 +233,20 @@ const ModelSelector: FC<ModelSelectorProps> = ({
       const model = AVAILABLE_MODELS.find(m => m.id === modelId);
       if (model) {
         onDtypeChange?.(model.dtype);
-      }
 
-      // Persist the chosen model, but keep the device preference
-      // controlled solely by the Processing Mode dropdown.
-      savePreferences(modelId, effectiveDevice);
+        let nextDevice = effectiveDevice;
+
+        // When a local model is picked, switch the local runtime to a compatible device family
+        // so the saved UI choice matches the actual runtime the hook will use.
+        if (effectiveDevice !== 'serverless') {
+          nextDevice = model.device === 'webgpu' ? 'webgpu' : (effectiveDevice === 'cpu' ? 'cpu' : 'wasm');
+          onDeviceChange?.(nextDevice);
+        }
+
+        savePreferences(modelId, nextDevice, model.dtype);
+      }
     },
-    [onDtypeChange, onModelChange, effectiveDevice, savePreferences]
+    [onDeviceChange, onDtypeChange, onModelChange, effectiveDevice, savePreferences]
   );
 
   const getQualityBadge = useCallback((quality: string) => {
@@ -254,18 +266,17 @@ const ModelSelector: FC<ModelSelectorProps> = ({
 
       setPreferredDevice(newDevice);
 
-      const bestModel = getBestModelForDevice(newDevice);
-      onModelChange(bestModel.id);
+      const bestModel = getDefaultModelForDevice(newDevice);
+      onModelChange(bestModel.modelId);
       onDtypeChange?.(bestModel.dtype);
 
-      savePreferences(bestModel.id, newDevice);
+      savePreferences(bestModel.modelId, newDevice, bestModel.dtype);
       onDeviceChange?.(newDevice);
     }
   }, [
     gpuCheckComplete,
     gpuAvailable,
     effectiveDevice,
-    getBestModelForDevice,
     onDeviceChange,
     onDtypeChange,
     onModelChange,

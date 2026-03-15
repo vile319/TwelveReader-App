@@ -6,6 +6,7 @@ import { driveSync } from '../utils/GoogleDriveSync';
 import { localDB } from '../utils/localDatabase';
 import { modelManager } from '../utils/modelManager';
 import { detectGpuCapabilities } from '../utils/gpuCapabilities';
+import { getDefaultModelForDevice, inferPreferredDtype } from '../utils/modelRuntime';
 import { useGoogleLogin } from '@react-oauth/google';
 import JSZip from 'jszip';
 
@@ -77,7 +78,10 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     const preferences = modelManager.getPreferences();
     return preferences.preferredDevice === 'auto' ? 'serverless' : (preferences.preferredDevice as 'webgpu' | 'wasm' | 'cpu' | 'serverless');
   });
-  const [preferredDtype, setPreferredDtype] = useState<'fp32' | 'fp16' | 'q8' | 'q4' | 'q4f16'>('fp32');
+  const [preferredDtype, setPreferredDtype] = useState<'fp32' | 'fp16' | 'q8' | 'q4' | 'q4f16'>(() => {
+    const preferences = modelManager.getPreferences();
+    return preferences.preferredDtype ?? inferPreferredDtype(preferences.selectedModel);
+  });
   const [autoSelect, setAutoSelect] = useState(false);
   const [keepLocal, setKeepLocal] = useState(true);
   const [detectedHardwareLabel, setDetectedHardwareLabel] = useState('Detecting...');
@@ -369,9 +373,16 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
   };
 
   const handleCancelModelDownload = () => {
+    const cloudDefaults = getDefaultModelForDevice('serverless');
     setShowModelWarning(false);
     setPreferredDevice('serverless');
-    modelManager.savePreferences({ preferredDevice: 'serverless' });
+    setSelectedModel(cloudDefaults.modelId);
+    setPreferredDtype(cloudDefaults.dtype);
+    modelManager.savePreferences({
+      preferredDevice: 'serverless',
+      selectedModel: cloudDefaults.modelId,
+      preferredDtype: cloudDefaults.dtype
+    });
   };
 
   const handleDownloadAudio = () => {
@@ -405,6 +416,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
 
   const handleDtypeChange = useCallback((dtype: 'fp32' | 'fp16' | 'q8' | 'q4' | 'q4f16') => {
     setPreferredDtype(dtype);
+    modelManager.savePreferences({ preferredDtype: dtype });
   }, []);
 
   const handleCloseOnboarding = () => {
@@ -468,11 +480,25 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
 
   // Init default device automatically based on hardware support
   useEffect(() => {
+    const preferences = modelManager.getPreferences();
+    const inferredDtype = preferences.preferredDtype ?? inferPreferredDtype(preferences.selectedModel);
+
+    if (inferredDtype !== preferredDtype) {
+      setPreferredDtype(inferredDtype);
+    }
+
+    if (preferences.preferredDtype !== inferredDtype) {
+      modelManager.savePreferences({ preferredDtype: inferredDtype });
+    }
+    // Intentionally run once to repair older saved preferences.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
     const initDevice = async () => {
       const preferences = modelManager.getPreferences();
       if (preferences.preferredDevice === 'auto') {
         let defaultDevice: 'webgpu' | 'serverless' | 'wasm' = 'serverless';
-        let defaultModel = 'kokoro-82m-fp32';
 
         const gpuCaps = await detectGpuCapabilities();
 
@@ -489,21 +515,24 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
 
         if (gpuCaps.canUseLocalGpu) {
           defaultDevice = 'webgpu';
-          defaultModel = 'kokoro-82m-fp32';
           console.log('✅ Local GPU supported: defaulting to webgpu processing.');
         } else if (isOnline) {
           defaultDevice = 'serverless';
-          defaultModel = 'kokoro-82m-fp32';
           console.log(`☁️ Defaulting to serverless processing. ${gpuCaps.localGpuUnavailableReason ?? 'Local GPU is unavailable.'}`);
         } else {
           defaultDevice = 'wasm';
-          defaultModel = 'kokoro-82m-q8';
           console.log(`📡 Offline detected. Defaulting to local CPU mode (wasm). ${gpuCaps.localGpuUnavailableReason ?? 'Local GPU is unavailable.'}`);
         }
 
+        const defaultModelConfig = getDefaultModelForDevice(defaultDevice);
         setPreferredDevice(defaultDevice);
-        setSelectedModel(defaultModel);
-        modelManager.savePreferences({ preferredDevice: defaultDevice, selectedModel: defaultModel });
+        setSelectedModel(defaultModelConfig.modelId);
+        setPreferredDtype(defaultModelConfig.dtype);
+        modelManager.savePreferences({
+          preferredDevice: defaultDevice,
+          selectedModel: defaultModelConfig.modelId,
+          preferredDtype: defaultModelConfig.dtype
+        });
       }
     };
     initDevice();

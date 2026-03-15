@@ -1,4 +1,6 @@
-import { ModelConfig, getModelInfo, getAllModels } from '../components/ModelSelector';// Local storage keys
+import { ModelConfig, getModelInfo, getAllModels } from '../components/ModelSelector';
+import { inferPreferredDtype, type ModelDtype } from './modelRuntime';
+// Local storage keys
 const MODEL_PREFERENCES_KEY = 'twelvereader-model-preferences-v2'; // bumped to reset old local-mode defaults
 const MODEL_KEEP_LOCAL_KEY = 'twelvereader-model-keep-local';
 const MODEL_CACHE_STATUS_KEY = 'twelvereader-model-cache-status';
@@ -6,6 +8,7 @@ const MODEL_CACHE_STATUS_KEY = 'twelvereader-model-cache-status';
 export interface ModelPreferences {
   selectedModel: string;
   preferredDevice: 'webgpu' | 'wasm' | 'cpu' | 'serverless' | 'auto';
+  preferredDtype: ModelDtype;
   lastUpdated: number;
 }
 
@@ -46,9 +49,11 @@ export class ModelManager {
       const saved = localStorage.getItem(MODEL_PREFERENCES_KEY);
       if (saved) {
         const parsed = JSON.parse(saved);
+        const selectedModel = parsed.selectedModel ?? 'kokoro-82m-fp32';
         return {
-          selectedModel: parsed.selectedModel ?? 'kokoro-82m-fp32',
+          selectedModel,
           preferredDevice: parsed.preferredDevice ?? 'auto',
+          preferredDtype: parsed.preferredDtype ?? inferPreferredDtype(selectedModel),
           lastUpdated: parsed.lastUpdated ?? Date.now()
         };
       }
@@ -59,13 +64,25 @@ export class ModelManager {
     return {
       selectedModel: 'kokoro-82m-fp32',
       preferredDevice: 'auto',
+      preferredDtype: 'fp32',
       lastUpdated: Date.now()
     };
   }
 
   public savePreferences(preferences: Partial<ModelPreferences>): void {
     try {
-      this.preferences = { ...this.preferences, ...preferences, lastUpdated: Date.now() };
+      const nextSelectedModel = preferences.selectedModel ?? this.preferences.selectedModel;
+      const nextPreferredDtype =
+        preferences.preferredDtype ??
+        (preferences.selectedModel ? inferPreferredDtype(nextSelectedModel) : this.preferences.preferredDtype);
+
+      this.preferences = {
+        ...this.preferences,
+        ...preferences,
+        selectedModel: nextSelectedModel,
+        preferredDtype: nextPreferredDtype,
+        lastUpdated: Date.now()
+      };
       localStorage.setItem(MODEL_PREFERENCES_KEY, JSON.stringify(this.preferences));
     } catch (error) {
       console.warn('Failed to save model preferences:', error);
@@ -403,3 +420,4 @@ export class ModelManager {
 
 // Export singleton instance
 export const modelManager = ModelManager.getInstance();
+export { inferPreferredDtype };

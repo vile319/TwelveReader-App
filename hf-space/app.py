@@ -30,6 +30,29 @@ class TTSRequest(BaseModel):
     speed: float = 1.0
 
 
+def analyze_audio(audio: np.ndarray):
+    peak = float(np.max(np.abs(audio))) if audio.size else 0.0
+    rms = float(np.sqrt(np.mean(np.square(audio)))) if audio.size else 0.0
+    zero_crossing_rate = float(np.mean(audio[:-1] * audio[1:] < 0)) if audio.size > 1 else 0.0
+    invalid_samples = int(audio.size - np.count_nonzero(np.isfinite(audio)))
+
+    suspicion = None
+    if invalid_samples > 0:
+        suspicion = f"contains {invalid_samples} invalid samples"
+    elif peak < 1e-5:
+        suspicion = "audio is effectively silent"
+    elif peak > 0.98 and rms > 0.35 and zero_crossing_rate > 0.3:
+        suspicion = "looks like broadband noise/static"
+
+    return {
+        "peak": peak,
+        "rms": rms,
+        "zero_crossing_rate": zero_crossing_rate,
+        "invalid_samples": invalid_samples,
+        "suspicion": suspicion,
+    }
+
+
 @app.get("/")
 def root():
     return {"status": "ok", "service": "Kokoro TTS API"}
@@ -62,7 +85,23 @@ async def tts(request: TTSRequest):
             raise HTTPException(status_code=500, detail="No audio generated")
 
         # Combine all chunks into a single float32 array
-        combined = np.concatenate(audio_chunks)
+        combined = np.concatenate(audio_chunks).astype(np.float32, copy=False)
+        diagnostics = analyze_audio(combined)
+        print(f"TTS diagnostics: {diagnostics}")
+
+        if diagnostics["invalid_samples"] > 0:
+            raise HTTPException(status_code=500, detail="Generated invalid audio samples")
+
+        if diagnostics["peak"] > 1.0:
+            combined = combined * (0.95 / diagnostics["peak"])
+            diagnostics = analyze_audio(combined)
+            print(f"TTS diagnostics after normalization: {diagnostics}")
+
+        if diagnostics["suspicion"]:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Generated audio looks corrupted: {diagnostics['suspicion']}"
+            )
 
         # Encode as WAV and return as a streaming binary response
         buf = io.BytesIO()
