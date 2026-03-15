@@ -207,10 +207,10 @@ const Sidebar: FC = () => {
             <div className="mb-8">
               <div className="mb-3 space-y-1">
                 <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">
-                  Processing Mode
+                  Processing mode and backend
                 </p>
                 <p className="text-[11px] text-slate-500">
-                  Active backend:{' '}
+                  Currently using{' '}
                   <span className="font-semibold text-slate-200">
                     {state.model.currentDevice === 'webgpu' && 'Local GPU (WebGPU)'}
                     {state.model.currentDevice === 'wasm' && 'Local CPU (WASM)'}
@@ -218,6 +218,7 @@ const Sidebar: FC = () => {
                     {state.model.currentDevice === 'serverless' && 'Cloud (Serverless)'}
                     {state.model.currentDevice === null && 'Detecting...'}
                   </span>
+                  {' '}based on your selection below.
                 </p>
               </div>
               <ModelSelector
@@ -243,7 +244,7 @@ const Sidebar: FC = () => {
                 </button>
               )}
               <button onClick={actions.handleShowHelp} className="w-full p-3 rounded-lg bg-slate-800 text-slate-300 text-sm font-medium hover:bg-slate-700 transition-colors flex items-center justify-center gap-2">
-                <span>❓</span> Help & Tutorials
+                Help & Tutorials
               </button>
             </div>
           </div>

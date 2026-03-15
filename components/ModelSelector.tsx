@@ -262,7 +262,7 @@ const ModelSelector: FC<ModelSelectorProps> = ({
       {/* Device Selection */}
       <div className="space-y-2">
         <label className="block text-sm font-semibold text-slate-200">
-          🔧 Processing Mode
+          Processing mode
         </label>
         <select
           value={preferredDevice}
@@ -272,21 +272,21 @@ const ModelSelector: FC<ModelSelectorProps> = ({
             }`}
         >
           <option value="serverless">
-            ☁️ Cloud (Recommended — Best Quality)
+            Cloud (recommended — best quality)
           </option>
           <option value="webgpu" disabled={!gpuAvailable}>
-            ⚡ Local GPU — WebGPU {!gpuAvailable && '(Not Available)'}
+            Local GPU — WebGPU {!gpuAvailable && '(Not available)'}
           </option>
           <option value="wasm">
-            🖥️ Local CPU — Offline ⚠️ May not work on iPhone
+            Local CPU — offline (may not work on iPhone)
           </option>
           <option value="cpu">
-            💻 Local CPU Native — Offline ⚠️ May not work on iPhone
+            Local CPU (native) — offline (may not work on iPhone)
           </option>
         </select>
         {(preferredDevice === 'wasm' || preferredDevice === 'cpu' || preferredDevice === 'webgpu') && (
           <p className="text-xs text-amber-400 flex items-center gap-1">
-            ⚠️ Local mode: works offline but may crash on iPhone. Use Cloud for best experience.
+            Local mode works offline but may crash on iPhone. Use cloud for best experience.
           </p>
         )}
       </div>
@@ -326,7 +326,7 @@ const ModelSelector: FC<ModelSelectorProps> = ({
                     <p className="text-xs text-slate-400 mb-1.5 leading-snug">{model.description}</p>
                     {/* Stats row */}
                     <div className="flex items-center gap-3 text-xs">
-                      <span className="text-slate-500">📦 {model.size}</span>
+                      <span className="text-slate-500">{model.size}</span>
                       {/* Download status — always shown */}
                       {isDownloaded ? (
                         <span className="text-emerald-400 font-medium">✓ Cached</span>

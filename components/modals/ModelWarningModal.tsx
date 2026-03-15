@@ -69,7 +69,7 @@ const ModelWarningModal: React.FC = () => {
               e.currentTarget.style.backgroundColor = '#4a90e2';
             }}
           >
-            📥 Download & Continue
+            Download and continue
           </button>
           <button
             onClick={actions.handleCancelModelDownload}
@@ -93,7 +93,7 @@ const ModelWarningModal: React.FC = () => {
               e.currentTarget.style.borderColor = '#4a5568';
             }}
           >
-            ❌ Cancel
+            Cancel
           </button>
         </div>
         <div style={{
@@ -102,7 +102,7 @@ const ModelWarningModal: React.FC = () => {
           color: '#718096',
           lineHeight: '1.3'
         }}>
-          💡 <strong>Privacy Note:</strong> Local models guarantee your text never leaves your device. Cloud processing (if selected) requires sending text securely to external servers.
+          <strong>Privacy note:</strong> Local models guarantee your text never leaves your device. Cloud processing (if selected) requires sending text securely to external servers.
         </div>
       </div>
     </div>

@@ -12,7 +12,7 @@ const OnboardingModal: React.FC<OnboardingModalProps> = ({ isOpen, onClose }) =>
   const steps = [
     {
       title: `Welcome to ${BRAND_NAME}`,
-      icon: "🎉",
+      icon: "",
       content: (
         <div>
           <p style={{ fontSize: '16px', lineHeight: '1.6', marginBottom: '16px' }}>
@@ -26,14 +26,14 @@ const OnboardingModal: React.FC<OnboardingModalProps> = ({ isOpen, onClose }) =>
             padding: '12px',
             fontSize: '14px'
           }}>
-            <strong>☁️ Zero Setup & 🔒 Local Privacy:</strong> Use our high-speed Cloud models instantly, or switch to fully Local processing where your data never leaves your device.
+            <strong>Zero setup and local privacy:</strong> Use high-speed cloud models instantly, or switch to fully local processing where your data never leaves your device.
           </div>
         </div>
       )
     },
     {
-      title: "How to Get Started",
-      icon: "📝",
+      title: "How to get started",
+      icon: "",
       content: (
         <div>
           <div style={{ fontSize: '16px', marginBottom: '20px' }}>
@@ -48,7 +48,6 @@ const OnboardingModal: React.FC<OnboardingModalProps> = ({ isOpen, onClose }) =>
               backgroundColor: '#2d3748',
               borderRadius: '8px'
             }}>
-              <span style={{ fontSize: '24px' }}>✍️</span>
               <div>
                 <div style={{ fontWeight: '600', marginBottom: '4px' }}>Type or Paste Text</div>
                 <div style={{ fontSize: '14px', color: '#a0a0a0' }}>
@@ -64,11 +63,10 @@ const OnboardingModal: React.FC<OnboardingModalProps> = ({ isOpen, onClose }) =>
               backgroundColor: '#2d3748',
               borderRadius: '8px'
             }}>
-              <span style={{ fontSize: '24px' }}>📄</span>
               <div>
-                <div style={{ fontWeight: '600', marginBottom: '4px' }}>Upload PDF</div>
+                <div style={{ fontWeight: '600', marginBottom: '4px' }}>Upload a document</div>
                 <div style={{ fontSize: '14px', color: '#a0a0a0' }}>
-                  Upload any PDF and we'll extract the text automatically
+                  Upload a PDF or EPUB and {BRAND_NAME} will extract the text automatically
                 </div>
               </div>
             </div>
@@ -77,8 +75,8 @@ const OnboardingModal: React.FC<OnboardingModalProps> = ({ isOpen, onClose }) =>
       )
     },
     {
-      title: "Choose Your Voice",
-      icon: "🎭",
+      title: "Choose your voice",
+      icon: "",
       content: (
         <div>
           <p style={{ fontSize: '16px', lineHeight: '1.6', marginBottom: '16px' }}>
@@ -91,16 +89,16 @@ const OnboardingModal: React.FC<OnboardingModalProps> = ({ isOpen, onClose }) =>
             marginBottom: '16px'
           }}>
             <div style={{ padding: '8px', backgroundColor: '#2d3748', borderRadius: '6px', textAlign: 'center' }}>
-              🇺🇸 American
+              American
             </div>
             <div style={{ padding: '8px', backgroundColor: '#2d3748', borderRadius: '6px', textAlign: 'center' }}>
-              🇬🇧 British
+              British
             </div>
             <div style={{ padding: '8px', backgroundColor: '#2d3748', borderRadius: '6px', textAlign: 'center' }}>
-              🇯🇵 Japanese
+              Japanese
             </div>
             <div style={{ padding: '8px', backgroundColor: '#2d3748', borderRadius: '6px', textAlign: 'center' }}>
-              🇫🇷 French
+              French
             </div>
           </div>
           <div style={{
@@ -114,8 +112,8 @@ const OnboardingModal: React.FC<OnboardingModalProps> = ({ isOpen, onClose }) =>
       )
     },
     {
-      title: "Smart Audio Controls",
-      icon: "🎧",
+      title: "Smart audio controls",
+      icon: "",
       content: (
         <div>
           <p style={{ fontSize: '16px', lineHeight: '1.6', marginBottom: '16px' }}>
@@ -123,25 +121,21 @@ const OnboardingModal: React.FC<OnboardingModalProps> = ({ isOpen, onClose }) =>
           </p>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <span style={{ fontSize: '20px' }}>🎯</span>
               <div>
                 <strong>Word-level highlighting</strong> - Follow along as each word is spoken
               </div>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <span style={{ fontSize: '20px' }}>⏯️</span>
               <div>
                 <strong>Smart controls</strong> - Play, pause, skip forward/backward 15 seconds
               </div>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <span style={{ fontSize: '20px' }}>📍</span>
               <div>
                 <strong>Click to seek</strong> - Click any word to jump to that position
               </div>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <span style={{ fontSize: '20px' }}>💾</span>
               <div>
                 <strong>Download audio</strong> - Save generated speech as WAV files
               </div>
@@ -151,12 +145,12 @@ const OnboardingModal: React.FC<OnboardingModalProps> = ({ isOpen, onClose }) =>
       )
     },
     {
-      title: "You're All Set!",
-      icon: "🚀",
+      title: "You're all set",
+      icon: "",
       content: (
         <div style={{ textAlign: 'center' }}>
           <p style={{ fontSize: '16px', lineHeight: '1.6', marginBottom: '20px' }}>
-            Ready to start reading with your ears? Let's go!
+            Ready to start reading with your ears? You are good to go.
           </p>
           <div style={{
             backgroundColor: 'rgba(16, 185, 129, 0.1)',
@@ -166,7 +160,7 @@ const OnboardingModal: React.FC<OnboardingModalProps> = ({ isOpen, onClose }) =>
             marginBottom: '16px'
           }}>
             <div style={{ fontSize: '14px', marginBottom: '8px' }}>
-              <strong>💡 Pro Tip:</strong>
+              <strong>Pro tip:</strong>
             </div>
             <div style={{ fontSize: '14px', color: '#a0a0a0' }}>
               Try the sample texts below to test different voices and see how highlighting works!
@@ -334,7 +328,7 @@ const OnboardingModal: React.FC<OnboardingModalProps> = ({ isOpen, onClose }) =>
               e.currentTarget.style.backgroundColor = '#4a90e2';
             }}
           >
-            {isLastStep ? '🎉 Get Started!' : 'Next →'}
+            {isLastStep ? 'Get started' : 'Next →'}
           </button>
         </div>
       </div>

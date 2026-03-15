@@ -858,7 +858,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
           localStorage.setItem('twelvereader-is-premium', String(data.isPremium));
 
           if (data.isPremium) {
-            setToast({ title: 'Premium Active ✨', message: `Welcome back, ${data.email}`, type: 'success' });
+            setToast({ title: 'Premium active', message: `Welcome back, ${data.email}`, type: 'success' });
           } else {
             setToast({ title: 'Signed In', message: `Successfully signed in as ${data.email}`, type: 'success' });
           }

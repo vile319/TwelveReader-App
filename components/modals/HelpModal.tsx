@@ -13,11 +13,11 @@ const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose, onShowOnboarding
   const faqItemsRaw = [
     {
       question: `How does ${BRAND_NAME} work?`,
-      answer: `${BRAND_NAME} uses advanced AI models that run entirely in your browser to convert text into natural-sounding speech. All processing happens locally - your text never leaves your device.`
+      answer: `${BRAND_NAME} uses advanced AI models to convert text into natural-sounding speech. You can choose fast cloud processing or fully local processing where your text never leaves your device.`
     },
     {
       question: "What file formats are supported?",
-      answer: "You can use plain text (type or paste) or upload PDF files. We automatically extract text from PDFs using PDF.js technology."
+      answer: "You can use plain text (type or paste), upload PDF files, or upload EPUB ebooks. We automatically extract text from documents for you."
     },
     {
       question: "How many voices are available?",
@@ -25,15 +25,15 @@ const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose, onShowOnboarding
     },
     {
       question: "Can I use this offline?",
-      answer: "Yes! After the initial model download (~100MB), TwelveReader works completely offline. Your privacy is protected and no internet connection is required."
+      answer: "Yes. When you choose a local processing mode and download a voice model, ${BRAND_NAME} can run offline. Cloud mode requires an internet connection."
     },
     {
       question: "Can I download the generated audio?",
-      answer: "Absolutely! Once audio generation is complete, you can download the speech as a high-quality WAV file using the download button."
+      answer: "Yes. Once audio generation is complete, you can download the speech as an audio file using the download button."
     },
     {
       question: "Is my data safe and private?",
-      answer: "Yes, completely. TwelveReader is privacy-first - all text processing and speech generation happens locally in your browser. No data is sent to any servers."
+      answer: "Local processing keeps your text on your device. Cloud processing sends text securely to servers to generate audio. You control which mode is used."
     },
     {
       question: "How do I seek to specific parts of the audio?",
@@ -44,19 +44,19 @@ const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose, onShowOnboarding
   const troubleshootingItemsRaw = [
     {
       question: "Audio sounds distorted or too quiet",
-      answer: "Try enabling the 'Audio Fix' toggle in the sidebar. This normalizes audio levels and can resolve scaling issues on some systems."
+      answer: "Check your system volume and output device, and make sure no other app is processing audio (EQ, spatial enhancements, etc.)."
     },
     {
       question: "Model download fails or gets stuck",
-      answer: "Check your internet connection and try the 'Reset Model' button. This clears the cache and downloads the model fresh."
+      answer: "Check your internet connection, keep the tab open, and try again. If it keeps failing, switch to cloud processing mode instead of local."
     },
     {
-      question: "PDF upload isn't working",
-      answer: "Make sure your PDF contains selectable text (not scanned images). Password-protected PDFs are not supported. Try a different PDF file."
+      question: "Document upload isn't working",
+      answer: "Make sure your PDF or EPUB contains selectable text (not just scanned images). Password-protected or heavily protected files may not be supported."
     },
     {
       question: "Audio generation is very slow",
-      answer: "Performance depends on your device. Check the Debug Audio button for system info. WebGPU-enabled browsers typically perform better than WASM fallback."
+      answer: "Performance depends on your device and mode. Cloud mode is usually fastest. On local modes, a modern desktop browser with WebGPU support will perform better than mobile devices."
     },
     {
       question: "Text highlighting is not working",
@@ -64,7 +64,7 @@ const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose, onShowOnboarding
     },
     {
       question: "Browser compatibility issues",
-      answer: "TwelveReader works best in modern browsers (Chrome, Firefox, Safari, Edge). Older browsers may have limited support for AI models."
+      answer: `${BRAND_NAME} works best in modern desktop browsers (Chrome, Edge, Safari). Some features, especially local processing, may not be available or stable on all mobile browsers.`
     }
   ];
 
@@ -120,7 +120,7 @@ const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose, onShowOnboarding
             margin: 0,
             color: '#e5e5e5'
           }}>
-            ❓ Help & Support
+            Help & Support
           </h2>
           <button
             onClick={onClose}
@@ -148,9 +148,9 @@ const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose, onShowOnboarding
           borderBottom: '1px solid #2d3748'
         }}>
           {[
-            { key: 'faq', label: '❓ FAQ', icon: '❓' },
-            { key: 'troubleshooting', label: '🔧 Troubleshooting', icon: '🔧' },
-            { key: 'about', label: 'ℹ️ About', icon: 'ℹ️' }
+            { key: 'faq', label: 'FAQ', icon: '' },
+            { key: 'troubleshooting', label: 'Troubleshooting', icon: '' },
+            { key: 'about', label: 'About', icon: '' }
           ].map((tab) => (
             <button
               key={tab.key}
@@ -189,7 +189,7 @@ const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose, onShowOnboarding
                 borderRadius: '8px',
                 fontSize: '14px'
               }}>
-                <strong>💡 New to {BRAND_NAME}?</strong>{' '}
+                <strong>New to {BRAND_NAME}?</strong>{' '}
                 <button
                   onClick={() => {
                     onClose();
@@ -268,7 +268,7 @@ const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose, onShowOnboarding
                 textAlign: 'center',
                 marginBottom: '24px'
               }}>
-                <div style={{ fontSize: '48px', marginBottom: '16px' }}>📚</div>
+                <div style={{ fontSize: '48px', marginBottom: '16px' }}>{BRAND_NAME.charAt(0)}</div>
                 <h3 style={{
                   fontSize: '24px',
                   fontWeight: '700',
@@ -291,7 +291,7 @@ const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose, onShowOnboarding
                   borderRadius: '8px',
                   padding: '16px'
                 }}>
-                  <h4 style={{ color: '#e5e5e5', marginBottom: '8px' }}>🎯 Mission</h4>
+                  <h4 style={{ color: '#e5e5e5', marginBottom: '8px' }}>Mission</h4>
                   <p style={{ fontSize: '14px', color: '#a0a0a0', lineHeight: '1.5', margin: 0 }}>
                     Make reading accessible to everyone through advanced AI voice technology. 
                     Perfect for students, people with visual impairments, language learners, 
@@ -304,11 +304,10 @@ const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose, onShowOnboarding
                   borderRadius: '8px',
                   padding: '16px'
                 }}>
-                  <h4 style={{ color: '#e5e5e5', marginBottom: '8px' }}>🔒 Privacy Promise</h4>
+                  <h4 style={{ color: '#e5e5e5', marginBottom: '8px' }}>Privacy promise</h4>
                   <p style={{ fontSize: '14px', color: '#a0a0a0', lineHeight: '1.5', margin: 0 }}>
-                    Your privacy is our priority. {BRAND_NAME} runs entirely in your browser 
-                    with no data collection, no tracking, and no server uploads. 
-                    What you read stays with you.
+                    Your privacy is our priority. In local modes, {BRAND_NAME} runs on your device with no server uploads. 
+                    In cloud mode, text is sent securely to generate audio and is not used for advertising.
                   </p>
                 </div>
 
@@ -317,7 +316,7 @@ const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose, onShowOnboarding
                   borderRadius: '8px',
                   padding: '16px'
                 }}>
-                  <h4 style={{ color: '#e5e5e5', marginBottom: '8px' }}>⚡ Technology</h4>
+                  <h4 style={{ color: '#e5e5e5', marginBottom: '8px' }}>Technology</h4>
                   <p style={{ fontSize: '14px', color: '#a0a0a0', lineHeight: '1.5', margin: 0 }}>
                     Powered by Kokoro AI and modern web technologies including WebGPU acceleration, 
                     Web Workers for smooth performance, and PDF.js for document processing.
@@ -332,7 +331,7 @@ const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose, onShowOnboarding
                   textAlign: 'center'
                 }}>
                   <div style={{ fontSize: '14px', color: '#e5e5e5' }}>
-                    <strong>💚 Open Source</strong>
+                    <strong>Open source</strong>
                   </div>
                   <div style={{ fontSize: '12px', color: '#a0a0a0', marginTop: '4px' }}>
                     {BRAND_NAME} is built with open technologies and community support
