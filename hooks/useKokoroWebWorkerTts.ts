@@ -5,6 +5,7 @@ void React;
 import { KokoroTTS } from 'kokoro-js';
 import { configureOnnxRuntimeForIOS } from '../utils/onnxIosConfig';
 import { modelManager } from '../utils/modelManager';
+import { detectGpuCapabilities } from '../utils/gpuCapabilities';
 
 // Helper to create WAV for HTMLAudioElement
 const floatToWav = (float32Array: Float32Array, sampleRate: number): Blob => {
@@ -685,8 +686,6 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
 
   // Detect if WebGPU is available and choose the best configuration
   const detectWebGPU = useCallback(async (): Promise<{ device: 'webgpu' | 'wasm' | 'cpu' | 'serverless'; dtype: 'fp32' | 'fp16' | 'q8' | 'q4' | 'q4f16' }> => {
-    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-
     // Honour explicit WASM override first
     if (forceWasmMode) {
       console.log('🔧 Forcing WASM mode as requested.');
@@ -699,39 +698,28 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
 
       // Validate device availability
       if (preferredDevice === 'webgpu') {
-        if (typeof navigator !== 'undefined' && (navigator as any).gpu) {
-          try {
-            const adapter = await (navigator as any).gpu.requestAdapter();
-            if (adapter) {
-              return { device: preferredDevice, dtype: preferredDtype };
-            } else {
-              console.warn('⚠️ WebGPU requested but not available, falling back to WASM');
-              return { device: 'wasm', dtype: preferredDtype };
-            }
-          } catch (e) {
-            console.warn('⚠️ WebGPU detection failed:', e);
-            return { device: 'wasm', dtype: preferredDtype };
-          }
-        } else {
-          console.warn('⚠️ WebGPU requested but not supported, falling back to WASM');
-          return { device: 'wasm', dtype: preferredDtype };
+        const caps = await detectGpuCapabilities();
+        if (caps.hasWebGPU) {
+          return { device: preferredDevice, dtype: preferredDtype };
         }
+
+        console.warn(`⚠️ WebGPU requested but not usable (${caps.reason}), falling back to WASM`);
+        return { device: 'wasm', dtype: preferredDtype };
       }
 
       return { device: preferredDevice, dtype: preferredDtype };
     }
 
     // Auto-detection logic (fallback)
-    if (typeof navigator !== 'undefined' && (navigator as any).gpu) {
-      try {
-        const adapter = await (navigator as any).gpu.requestAdapter();
-        if (adapter) {
-          console.log(`✅ WebGPU available on ${isMobile ? 'mobile' : 'desktop'}. Using stable fp32 model.`);
-          return { device: 'webgpu', dtype: 'fp32' };
-        }
-      } catch (e) {
-        console.warn('⚠️ WebGPU detection failed:', e);
-      }
+    const caps = await detectGpuCapabilities();
+    if (caps.hasWebGPU) {
+      console.log('✅ WebGPU available. Using stable fp32 model.', {
+        isFallback: caps.isFallbackAdapter,
+        maxStorage: caps.maxStorageBufferBindingSize
+      });
+      return { device: 'webgpu', dtype: 'fp32' };
+    } else {
+      console.log(`⚠️ WebGPU auto-detect: not usable (${caps.reason}), falling back to WASM.`);
     }
 
     // Fallback path – CPU (WASM) back-end with quantised model to conserve memory
@@ -1596,23 +1584,19 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
       }
     }
 
-    // WebGPU info
-    if ('gpu' in navigator) {
-      try {
-        const adapter = await (navigator as any).gpu.requestAdapter();
-        if (adapter) {
-          console.log('⚡ WebGPU Available');
-          const info = await adapter.requestAdapterInfo?.();
-          if (info) {
-            console.log('⚡ GPU Vendor:', info.vendor);
-            console.log('⚡ GPU Device:', info.device);
-          }
-        }
-      } catch (error) {
-        console.log('❌ WebGPU Not Available:', error instanceof Error ? error.message : String(error));
+    // WebGPU info (via shared helper)
+    try {
+      const caps = await detectGpuCapabilities();
+      if (caps.hasWebGPU) {
+        console.log('⚡ WebGPU Available', {
+          isFallback: caps.isFallbackAdapter,
+          maxStorage: caps.maxStorageBufferBindingSize
+        });
+      } else {
+        console.log(`❌ WebGPU Not Usable. Reason: ${caps.reason}`);
       }
-    } else {
-      console.log('❌ WebGPU Not Supported');
+    } catch (error) {
+      console.log('❌ WebGPU Capability Check Failed:', error instanceof Error ? error.message : String(error));
     }
 
     console.log('🔍 === END DEBUG INFO ===');

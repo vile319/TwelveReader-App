@@ -26,10 +26,37 @@ export const configureOnnxRuntimeForIOS = async () => {
     const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
     
     if (isIOS) {
-      console.log('📱 iOS detected - using WebGL execution provider for better compatibility');
-      
-      // Store preferred execution provider for kokoro-js
-      window.PREFERRED_EXECUTION_PROVIDER = 'webgl';
+      console.log('📱 iOS detected - probing for WebGL support (WebGPU will not be touched in this path)...');
+
+      // IMPORTANT: Do NOT call navigator.gpu.requestAdapter() here.
+      // It can hang on some platforms and this function runs during early app init.
+      let hasWebGL = false;
+      try {
+        const doc: any = typeof document !== 'undefined' ? document : null;
+        const canvas =
+          doc && typeof doc.createElement === 'function'
+            ? (doc.createElement('canvas') as HTMLCanvasElement)
+            : null;
+
+        if (canvas) {
+          const gl =
+            canvas.getContext('webgl2') || canvas.getContext('webgl') || null;
+          if (gl) {
+            hasWebGL = true;
+          }
+        }
+      } catch (e) {
+        console.warn('⚠️ Failed to probe WebGL capabilities on iOS:', e);
+      }
+
+      if (hasWebGL) {
+        console.log('📱 iOS: WebGL detected – using WebGL execution provider for better compatibility');
+        // Store preferred execution provider for kokoro-js
+        window.PREFERRED_EXECUTION_PROVIDER = 'webgl';
+      } else {
+        console.log('📱 iOS: WebGL not available – falling back to default WASM execution provider');
+        window.PREFERRED_EXECUTION_PROVIDER = 'wasm';
+      }
     } else {
       console.log('💻 Non-iOS device - using default execution provider');
     }

@@ -5,6 +5,7 @@ import { AppContextType, AppState, AppToast, SampleText, TextSet } from '../type
 import { driveSync } from '../utils/GoogleDriveSync';
 import { localDB } from '../utils/localDatabase';
 import { modelManager } from '../utils/modelManager';
+import { detectGpuCapabilities } from '../utils/gpuCapabilities';
 import { useGoogleLogin } from '@react-oauth/google';
 import JSZip from 'jszip';
 
@@ -110,7 +111,8 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     try {
       const raw = localStorage.getItem(TEXT_SETS_KEY);
       if (raw) return JSON.parse(raw) as TextSet[];
-    } catch { }
+    } catch {
+    }
     return [];
   });
 
@@ -445,34 +447,18 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
         let defaultDevice: 'webgpu' | 'serverless' | 'wasm' = 'serverless';
         let defaultModel = 'kokoro-82m-fp32';
 
-        let hasGpu = false;
-        let isGoodGpu = false;
+        const gpuCaps = await detectGpuCapabilities();
 
-        if (typeof navigator !== 'undefined' && (navigator as any).gpu) {
-          try {
-            console.log('🔍 [initDevice] navigator.gpu found, requesting adapter...');
-            const adapter = await (navigator as any).gpu.requestAdapter();
-            if (adapter) {
-              console.log('🔍 [initDevice] adapter received.', {
-                isFallback: adapter.isFallbackAdapter,
-                maxStorage: adapter.limits?.maxStorageBufferBindingSize
-              });
-              hasGpu = true;
-              isGoodGpu = !adapter.isFallbackAdapter;
+        const hasGpu = gpuCaps.hasWebGPU;
+        const isGoodGpu = gpuCaps.isGoodWebGPU;
 
-              // Check for particularly weak mobile GPUs based on limits if needed
-              if (adapter.limits && adapter.limits.maxStorageBufferBindingSize < 128 * 1024 * 1024) {
-                console.log('⚠️ [initDevice] GPU rejected due to low maxStorageBufferBindingSize:', adapter.limits.maxStorageBufferBindingSize);
-                isGoodGpu = false;
-              }
-            } else {
-              console.log('❌ [initDevice] requestAdapter returned null.');
-            }
-          } catch (e) {
-            console.log('❌ [initDevice] WebGPU detection failed during requestAdapter.', e);
-          }
+        if (!gpuCaps.hasWebGPU) {
+          console.log(`❌ [initDevice] WebGPU not usable. Reason: ${gpuCaps.reason}`);
         } else {
-          console.log('❌ [initDevice] navigator.gpu is undefined.');
+          console.log('🔍 [initDevice] WebGPU adapter detected.', {
+            isFallback: gpuCaps.isFallbackAdapter,
+            maxStorage: gpuCaps.maxStorageBufferBindingSize
+          });
         }
 
         const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
@@ -978,7 +964,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
         // Only log in dev to avoid annoying users
         // console.log("☁️ Auto-syncing progress to Google Drive...");
         await driveSync.uploadSyncData(savedTextSets, readingProgress);
-      } catch (e) {
+      } catch {
         // Silent fail for background progress syncs to not disturb reading
       }
     }, 2000);

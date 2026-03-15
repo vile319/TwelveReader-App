@@ -1,6 +1,7 @@
-import { type FC, useState, useEffect, type ChangeEvent, useCallback } from 'react';
+import React, { type FC, useState, useEffect, type ChangeEvent, useCallback } from 'react';
 import { modelManager } from '../utils/modelManager';
 import { useModelManager } from '../hooks/useModelManager';
+import { detectGpuCapabilities } from '../utils/gpuCapabilities';
 
 export interface ModelConfig {
   id: string;
@@ -131,28 +132,19 @@ const ModelSelector: FC<ModelSelectorProps> = ({
   // Check GPU availability on mount
   useEffect(() => {
     const checkGPU = async () => {
-      console.log('🔍 [ModelSelector] Checking GPU availability...');
-      if (typeof navigator !== 'undefined' && (navigator as any).gpu) {
-        try {
-          const adapter = await (navigator as any).gpu.requestAdapter();
-          if (adapter) {
-            console.log('🔍 [ModelSelector] adapter received.', {
-              isFallback: adapter.isFallbackAdapter,
-              maxStorage: adapter.limits?.maxStorageBufferBindingSize
-            });
-            setGpuAvailable(true);
-          } else {
-            console.log('❌ [ModelSelector] requestAdapter returned null.');
-            setGpuAvailable(false);
-          }
-        } catch (e) {
-          console.warn('❌ [ModelSelector] GPU detection failed:', e);
-          setGpuAvailable(false);
-        }
+      console.log('🔍 [ModelSelector] Checking GPU availability via shared helper...');
+      const caps = await detectGpuCapabilities();
+
+      if (caps.hasWebGPU) {
+        console.log('🔍 [ModelSelector] WebGPU adapter detected.', {
+          isFallback: caps.isFallbackAdapter,
+          maxStorage: caps.maxStorageBufferBindingSize
+        });
       } else {
-        console.log('❌ [ModelSelector] navigator.gpu is undefined.');
-        setGpuAvailable(false);
+        console.log(`❌ [ModelSelector] WebGPU not usable. Reason: ${caps.reason}`);
       }
+
+      setGpuAvailable(caps.hasWebGPU);
       setGpuCheckComplete(true);
     };
 
