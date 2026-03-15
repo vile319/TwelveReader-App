@@ -1294,7 +1294,8 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
     }
   }, [isReady, onError, chunkText]);
 
-  // This effect will trigger playback once the UI is ready after the first chunk
+  // This effect will trigger playback once the UI is ready after the first chunk,
+  // so that both desktop and mobile behave the same after pressing Listen.
   useEffect(() => {
     if (isFirstChunkReady) {
       console.log('▶️ UI is ready, starting playback.');
