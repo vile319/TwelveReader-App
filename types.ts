@@ -29,6 +29,8 @@ export interface AudioState {
   isLoading: boolean;
   currentTime: number;
   duration: number;
+  synthesizedDuration: number;
+  isStreaming: boolean;
   canScrub: boolean;
   synthesisComplete: boolean;
   wordTimings: WordTiming[];

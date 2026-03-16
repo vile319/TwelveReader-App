@@ -1043,6 +1043,8 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       isLoading: tts.isLoading,
       currentTime: tts.currentTime,
       duration: tts.duration,
+      synthesizedDuration: tts.synthesizedDuration,
+      isStreaming: tts.isStreaming,
       canScrub: tts.canScrub,
       synthesisComplete: tts.synthesisComplete,
       wordTimings: tts.wordTimings,

@@ -1277,6 +1277,13 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
             continue; // Skip this chunk and continue
           }
 
+          // Sanitize NaN/Infinity samples from the model before validation
+          let invalidCount = 0;
+          for (let s = 0; s < audioData.length; s++) {
+            if (!Number.isFinite(audioData[s])) { audioData[s] = 0; invalidCount++; }
+          }
+          if (invalidCount > 0) console.warn(`⚠️ Chunk ${i + 1}: replaced ${invalidCount} invalid samples with 0`);
+
           const diagnostics = validateAudioData(
             audioData,
             sampleRate,
@@ -2061,6 +2068,8 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
     canScrub,
     currentTime,
     duration,
+    synthesizedDuration,
+    isStreaming,
     seekToTime,
     togglePlayPause,
     skipForward,

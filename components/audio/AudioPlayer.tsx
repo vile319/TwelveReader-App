@@ -10,7 +10,7 @@ const AudioPlayer: FC = () => {
   // #region agent log
   useEffect(() => {
     if (!state.audio.canScrub) return;
-    fetch('http://127.0.0.1:7526/ingest/5f08a776-410a-4fa7-a1b6-4955d21b10ea',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'f511cb'},body:JSON.stringify({sessionId:'f511cb',location:'AudioPlayer.tsx:render',message:'seek bar values',data:{duration:state.audio.duration,currentTime:state.audio.currentTime,canScrub:state.audio.canScrub,isPlaying:state.audio.isPlaying,synthesisComplete:state.audio.synthesisComplete},timestamp:Date.now(),hypothesisId:'H-A,H-B,H-C'})}).catch(()=>{});
+    fetch('http://127.0.0.1:7526/ingest/5f08a776-410a-4fa7-a1b6-4955d21b10ea',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'f511cb'},body:JSON.stringify({sessionId:'f511cb',runId:'post-fix',location:'AudioPlayer.tsx:render',message:'seek bar values',data:{duration:state.audio.duration,synthesizedDuration:state.audio.synthesizedDuration,isStreaming:state.audio.isStreaming,safeDuration,currentTime:state.audio.currentTime,progressPercent,isPlaying:state.audio.isPlaying,synthesisComplete:state.audio.synthesisComplete},timestamp:Date.now(),hypothesisId:'H-A,H-B,H-C'})}).catch(()=>{});
   });
   // #endregion
 
@@ -30,7 +30,8 @@ const AudioPlayer: FC = () => {
 
   const disabled = !state.audio.canScrub && !state.isReading;
 
-  const safeDuration = state.audio.duration || 0;
+  // During streaming, use synthesizedDuration (grows per chunk); after synthesis use final duration
+  const safeDuration = (state.audio.isStreaming ? state.audio.synthesizedDuration : state.audio.duration) || 0;
   const safeCurrentTime = Math.min(state.audio.currentTime, safeDuration);
   const progressPercent = safeDuration > 0 ? (safeCurrentTime / safeDuration) * 100 : 0;
 
