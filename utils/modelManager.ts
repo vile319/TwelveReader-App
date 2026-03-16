@@ -291,6 +291,10 @@ export class ModelManager {
         !this.getModelKeepLocal(modelId)
       );
 
+      // #region agent log
+      fetch('http://127.0.0.1:7526/ingest/5f08a776-410a-4fa7-a1b6-4955d21b10ea',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'dbe5d3'},body:JSON.stringify({sessionId:'dbe5d3',location:'modelManager.ts:cleanupUnwantedModels',message:'cleanup called',data:{downloadedModels,modelsToKeep,modelsToRemove,allKeepLocalSettings:this.keepLocalSettings,allCacheStatus:this.cacheStatus},timestamp:Date.now(),hypothesisId:'H1'})}).catch(()=>{});
+      // #endregion
+
       console.log(`🧹 Cleaning up ${modelsToRemove.length} unwanted models...`);
 
       for (const modelId of modelsToRemove) {

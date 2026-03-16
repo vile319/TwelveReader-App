@@ -406,8 +406,18 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
         audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
       }
 
+      // #region agent log
+      const ctxStateBefore = audioContextRef.current.state;
+      fetch('http://127.0.0.1:7526/ingest/5f08a776-410a-4fa7-a1b6-4955d21b10ea',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'dbe5d3'},body:JSON.stringify({sessionId:'dbe5d3',location:'useKokoroWebWorkerTts.ts:startStreamingFromPosition',message:'AudioContext state before resume',data:{state:ctxStateBefore,ua:navigator.userAgent},timestamp:Date.now(),hypothesisId:'H4H5'})}).catch(()=>{});
+      // #endregion
+
       if (audioContextRef.current.state === 'suspended') {
-        await audioContextRef.current.resume();
+        try {
+          await audioContextRef.current.resume();
+        } catch(resumeErr) { /* silent */ }
+        // #region agent log
+        fetch('http://127.0.0.1:7526/ingest/5f08a776-410a-4fa7-a1b6-4955d21b10ea',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'dbe5d3'},body:JSON.stringify({sessionId:'dbe5d3',location:'useKokoroWebWorkerTts.ts:startStreamingFromPosition:afterResume',message:'AudioContext state after resume attempt',data:{stateAfter:audioContextRef.current.state},timestamp:Date.now(),hypothesisId:'H4H5'})}).catch(()=>{});
+        // #endregion
       }
 
       // Calculate which chunk to start from
@@ -942,6 +952,12 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
           const modelCache = await caches.open('models');
           const cachedRequests = await modelCache.keys();
           console.log('📁 Cached model files:', cachedRequests.length);
+
+          // #region agent log
+          const allCacheDetails: Record<string, string[]> = {};
+          for (const cn of cacheNames) { try { const c = await caches.open(cn); const ks = await c.keys(); allCacheDetails[cn] = ks.map((r: Request) => r.url); } catch {} }
+          fetch('http://127.0.0.1:7526/ingest/5f08a776-410a-4fa7-a1b6-4955d21b10ea',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'dbe5d3'},body:JSON.stringify({sessionId:'dbe5d3',location:'useKokoroWebWorkerTts.ts:initializeTts:cacheCheck',message:'cache state before from_pretrained',data:{allCacheDetails,modelsCacheCount:cachedRequests.length},timestamp:Date.now(),hypothesisId:'H2H3'})}).catch(()=>{});
+          // #endregion
 
           if (cachedRequests.length > 0) {
             console.log('🎯 Model appears to be cached - should load faster');
