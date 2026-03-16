@@ -352,7 +352,7 @@ export class ModelManager {
           for (const request of requests) {
             // Only count if it's one of our known ONNX models or related JSON
             const isKnownModelFile = validFilenames.some((fn: any) => request.url.includes(fn));
-            const isJsonConfig = request.url.includes('.json') && request.url.includes('Kokoro-82M-ONNX');
+            const isJsonConfig = request.url.includes('.json') && request.url.includes('Kokoro-82M-v1.0-ONNX');
 
             // Also transformers.js caches wasm files, which we should count
             const isWasmEnv = request.url.includes('.wasm');
