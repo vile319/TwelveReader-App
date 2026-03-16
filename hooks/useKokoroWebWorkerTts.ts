@@ -799,6 +799,9 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
 
     if (diagnostics.suspicionReason) {
       console.warn(`⚠️ Suspicious audio detected for ${label}: ${diagnostics.suspicionReason}`);
+      // #region agent log
+      fetch('http://127.0.0.1:7526/ingest/5f08a776-410a-4fa7-a1b6-4955d21b10ea',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'f511cb'},body:JSON.stringify({sessionId:'f511cb',runId:'diag',location:'useKokoroWebWorkerTts.ts:validate',message:'suspicious audio',data:{label,reason:diagnostics.suspicionReason,peak:diagnostics.peak,rms:diagnostics.rms,invalidSamples:diagnostics.invalidSamples,samples:diagnostics.samples,willThrow:!!options?.failOnSuspicion},timestamp:Date.now(),hypothesisId:'cache-config'})}).catch(()=>{});
+      // #endregion
       if (options?.failOnSuspicion) {
         throw new Error(`Generated audio looks corrupt (${diagnostics.suspicionReason})`);
       }
@@ -1098,6 +1101,9 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
   const speak = useCallback(async (text: string, voice: string = 'af_bella', onProgress?: (progress: number) => void) => {
     // If it's a Serverless device, it's always "ready". For WebWorker, check ttsRef.
     const isServerless = currentDevice === 'serverless';
+    // #region agent log
+    fetch('http://127.0.0.1:7526/ingest/5f08a776-410a-4fa7-a1b6-4955d21b10ea',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'f511cb'},body:JSON.stringify({sessionId:'f511cb',runId:'diag',location:'useKokoroWebWorkerTts.ts:speak-start',message:'speak() invoked',data:{currentDevice,isServerless,isReady,hasTtsRef:!!ttsRef.current,preferredDevice,preferredDtype},timestamp:Date.now(),hypothesisId:'cache-config'})}).catch(()=>{});
+    // #endregion
     if (!isReady || (!isServerless && !ttsRef.current)) {
       console.warn('TTS not ready');
       onError({
@@ -1282,7 +1288,12 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
           for (let s = 0; s < audioData.length; s++) {
             if (!Number.isFinite(audioData[s])) { audioData[s] = 0; invalidCount++; }
           }
-          if (invalidCount > 0) console.warn(`⚠️ Chunk ${i + 1}: replaced ${invalidCount} invalid samples with 0`);
+          if (invalidCount > 0) {
+            console.warn(`⚠️ Chunk ${i + 1}: replaced ${invalidCount} invalid samples with 0`);
+            // #region agent log
+            fetch('http://127.0.0.1:7526/ingest/5f08a776-410a-4fa7-a1b6-4955d21b10ea',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'f511cb'},body:JSON.stringify({sessionId:'f511cb',runId:'diag',location:'useKokoroWebWorkerTts.ts:nan-sanitize',message:'NaN sanitized',data:{chunkIndex:i,invalidCount,totalSamples:audioData.length,pctBad:((invalidCount/audioData.length)*100).toFixed(1),currentDevice,isServerless},timestamp:Date.now(),hypothesisId:'cache-config'})}).catch(()=>{});
+            // #endregion
+          }
 
           const diagnostics = validateAudioData(
             audioData,
