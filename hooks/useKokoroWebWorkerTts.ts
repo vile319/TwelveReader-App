@@ -1490,42 +1490,12 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
       console.error('Synthesis error:', error);
       setIsPlaying(false);
       currentSynthesisRef.current = null;
-
-      // If WebGPU produced corrupt/invalid audio, auto-switch to WASM and ask user to retry
-      if (error.message?.includes('corrupt') && currentDevice === 'webgpu') {
-        console.warn('⚠️ WebGPU produced invalid audio — auto-switching to WASM (CPU) mode');
-        // #region agent log
-        fetch('http://127.0.0.1:7526/ingest/5f08a776-410a-4fa7-a1b6-4955d21b10ea',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'f511cb'},body:JSON.stringify({sessionId:'f511cb',runId:'post-fix',location:'useKokoroWebWorkerTts.ts:catch-webgpu-fallback',message:'WebGPU invalid audio — falling back to WASM',data:{errorMsg:error.message,currentDevice},timestamp:Date.now(),hypothesisId:'cache-config'})}).catch(()=>{});
-        // #endregion
-        try {
-          setStatus('⚠️ GPU audio invalid — loading CPU fallback...');
-          const wasmTts = await KokoroTTS.from_pretrained('onnx-community/Kokoro-82M-ONNX', {
-            dtype: 'q8',
-            device: 'wasm',
-          });
-          ttsRef.current = wasmTts;
-          setCurrentDevice('wasm');
-          setIsReady(true);
-          setStatus('✅ Switched to CPU mode — please try again');
-          onError({
-            title: 'Switched to CPU Mode',
-            message: 'GPU produced invalid audio. Automatically switched to CPU — tap Listen again.'
-          });
-        } catch (wasmError: any) {
-          onError({
-            title: 'Synthesis Error',
-            message: `GPU failed and CPU fallback also failed: ${wasmError.message}`
-          });
-        }
-        return;
-      }
-
       onError({
         title: 'Synthesis Error',
         message: `Failed to synthesize text: ${error.message}`
       });
     }
-  }, [isReady, onError, chunkText, currentDevice]);
+  }, [isReady, onError, chunkText]);
 
   // This effect will trigger playback once the UI is ready after the first chunk,
   // so that both desktop and mobile behave the same after pressing Listen.

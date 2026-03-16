@@ -41,9 +41,6 @@ export const getCompatibleDtypeForDevice = (
   const dtype = requestedDtype ?? inferPreferredDtype(selectedModel);
 
   if (device === 'webgpu') {
-    // fp32 does not produce correct output via the WebGPU ONNX backend for Kokoro;
-    // fp16 is the correct WebGPU-compatible variant.
-    if (dtype === 'fp32') return 'fp16';
     return WEBGPU_DTYPES.includes(dtype) ? dtype : 'fp16';
   }
 
