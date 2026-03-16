@@ -1298,6 +1298,9 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
           streamingAudioRef.current.push(audioData!);
           const currentStreamDuration = (totalSamples / sampleRate);
           setSynthesizedDuration(currentStreamDuration);
+          // #region agent log
+          fetch('http://127.0.0.1:7526/ingest/5f08a776-410a-4fa7-a1b6-4955d21b10ea',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'f511cb'},body:JSON.stringify({sessionId:'f511cb',location:'useKokoroWebWorkerTts.ts:1300',message:'chunk synthesized',data:{chunkIndex:i,synthesizedDuration:currentStreamDuration,durationState:durationRef.current,currentTimeRef:currentTimeRef.current},timestamp:Date.now(),hypothesisId:'H-B'})}).catch(()=>{});
+          // #endregion
 
           // --- New: Use precise word timings if available ---
           if (audioObject && audioObject.alignments) {
@@ -1404,6 +1407,9 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
       completeAudioSampleRateRef.current = sampleRate;
       setDurationBoth(combinedAudio.length / sampleRate);
       setSynthesizedDuration(combinedAudio.length / sampleRate);
+      // #region agent log
+      fetch('http://127.0.0.1:7526/ingest/5f08a776-410a-4fa7-a1b6-4955d21b10ea',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'f511cb'},body:JSON.stringify({sessionId:'f511cb',location:'useKokoroWebWorkerTts.ts:1405',message:'synthesis complete - duration set',data:{finalDuration:combinedAudio.length/sampleRate,currentTimeAtEnd:currentTimeRef.current,wasPlayingStreaming:isPlaybackActiveRef.current},timestamp:Date.now(),hypothesisId:'H-A,H-C'})}).catch(()=>{});
+      // #endregion
 
       // Stop streaming playback before switching to complete mode
       if (streamingTimeoutRef.current) {
