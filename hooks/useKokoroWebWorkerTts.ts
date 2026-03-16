@@ -983,17 +983,29 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
           } else if (progress.status === 'ready') {
             const loadTime = ((performance.now() - modelLoadStart) / 1000).toFixed(1);
             console.log(`⏱️ Model loaded in ${loadTime}s`);
-
-            // Mark the model as cached in our local state Manager so the UI updates
-            if (selectedModel) {
-              modelManager.updateModelCacheStatus(selectedModel, true);
-            }
+            // #region agent log
+            fetch('http://127.0.0.1:7526/ingest/5f08a776-410a-4fa7-a1b6-4955d21b10ea',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'dbe5d3'},body:JSON.stringify({sessionId:'dbe5d3',location:'useKokoroWebWorkerTts.ts:progress_callback',message:'progress.status===ready FIRED',data:{selectedModel,loadTime},timestamp:Date.now(),hypothesisId:'H3'})}).catch(()=>{});
+            // #endregion
+          } else {
+            // #region agent log
+            fetch('http://127.0.0.1:7526/ingest/5f08a776-410a-4fa7-a1b6-4955d21b10ea',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'dbe5d3'},body:JSON.stringify({sessionId:'dbe5d3',location:'useKokoroWebWorkerTts.ts:progress_callback',message:'other progress status',data:{status:progress.status,selectedModel},timestamp:Date.now(),hypothesisId:'H3'})}).catch(()=>{});
+            // #endregion
           }
         }
       });
 
       if (getIsCancelled?.()) return null;
       ttsRef.current = tts;
+
+      // Mark model as cached here (after from_pretrained resolves) — the progress_callback
+      // status==='ready' is unreliable in transformers.js and may never fire.
+      if (selectedModel) {
+        modelManager.updateModelCacheStatus(selectedModel, true);
+        // #region agent log
+        fetch('http://127.0.0.1:7526/ingest/5f08a776-410a-4fa7-a1b6-4955d21b10ea',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'dbe5d3'},body:JSON.stringify({sessionId:'dbe5d3',location:'useKokoroWebWorkerTts.ts:after_from_pretrained',message:'updateModelCacheStatus called after resolve',data:{selectedModel},timestamp:Date.now(),hypothesisId:'H3'})}).catch(()=>{});
+        // #endregion
+      }
+
       setIsReady(true);
       setCurrentDevice(device);
       setStatus(`Ready - generating with ${getRuntimeBackendLabel(device)} [${dtype}]`);
