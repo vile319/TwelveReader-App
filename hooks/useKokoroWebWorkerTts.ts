@@ -244,8 +244,6 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
   const ttsRef = useRef<any>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const sourceNodeRef = useRef<AudioBufferSourceNode | null>(null);
-  // iOS: an HTMLAudioElement pre-unlocked during the user gesture so async play() calls work
-  const iosPreUnlockedAudioRef = useRef<HTMLAudioElement | null>(null);
   const currentSynthesisRef = useRef<string | null>(null);
 
   // Enhanced audio refs for scrubbing
@@ -1177,32 +1175,6 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
     setSynthesisComplete(false);
     console.log('📝 Cleared word timings and reset current word index');
 
-    // Pre-unlock audio within the user gesture handler.
-    // iOS Safari requires audio.play() to be called directly from a user gesture.
-    // We pre-unlock an HTMLAudioElement here; iOS then allows play() on that same
-    // element from async code later (when the WAV blob is ready).
-    try {
-      if (!audioContextRef.current) {
-        audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
-      }
-      if (audioContextRef.current.state === 'suspended') {
-        await audioContextRef.current.resume();
-      }
-
-      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-      if (isIOS) {
-        // Create a new pre-unlocked audio element for this speak() call
-        const unlockEl = new Audio();
-        unlockEl.setAttribute('playsinline', '');
-        // play() + immediate pause() registers this element as user-gesture-trusted on iOS
-        await unlockEl.play().catch(() => {});
-        unlockEl.pause();
-        iosPreUnlockedAudioRef.current = unlockEl;
-        console.log('🔓 iOS audio element pre-unlocked during user gesture');
-      }
-    } catch (audioCtxErr) {
-      console.warn('⚠️ Could not pre-unlock audio:', audioCtxErr);
-    }
 
     try {
       console.log(`📚 Processing text (${text.length} characters)`);
@@ -1487,12 +1459,7 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
           URL.revokeObjectURL(completeAudioUrlRef.current);
         }
         completeAudioUrlRef.current = url;
-        // On iOS, reuse the pre-unlocked element from the user gesture so play() succeeds
-        const audio = iosPreUnlockedAudioRef.current ?? new Audio(url);
-        if (iosPreUnlockedAudioRef.current) {
-          audio.src = url;
-          audio.load();
-        }
+        const audio = new Audio(url);
         audio.setAttribute('playsinline', '');
         audio.preservesPitch = true;
         audio.playbackRate = playbackRateRef.current;
@@ -1503,7 +1470,8 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
 
       setIsStreaming(false); // Switch from streaming to complete mode
 
-      if (wasPlaying) {
+      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+      if (wasPlaying && !isIOS) {
         console.log('🔄 Switching from streaming to complete audio playback');
         // Use ref — speak()'s closure doesn't include playCompleteAudio in its deps,
         // so the direct call would use the stale mount-time version with duration=0.
@@ -1511,7 +1479,14 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
       }
 
       onProgress?.(100);
-      setStatus(`🎵 Audio complete! ${(combinedAudio.length / sampleRate).toFixed(1)}s of audio ready`);
+      if (isIOS) {
+        setIsPlaying(false);
+        isPlaybackActiveRef.current = false;
+        setStatus(`✅ Ready — tap ▶ to play`);
+        setCanScrub(true);
+      } else {
+        setStatus(`🎵 Audio complete! ${(combinedAudio.length / sampleRate).toFixed(1)}s of audio ready`);
+      }
 
       // Word timings are now generated provisionally, no final calculation needed.
 
@@ -1539,6 +1514,11 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
   // so that both desktop and mobile behave the same after pressing Listen.
   useEffect(() => {
     if (isFirstChunkReady) {
+      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+      if (isIOS) {
+        // iOS blocks autoplay without direct user gesture — skip streaming, wait for tap
+        return;
+      }
       console.log('▶️ UI is ready, starting playback.');
       startStreamingFromPosition(0);
     }
@@ -1600,8 +1580,6 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
       } catch { }
       audioContextRef.current = null;
     }
-
-    iosPreUnlockedAudioRef.current = null;
 
     // Clear audio buffer and reset scrubbing state
     audioBufferRef.current = [];
