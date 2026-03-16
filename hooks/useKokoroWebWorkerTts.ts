@@ -244,9 +244,8 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
   const ttsRef = useRef<any>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const sourceNodeRef = useRef<AudioBufferSourceNode | null>(null);
-  // iOS: routes Web Audio through an HTML <audio> element so it plays via speaker, not earpiece
-  const mediaStreamDestRef = useRef<MediaStreamAudioDestinationNode | null>(null);
-  const iosStreamAudioRef = useRef<HTMLAudioElement | null>(null);
+  // iOS: an HTMLAudioElement pre-unlocked during the user gesture so async play() calls work
+  const iosPreUnlockedAudioRef = useRef<HTMLAudioElement | null>(null);
   const currentSynthesisRef = useRef<string | null>(null);
 
   // Enhanced audio refs for scrubbing
@@ -498,7 +497,7 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
       try {
         source.playbackRate.value = playbackRateRef.current;
       } catch { }
-      source.connect(mediaStreamDestRef.current ?? audioContextRef.current.destination);
+      source.connect(audioContextRef.current.destination);
       scheduledSourceNodesRef.current.push(source);
 
       // Ensure we don't schedule in the past
@@ -1178,10 +1177,10 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
     setSynthesisComplete(false);
     console.log('📝 Cleared word timings and reset current word index');
 
-    // Pre-create and unlock AudioContext here while we're in the user gesture handler.
-    // iOS Safari blocks AudioContext.resume() outside a direct user gesture.
-    // On iOS we also route all Web Audio through a MediaStreamDestinationNode → HTMLAudioElement
-    // so the output goes to the speaker instead of the earpiece.
+    // Pre-unlock audio within the user gesture handler.
+    // iOS Safari requires audio.play() to be called directly from a user gesture.
+    // We pre-unlock an HTMLAudioElement here; iOS then allows play() on that same
+    // element from async code later (when the WAV blob is ready).
     try {
       if (!audioContextRef.current) {
         audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
@@ -1192,24 +1191,17 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
 
       const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
       if (isIOS) {
-        // Set up MediaStream routing: Web Audio → MediaStreamDest → <audio> element → speaker
-        if (!mediaStreamDestRef.current) {
-          mediaStreamDestRef.current = audioContextRef.current.createMediaStreamDestination();
-        }
-        if (!iosStreamAudioRef.current) {
-          const audioEl = new Audio();
-          audioEl.srcObject = mediaStreamDestRef.current.stream;
-          audioEl.setAttribute('playsinline', '');
-          iosStreamAudioRef.current = audioEl;
-        }
-        // Must call play() inside user gesture so iOS routes to speaker
-        await iosStreamAudioRef.current.play().catch(() => {});
-        console.log('🔓 iOS AudioContext unlocked + MediaStream routed to speaker');
-      } else {
-        console.log('🔓 AudioContext unlocked, state:', audioContextRef.current.state);
+        // Create a new pre-unlocked audio element for this speak() call
+        const unlockEl = new Audio();
+        unlockEl.setAttribute('playsinline', '');
+        // play() + immediate pause() registers this element as user-gesture-trusted on iOS
+        await unlockEl.play().catch(() => {});
+        unlockEl.pause();
+        iosPreUnlockedAudioRef.current = unlockEl;
+        console.log('🔓 iOS audio element pre-unlocked during user gesture');
       }
     } catch (audioCtxErr) {
-      console.warn('⚠️ Could not pre-unlock AudioContext:', audioCtxErr);
+      console.warn('⚠️ Could not pre-unlock audio:', audioCtxErr);
     }
 
     try {
@@ -1495,7 +1487,13 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
           URL.revokeObjectURL(completeAudioUrlRef.current);
         }
         completeAudioUrlRef.current = url;
-        const audio = new Audio(url);
+        // On iOS, reuse the pre-unlocked element from the user gesture so play() succeeds
+        const audio = iosPreUnlockedAudioRef.current ?? new Audio(url);
+        if (iosPreUnlockedAudioRef.current) {
+          audio.src = url;
+          audio.load();
+        }
+        audio.setAttribute('playsinline', '');
         audio.preservesPitch = true;
         audio.playbackRate = playbackRateRef.current;
         completeHtmlAudioRef.current = audio;
@@ -1601,17 +1599,9 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
         audioContextRef.current.close();
       } catch { }
       audioContextRef.current = null;
-      mediaStreamDestRef.current = null;
     }
 
-    // Stop iOS stream audio element
-    if (iosStreamAudioRef.current) {
-      try {
-        iosStreamAudioRef.current.pause();
-        iosStreamAudioRef.current.srcObject = null;
-      } catch { }
-      iosStreamAudioRef.current = null;
-    }
+    iosPreUnlockedAudioRef.current = null;
 
     // Clear audio buffer and reset scrubbing state
     audioBufferRef.current = [];
