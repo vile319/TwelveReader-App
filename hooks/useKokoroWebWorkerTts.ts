@@ -244,6 +244,9 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
   const ttsRef = useRef<any>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const sourceNodeRef = useRef<AudioBufferSourceNode | null>(null);
+  // iOS: routes Web Audio through an HTML <audio> element so it plays via speaker, not earpiece
+  const mediaStreamDestRef = useRef<MediaStreamAudioDestinationNode | null>(null);
+  const iosStreamAudioRef = useRef<HTMLAudioElement | null>(null);
   const currentSynthesisRef = useRef<string | null>(null);
 
   // Enhanced audio refs for scrubbing
@@ -495,7 +498,7 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
       try {
         source.playbackRate.value = playbackRateRef.current;
       } catch { }
-      source.connect(audioContextRef.current.destination);
+      source.connect(mediaStreamDestRef.current ?? audioContextRef.current.destination);
       scheduledSourceNodesRef.current.push(source);
 
       // Ensure we don't schedule in the past
@@ -1176,10 +1179,9 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
     console.log('📝 Cleared word timings and reset current word index');
 
     // Pre-create and unlock AudioContext here while we're in the user gesture handler.
-    // iOS Safari blocks AudioContext.resume() if called outside a direct user gesture,
-    // so we must unlock it now before the async synthesis work begins.
-    // We also play a silent buffer immediately — this forces iOS to route audio
-    // to the speaker (media output) instead of the earpiece (call output).
+    // iOS Safari blocks AudioContext.resume() outside a direct user gesture.
+    // On iOS we also route all Web Audio through a MediaStreamDestinationNode → HTMLAudioElement
+    // so the output goes to the speaker instead of the earpiece.
     try {
       if (!audioContextRef.current) {
         audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
@@ -1187,13 +1189,25 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
       if (audioContextRef.current.state === 'suspended') {
         await audioContextRef.current.resume();
       }
-      // Play a 0.01s silent buffer to fully unlock iOS audio output routing to speaker
-      const silentBuffer = audioContextRef.current.createBuffer(1, audioContextRef.current.sampleRate * 0.01, audioContextRef.current.sampleRate);
-      const silentSource = audioContextRef.current.createBufferSource();
-      silentSource.buffer = silentBuffer;
-      silentSource.connect(audioContextRef.current.destination);
-      silentSource.start();
-      console.log('🔓 AudioContext unlocked + silent buffer played, state:', audioContextRef.current.state);
+
+      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+      if (isIOS) {
+        // Set up MediaStream routing: Web Audio → MediaStreamDest → <audio> element → speaker
+        if (!mediaStreamDestRef.current) {
+          mediaStreamDestRef.current = audioContextRef.current.createMediaStreamDestination();
+        }
+        if (!iosStreamAudioRef.current) {
+          const audioEl = new Audio();
+          audioEl.srcObject = mediaStreamDestRef.current.stream;
+          audioEl.setAttribute('playsinline', '');
+          iosStreamAudioRef.current = audioEl;
+        }
+        // Must call play() inside user gesture so iOS routes to speaker
+        await iosStreamAudioRef.current.play().catch(() => {});
+        console.log('🔓 iOS AudioContext unlocked + MediaStream routed to speaker');
+      } else {
+        console.log('🔓 AudioContext unlocked, state:', audioContextRef.current.state);
+      }
     } catch (audioCtxErr) {
       console.warn('⚠️ Could not pre-unlock AudioContext:', audioCtxErr);
     }
@@ -1587,6 +1601,16 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
         audioContextRef.current.close();
       } catch { }
       audioContextRef.current = null;
+      mediaStreamDestRef.current = null;
+    }
+
+    // Stop iOS stream audio element
+    if (iosStreamAudioRef.current) {
+      try {
+        iosStreamAudioRef.current.pause();
+        iosStreamAudioRef.current.srcObject = null;
+      } catch { }
+      iosStreamAudioRef.current = null;
     }
 
     // Clear audio buffer and reset scrubbing state
