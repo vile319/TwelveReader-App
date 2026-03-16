@@ -406,18 +406,8 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
         audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
       }
 
-      // #region agent log
-      const ctxStateBefore = audioContextRef.current.state;
-      fetch('http://127.0.0.1:7526/ingest/5f08a776-410a-4fa7-a1b6-4955d21b10ea',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'dbe5d3'},body:JSON.stringify({sessionId:'dbe5d3',location:'useKokoroWebWorkerTts.ts:startStreamingFromPosition',message:'AudioContext state before resume',data:{state:ctxStateBefore,ua:navigator.userAgent},timestamp:Date.now(),hypothesisId:'H4H5'})}).catch(()=>{});
-      // #endregion
-
       if (audioContextRef.current.state === 'suspended') {
-        try {
-          await audioContextRef.current.resume();
-        } catch(resumeErr) { /* silent */ }
-        // #region agent log
-        fetch('http://127.0.0.1:7526/ingest/5f08a776-410a-4fa7-a1b6-4955d21b10ea',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'dbe5d3'},body:JSON.stringify({sessionId:'dbe5d3',location:'useKokoroWebWorkerTts.ts:startStreamingFromPosition:afterResume',message:'AudioContext state after resume attempt',data:{stateAfter:audioContextRef.current.state},timestamp:Date.now(),hypothesisId:'H4H5'})}).catch(()=>{});
-        // #endregion
+        await audioContextRef.current.resume();
       }
 
       // Calculate which chunk to start from
@@ -809,6 +799,9 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
 
     if (diagnostics.suspicionReason) {
       console.warn(`⚠️ Suspicious audio detected for ${label}: ${diagnostics.suspicionReason}`);
+      // #region agent log
+      fetch('http://127.0.0.1:7526/ingest/5f08a776-410a-4fa7-a1b6-4955d21b10ea',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'2b38f5'},body:JSON.stringify({sessionId:'2b38f5',location:'useKokoroWebWorkerTts.ts:validateAudioData',message:'suspicious audio',data:{label,reason:diagnostics.suspicionReason,peak:diagnostics.peak,rms:diagnostics.rms,clippedSamples:diagnostics.clippedSamples,totalSamples:diagnostics.samples,clippedPct:(diagnostics.clippedSamples/Math.max(diagnostics.samples,1)).toFixed(4),willThrow:!!options?.failOnSuspicion,preview:diagnostics.preview},timestamp:Date.now(),hypothesisId:'H2H3'})}).catch(()=>{});
+      // #endregion
       if (options?.failOnSuspicion) {
         throw new Error(`Generated audio looks corrupt (${diagnostics.suspicionReason})`);
       }
@@ -953,12 +946,6 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
           const cachedRequests = await modelCache.keys();
           console.log('📁 Cached model files:', cachedRequests.length);
 
-          // #region agent log
-          const allCacheDetails: Record<string, string[]> = {};
-          for (const cn of cacheNames) { try { const c = await caches.open(cn); const ks = await c.keys(); allCacheDetails[cn] = ks.map((r: Request) => r.url); } catch {} }
-          fetch('http://127.0.0.1:7526/ingest/5f08a776-410a-4fa7-a1b6-4955d21b10ea',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'dbe5d3'},body:JSON.stringify({sessionId:'dbe5d3',location:'useKokoroWebWorkerTts.ts:initializeTts:cacheCheck',message:'cache state before from_pretrained',data:{allCacheDetails,modelsCacheCount:cachedRequests.length},timestamp:Date.now(),hypothesisId:'H2H3'})}).catch(()=>{});
-          // #endregion
-
           if (cachedRequests.length > 0) {
             console.log('🎯 Model appears to be cached - should load faster');
           } else {
@@ -983,13 +970,6 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
           } else if (progress.status === 'ready') {
             const loadTime = ((performance.now() - modelLoadStart) / 1000).toFixed(1);
             console.log(`⏱️ Model loaded in ${loadTime}s`);
-            // #region agent log
-            fetch('http://127.0.0.1:7526/ingest/5f08a776-410a-4fa7-a1b6-4955d21b10ea',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'dbe5d3'},body:JSON.stringify({sessionId:'dbe5d3',location:'useKokoroWebWorkerTts.ts:progress_callback',message:'progress.status===ready FIRED',data:{selectedModel,loadTime},timestamp:Date.now(),hypothesisId:'H3'})}).catch(()=>{});
-            // #endregion
-          } else {
-            // #region agent log
-            fetch('http://127.0.0.1:7526/ingest/5f08a776-410a-4fa7-a1b6-4955d21b10ea',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'dbe5d3'},body:JSON.stringify({sessionId:'dbe5d3',location:'useKokoroWebWorkerTts.ts:progress_callback',message:'other progress status',data:{status:progress.status,selectedModel},timestamp:Date.now(),hypothesisId:'H3'})}).catch(()=>{});
-            // #endregion
           }
         }
       });
@@ -1001,9 +981,6 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
       // status==='ready' is unreliable in transformers.js and may never fire.
       if (selectedModel) {
         modelManager.updateModelCacheStatus(selectedModel, true);
-        // #region agent log
-        fetch('http://127.0.0.1:7526/ingest/5f08a776-410a-4fa7-a1b6-4955d21b10ea',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'dbe5d3'},body:JSON.stringify({sessionId:'dbe5d3',location:'useKokoroWebWorkerTts.ts:after_from_pretrained',message:'updateModelCacheStatus called after resolve',data:{selectedModel},timestamp:Date.now(),hypothesisId:'H3'})}).catch(()=>{});
-        // #endregion
       }
 
       setIsReady(true);
@@ -1175,6 +1152,10 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
     setSynthesisComplete(false);
     console.log('📝 Cleared word timings and reset current word index');
 
+
+    // #region agent log
+    fetch('http://127.0.0.1:7526/ingest/5f08a776-410a-4fa7-a1b6-4955d21b10ea',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'2b38f5'},body:JSON.stringify({sessionId:'2b38f5',location:'useKokoroWebWorkerTts.ts:speak:start',message:'speak() called',data:{isServerless,currentDevice,hasTtsRef:!!ttsRef.current,textLen:text.length,voice},timestamp:Date.now(),hypothesisId:'H1H4'})}).catch(()=>{});
+    // #endregion
 
     try {
       console.log(`📚 Processing text (${text.length} characters)`);
