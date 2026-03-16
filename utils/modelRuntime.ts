@@ -17,7 +17,7 @@ export const inferPreferredDtype = (selectedModel?: string): ModelDtype => {
 export const getDefaultModelForDevice = (device: PreferredDevice): { modelId: string; dtype: ModelDtype } => {
   switch (device) {
     case 'webgpu':
-      return { modelId: 'kokoro-82m-fp16', dtype: 'fp16' };
+      return { modelId: 'kokoro-82m-fp32', dtype: 'fp32' };
     case 'wasm':
     case 'cpu':
       return { modelId: 'kokoro-82m-q8', dtype: 'q8' };
@@ -41,7 +41,7 @@ export const getCompatibleDtypeForDevice = (
   const dtype = requestedDtype ?? inferPreferredDtype(selectedModel);
 
   if (device === 'webgpu') {
-    return WEBGPU_DTYPES.includes(dtype) ? dtype : 'fp16';
+    return WEBGPU_DTYPES.includes(dtype) ? dtype : 'fp32';
   }
 
   if (device === 'wasm') {
