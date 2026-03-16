@@ -957,6 +957,9 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
       }
 
       if (getIsCancelled?.()) return null;
+      // #region agent log
+      fetch('http://127.0.0.1:7526/ingest/5f08a776-410a-4fa7-a1b6-4955d21b10ea',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'2b38f5'},body:JSON.stringify({sessionId:'2b38f5',location:'useKokoroWebWorkerTts.ts:initializeTts:from_pretrained',message:'loading model',data:{device,dtype,selectedModel,requestedDevice,requestedDtype},timestamp:Date.now(),hypothesisId:'H2'})}).catch(()=>{});
+      // #endregion
       const modelLoadStart = performance.now();
       const tts = await KokoroTTS.from_pretrained('onnx-community/Kokoro-82M-ONNX', {
         dtype: dtype,
@@ -1284,20 +1287,6 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
             continue; // Skip this chunk and continue
           }
 
-          // For local (WebGPU/WASM) mode, auto-normalize before validation so that
-          // models which output values > 1.0 (common with fp16/q4 WebGPU quantization)
-          // don't falsely trigger the "heavily clipped" guard.
-          if (!isServerless) {
-            const peak = audioData.reduce((m, v) => Math.max(m, Math.abs(v)), 0);
-            if (peak > 1.0) {
-              const scale = 0.95 / peak;
-              audioData = audioData.map(s => s * scale);
-              // #region agent log
-              fetch('http://127.0.0.1:7526/ingest/5f08a776-410a-4fa7-a1b6-4955d21b10ea',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'2b38f5'},body:JSON.stringify({sessionId:'2b38f5',location:'useKokoroWebWorkerTts.ts:speak:autoNormalize',message:'auto-normalized local audio',data:{peak,scale,chunk:i+1},timestamp:Date.now(),hypothesisId:'H2'})}).catch(()=>{});
-              // #endregion
-            }
-          }
-
           const diagnostics = validateAudioData(
             audioData,
             sampleRate,
@@ -1309,7 +1298,7 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
             setStatus(`⚠️ Cloud audio looks suspicious: ${diagnostics.suspicionReason}`);
           }
 
-          // Apply normalization if enabled by user toggle (on top of the auto-normalize above)
+          // Apply normalization if enabled
           audioData = normalizeAudioData(audioData!);
 
           allAudioChunks.push(audioData!);
