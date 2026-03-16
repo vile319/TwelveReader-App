@@ -53,6 +53,33 @@ const floatToWav = (float32Array: Float32Array, sampleRate: number): Blob => {
 // === HuggingFace Space TTS API URL ===
 const HF_TTS_API_URL = 'https://oronto-kokoro-tts-api.hf.space';
 
+type DebugLogPayload = {
+  runId: string;
+  hypothesisId: string;
+  location: string;
+  message: string;
+  data?: Record<string, unknown>;
+};
+
+const postDebugLog = ({ runId, hypothesisId, location, message, data = {} }: DebugLogPayload) => {
+  fetch('http://127.0.0.1:7526/ingest/5f08a776-410a-4fa7-a1b6-4955d21b10ea', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Debug-Session-Id': 'f0a691'
+    },
+    body: JSON.stringify({
+      sessionId: 'f0a691',
+      runId,
+      hypothesisId,
+      location,
+      message,
+      data,
+      timestamp: Date.now()
+    })
+  }).catch(() => {});
+};
+
 
 // Force enable caching for transformers.js
 if (typeof window !== 'undefined') {
@@ -796,6 +823,29 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
     const diagnostics = analyzeAudioData(audioData, sampleRate, label);
 
     console.log(`🔎 Audio diagnostics [${label}]`, diagnostics);
+    // #region agent log
+    postDebugLog({
+      runId: 'initial',
+      hypothesisId: diagnostics.suspicionReason ? 'H1/H3' : 'H1',
+      location: 'hooks/useKokoroWebWorkerTts.ts:824',
+      message: 'Computed audio diagnostics',
+      data: {
+        label,
+        failOnSuspicion: !!options?.failOnSuspicion,
+        sampleRate,
+        samples: diagnostics.samples,
+        duration: diagnostics.duration,
+        peak: diagnostics.peak,
+        rms: diagnostics.rms,
+        clippedSamples: diagnostics.clippedSamples,
+        clippedRatio: diagnostics.samples > 0 ? diagnostics.clippedSamples / diagnostics.samples : 0,
+        invalidSamples: diagnostics.invalidSamples,
+        zeroCrossingRate: diagnostics.zeroCrossingRate,
+        suspicionReason: diagnostics.suspicionReason,
+        preview: diagnostics.preview
+      }
+    });
+    // #endregion
 
     if (diagnostics.suspicionReason) {
       console.warn(`⚠️ Suspicious audio detected for ${label}: ${diagnostics.suspicionReason}`);
@@ -931,6 +981,24 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
       requestedDevice,
       requestedDtype
     });
+    // #region agent log
+    postDebugLog({
+      runId: 'initial',
+      hypothesisId: 'H4',
+      location: 'hooks/useKokoroWebWorkerTts.ts:954',
+      message: 'Resolved runtime config for local TTS',
+      data: {
+        selectedModel,
+        preferredDevice,
+        preferredDtype,
+        requestedDevice,
+        requestedDtype,
+        resolvedDevice: device,
+        resolvedDtype: dtype,
+        warning: warning ?? null
+      }
+    });
+    // #endregion
 
     try {
       // Check if cache is available
@@ -1109,6 +1177,25 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
     setIsPlaying(false); // Will be set to true when first chunk starts playing
     currentSynthesisRef.current = text;
     onProgress?.(0);
+    // #region agent log
+    postDebugLog({
+      runId: 'initial',
+      hypothesisId: 'H4',
+      location: 'hooks/useKokoroWebWorkerTts.ts:1138',
+      message: 'Starting synthesis request',
+      data: {
+        textLength: text.length,
+        voice,
+        currentDevice,
+        selectedModel,
+        preferredDevice,
+        preferredDtype,
+        normalizeAudio,
+        forceWasmMode,
+        hasTtsRef: !!ttsRef.current
+      }
+    });
+    // #endregion
 
     // Clear previous audio buffer and scrubbing state
     audioBufferRef.current = [];
@@ -1239,6 +1326,26 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
               voice: voice,
               return_alignments: true
             });
+            // #region agent log
+            postDebugLog({
+              runId: 'initial',
+              hypothesisId: 'H2',
+              location: 'hooks/useKokoroWebWorkerTts.ts:1285',
+              message: 'Received raw local generate output',
+              data: {
+                chunkIndex: i + 1,
+                chunkLength: chunk.length,
+                constructorName: audioObject?.constructor?.name ?? null,
+                keys: audioObject && typeof audioObject === 'object' ? Object.keys(audioObject).slice(0, 12) : [],
+                hasAudioFloat32: !!(audioObject?.audio && audioObject.audio instanceof Float32Array),
+                hasDataFloat32: !!(audioObject?.data && audioObject.data instanceof Float32Array),
+                isDirectFloat32: audioObject instanceof Float32Array,
+                sampleRate: audioObject?.sample_rate ?? null,
+                samplingRate: audioObject?.sampling_rate ?? null,
+                alignmentsCount: Array.isArray(audioObject?.alignments) ? audioObject.alignments.length : null
+              }
+            });
+            // #endregion
 
             // Extract audio data
             if (audioObject && typeof audioObject === 'object') {
@@ -1464,6 +1571,23 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
 
     } catch (error: any) {
       console.error('Synthesis error:', error);
+      // #region agent log
+      postDebugLog({
+        runId: 'initial',
+        hypothesisId: 'H1/H2/H3/H4',
+        location: 'hooks/useKokoroWebWorkerTts.ts:1519',
+        message: 'Synthesis request failed',
+        data: {
+          currentDevice,
+          selectedModel,
+          preferredDevice,
+          preferredDtype,
+          normalizeAudio,
+          forceWasmMode,
+          errorMessage: error?.message ?? String(error)
+        }
+      });
+      // #endregion
       setIsPlaying(false);
       currentSynthesisRef.current = null;
       onError({
