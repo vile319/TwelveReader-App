@@ -1175,6 +1175,21 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
     setSynthesisComplete(false);
     console.log('📝 Cleared word timings and reset current word index');
 
+    // Pre-create and unlock AudioContext here while we're in the user gesture handler.
+    // iOS Safari blocks AudioContext.resume() if called outside a direct user gesture,
+    // so we must unlock it now before the async synthesis work begins.
+    try {
+      if (!audioContextRef.current) {
+        audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+      }
+      if (audioContextRef.current.state === 'suspended') {
+        await audioContextRef.current.resume();
+      }
+      console.log('🔓 AudioContext unlocked in speak(), state:', audioContextRef.current.state);
+    } catch (audioCtxErr) {
+      console.warn('⚠️ Could not pre-unlock AudioContext:', audioCtxErr);
+    }
+
     try {
       console.log(`📚 Processing text (${text.length} characters)`);
 
