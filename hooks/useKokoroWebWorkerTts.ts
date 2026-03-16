@@ -799,9 +799,6 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
 
     if (diagnostics.suspicionReason) {
       console.warn(`⚠️ Suspicious audio detected for ${label}: ${diagnostics.suspicionReason}`);
-      // #region agent log
-      fetch('http://127.0.0.1:7526/ingest/5f08a776-410a-4fa7-a1b6-4955d21b10ea',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'2b38f5'},body:JSON.stringify({sessionId:'2b38f5',location:'useKokoroWebWorkerTts.ts:validateAudioData',message:'suspicious audio',data:{label,reason:diagnostics.suspicionReason,peak:diagnostics.peak,rms:diagnostics.rms,clippedSamples:diagnostics.clippedSamples,totalSamples:diagnostics.samples,clippedPct:(diagnostics.clippedSamples/Math.max(diagnostics.samples,1)).toFixed(4),willThrow:!!options?.failOnSuspicion,preview:diagnostics.preview},timestamp:Date.now(),hypothesisId:'H2H3'})}).catch(()=>{});
-      // #endregion
       if (options?.failOnSuspicion) {
         throw new Error(`Generated audio looks corrupt (${diagnostics.suspicionReason})`);
       }
@@ -957,9 +954,6 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
       }
 
       if (getIsCancelled?.()) return null;
-      // #region agent log
-      fetch('http://127.0.0.1:7526/ingest/5f08a776-410a-4fa7-a1b6-4955d21b10ea',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'2b38f5'},body:JSON.stringify({sessionId:'2b38f5',location:'useKokoroWebWorkerTts.ts:initializeTts:from_pretrained',message:'loading model',data:{device,dtype,selectedModel,requestedDevice,requestedDtype},timestamp:Date.now(),hypothesisId:'H2'})}).catch(()=>{});
-      // #endregion
       const modelLoadStart = performance.now();
       const tts = await KokoroTTS.from_pretrained('onnx-community/Kokoro-82M-ONNX', {
         dtype: dtype,
@@ -1155,10 +1149,6 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
     setSynthesisComplete(false);
     console.log('📝 Cleared word timings and reset current word index');
 
-
-    // #region agent log
-    fetch('http://127.0.0.1:7526/ingest/5f08a776-410a-4fa7-a1b6-4955d21b10ea',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'2b38f5'},body:JSON.stringify({sessionId:'2b38f5',location:'useKokoroWebWorkerTts.ts:speak:start',message:'speak() called',data:{isServerless,currentDevice,hasTtsRef:!!ttsRef.current,textLen:text.length,voice},timestamp:Date.now(),hypothesisId:'H1H4'})}).catch(()=>{});
-    // #endregion
 
     try {
       console.log(`📚 Processing text (${text.length} characters)`);
