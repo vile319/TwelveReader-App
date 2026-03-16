@@ -1178,6 +1178,8 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
     // Pre-create and unlock AudioContext here while we're in the user gesture handler.
     // iOS Safari blocks AudioContext.resume() if called outside a direct user gesture,
     // so we must unlock it now before the async synthesis work begins.
+    // We also play a silent buffer immediately — this forces iOS to route audio
+    // to the speaker (media output) instead of the earpiece (call output).
     try {
       if (!audioContextRef.current) {
         audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
@@ -1185,7 +1187,13 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
       if (audioContextRef.current.state === 'suspended') {
         await audioContextRef.current.resume();
       }
-      console.log('🔓 AudioContext unlocked in speak(), state:', audioContextRef.current.state);
+      // Play a 0.01s silent buffer to fully unlock iOS audio output routing to speaker
+      const silentBuffer = audioContextRef.current.createBuffer(1, audioContextRef.current.sampleRate * 0.01, audioContextRef.current.sampleRate);
+      const silentSource = audioContextRef.current.createBufferSource();
+      silentSource.buffer = silentBuffer;
+      silentSource.connect(audioContextRef.current.destination);
+      silentSource.start();
+      console.log('🔓 AudioContext unlocked + silent buffer played, state:', audioContextRef.current.state);
     } catch (audioCtxErr) {
       console.warn('⚠️ Could not pre-unlock AudioContext:', audioCtxErr);
     }
