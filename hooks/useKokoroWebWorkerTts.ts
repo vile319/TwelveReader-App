@@ -713,8 +713,7 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
 
     const peak = Math.max(...audioData.map(Math.abs));
     if (peak > 1.0) {
-      // Audio is clipped/too loud - normalize it
-      const scale = 0.95 / peak; // Scale to 95% to prevent clipping
+      const scale = 0.95 / peak;
       console.log(`🔧 Normalizing audio: peak ${peak.toFixed(4)} → scaling by ${scale.toFixed(4)}`);
       return audioData.map(sample => sample * scale);
     }
