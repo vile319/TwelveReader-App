@@ -1489,12 +1489,35 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
       console.error('Synthesis error:', error);
       setIsPlaying(false);
       currentSynthesisRef.current = null;
+
+      // WebGPU produced invalid/corrupt audio — auto-fallback to WASM q8
+      if (error.message?.includes('corrupt') && currentDevice === 'webgpu') {
+        console.warn('⚠️ WebGPU audio invalid — clearing cache and switching to WASM q8');
+        try {
+          // Clear all caches to remove any stale/corrupt model files
+          const cacheNames = await caches.keys();
+          await Promise.all(cacheNames.filter(n => n !== 'workbox-precache-v2-https://www.pdftoaudio.org/').map(n => caches.delete(n)));
+          const wasmTts = await KokoroTTS.from_pretrained('onnx-community/Kokoro-82M-v1.0-ONNX', { dtype: 'q8', device: 'wasm' });
+          ttsRef.current = wasmTts;
+          setCurrentDevice('wasm');
+          setIsReady(true);
+          setStatus('✅ Switched to CPU mode — tap Listen again');
+          onError({ title: 'Switched to CPU Mode', message: 'GPU produced invalid audio. Switched to CPU automatically — tap Listen again.' });
+          // #region agent log
+          fetch('http://127.0.0.1:7526/ingest/5f08a776-410a-4fa7-a1b6-4955d21b10ea',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'f511cb'},body:JSON.stringify({sessionId:'f511cb',runId:'fallback',location:'useKokoroWebWorkerTts.ts:catch',message:'WebGPU fallback to WASM succeeded',data:{errorMsg:error.message},timestamp:Date.now()})}).catch(()=>{});
+          // #endregion
+        } catch (wasmError: any) {
+          onError({ title: 'Synthesis Error', message: `GPU and CPU both failed: ${wasmError.message}` });
+        }
+        return;
+      }
+
       onError({
         title: 'Synthesis Error',
         message: `Failed to synthesize text: ${error.message}`
       });
     }
-  }, [isReady, onError, chunkText]);
+  }, [isReady, onError, chunkText, currentDevice]);
 
   // This effect will trigger playback once the UI is ready after the first chunk,
   // so that both desktop and mobile behave the same after pressing Listen.
