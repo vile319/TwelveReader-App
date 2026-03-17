@@ -145,6 +145,13 @@ const ModelSelector: FC<ModelSelectorProps> = ({
   // Check GPU availability on mount
   useEffect(() => {
     const checkGPU = async () => {
+      const isFirefox = typeof navigator !== 'undefined' && /firefox/i.test(navigator.userAgent);
+      if (isFirefox) {
+        setGpuAvailable(false);
+        setGpuCheckComplete(true);
+        setGpuUnavailableReason('Local GPU is not supported in Firefox.');
+        return;
+      }
       console.log('🔍 [ModelSelector] Checking GPU availability via shared helper...');
       const caps = await detectGpuCapabilities();
 
