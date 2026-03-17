@@ -1284,6 +1284,9 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
           }
 
 
+          // Normalize first (handles WebGPU fp32 scale issues where peak can be in the millions)
+          audioData = normalizeAudioData(audioData!);
+
           const diagnostics = validateAudioData(
             audioData,
             sampleRate,
@@ -1294,9 +1297,6 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
           if (diagnostics.suspicionReason && isServerless) {
             setStatus(`⚠️ Cloud audio looks suspicious: ${diagnostics.suspicionReason}`);
           }
-
-          // Apply normalization if enabled
-          audioData = normalizeAudioData(audioData!);
 
           allAudioChunks.push(audioData!);
           totalSamples += audioData!.length;
