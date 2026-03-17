@@ -838,6 +838,17 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
     }
 
     if (mappedDevice === 'webgpu') {
+      const isFirefox = typeof navigator !== 'undefined' && /firefox/i.test(navigator.userAgent);
+      if (isFirefox) {
+        return {
+          device: 'wasm',
+          dtype: getCompatibleDtypeForDevice('wasm', undefined, selectedModel),
+          requestedDevice,
+          requestedDtype,
+          warning: 'Firefox WebGPU produces invalid audio output; using WASM instead.'
+        };
+      }
+
       const caps = await detectGpuCapabilities();
       if (caps.canUseLocalGpu) {
         return {
