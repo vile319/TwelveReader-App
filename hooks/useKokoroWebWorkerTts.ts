@@ -798,9 +798,6 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
 
     if (diagnostics.suspicionReason) {
       console.warn(`⚠️ Suspicious audio detected for ${label}: ${diagnostics.suspicionReason}`);
-      // #region agent log
-      fetch('http://127.0.0.1:7526/ingest/5f08a776-410a-4fa7-a1b6-4955d21b10ea',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'f511cb'},body:JSON.stringify({sessionId:'f511cb',runId:'diag',location:'useKokoroWebWorkerTts.ts:validate',message:'suspicious audio',data:{label,reason:diagnostics.suspicionReason,peak:diagnostics.peak,rms:diagnostics.rms,invalidSamples:diagnostics.invalidSamples,samples:diagnostics.samples,willThrow:!!options?.failOnSuspicion},timestamp:Date.now(),hypothesisId:'cache-config'})}).catch(()=>{});
-      // #endregion
       if (options?.failOnSuspicion) {
         throw new Error(`Generated audio looks corrupt (${diagnostics.suspicionReason})`);
       }
@@ -1100,9 +1097,6 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
   const speak = useCallback(async (text: string, voice: string = 'af_bella', onProgress?: (progress: number) => void) => {
     // If it's a Serverless device, it's always "ready". For WebWorker, check ttsRef.
     const isServerless = currentDevice === 'serverless';
-    // #region agent log
-    fetch('http://127.0.0.1:7526/ingest/5f08a776-410a-4fa7-a1b6-4955d21b10ea',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'f511cb'},body:JSON.stringify({sessionId:'f511cb',runId:'diag',location:'useKokoroWebWorkerTts.ts:speak-start',message:'speak() invoked',data:{currentDevice,isServerless,isReady,hasTtsRef:!!ttsRef.current,preferredDevice,preferredDtype},timestamp:Date.now(),hypothesisId:'cache-config'})}).catch(()=>{});
-    // #endregion
     if (!isReady || (!isServerless && !ttsRef.current)) {
       console.warn('TTS not ready');
       onError({
@@ -1304,9 +1298,6 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
           streamingAudioRef.current.push(audioData!);
           const currentStreamDuration = (totalSamples / sampleRate);
           setSynthesizedDuration(currentStreamDuration);
-          // #region agent log
-          fetch('http://127.0.0.1:7526/ingest/5f08a776-410a-4fa7-a1b6-4955d21b10ea',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'f511cb'},body:JSON.stringify({sessionId:'f511cb',location:'useKokoroWebWorkerTts.ts:1300',message:'chunk synthesized',data:{chunkIndex:i,synthesizedDuration:currentStreamDuration,durationState:durationRef.current,currentTimeRef:currentTimeRef.current},timestamp:Date.now(),hypothesisId:'H-B'})}).catch(()=>{});
-          // #endregion
 
           // --- New: Use precise word timings if available ---
           if (audioObject && audioObject.alignments) {
@@ -1413,9 +1404,6 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
       completeAudioSampleRateRef.current = sampleRate;
       setDurationBoth(combinedAudio.length / sampleRate);
       setSynthesizedDuration(combinedAudio.length / sampleRate);
-      // #region agent log
-      fetch('http://127.0.0.1:7526/ingest/5f08a776-410a-4fa7-a1b6-4955d21b10ea',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'f511cb'},body:JSON.stringify({sessionId:'f511cb',location:'useKokoroWebWorkerTts.ts:1405',message:'synthesis complete - duration set',data:{finalDuration:combinedAudio.length/sampleRate,currentTimeAtEnd:currentTimeRef.current,wasPlayingStreaming:isPlaybackActiveRef.current},timestamp:Date.now(),hypothesisId:'H-A,H-C'})}).catch(()=>{});
-      // #endregion
 
       // Stop streaming playback before switching to complete mode
       if (streamingTimeoutRef.current) {
@@ -1503,9 +1491,6 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
           setIsReady(true);
           setStatus('✅ Switched to CPU mode — tap Listen again');
           onError({ title: 'Switched to CPU Mode', message: 'GPU produced invalid audio. Switched to CPU automatically — tap Listen again.' });
-          // #region agent log
-          fetch('http://127.0.0.1:7526/ingest/5f08a776-410a-4fa7-a1b6-4955d21b10ea',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'f511cb'},body:JSON.stringify({sessionId:'f511cb',runId:'fallback',location:'useKokoroWebWorkerTts.ts:catch',message:'WebGPU fallback to WASM succeeded',data:{errorMsg:error.message},timestamp:Date.now()})}).catch(()=>{});
-          // #endregion
         } catch (wasmError: any) {
           onError({ title: 'Synthesis Error', message: `GPU and CPU both failed: ${wasmError.message}` });
         }

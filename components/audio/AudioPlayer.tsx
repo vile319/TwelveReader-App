@@ -7,12 +7,6 @@ const AudioPlayer: FC = () => {
   const { state, actions } = useAppContext();
   const [showDriveMenu, setShowDriveMenu] = useState(false);
 
-  // #region agent log
-  useEffect(() => {
-    if (!state.audio.canScrub) return;
-    fetch('http://127.0.0.1:7526/ingest/5f08a776-410a-4fa7-a1b6-4955d21b10ea',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'f511cb'},body:JSON.stringify({sessionId:'f511cb',runId:'post-fix',location:'AudioPlayer.tsx:render',message:'seek bar values',data:{duration:state.audio.duration,synthesizedDuration:state.audio.synthesizedDuration,isStreaming:state.audio.isStreaming,safeDuration,currentTime:state.audio.currentTime,progressPercent,isPlaying:state.audio.isPlaying,synthesisComplete:state.audio.synthesisComplete},timestamp:Date.now(),hypothesisId:'H-A,H-B,H-C'})}).catch(()=>{});
-  });
-  // #endregion
 
   // Close drive menu when clicking outside
   useEffect(() => {
