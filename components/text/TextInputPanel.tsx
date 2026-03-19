@@ -292,6 +292,16 @@ const TextInputPanel: FC = () => {
                   style={{ width: `${state.generationProgress}%` }}
                 />
               </div>
+              {state.isGenerating && (
+                <div className="flex justify-end pt-1">
+                  <button
+                    onClick={actions.cancelGeneration}
+                    className="text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 uppercase font-bold px-3 py-1.5 rounded-sm transition-colors border border-slate-700 hover:border-slate-500"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              )}
             </div>
           ) : !state.isReading ? (
             <div className="flex flex-col items-center gap-2">

@@ -131,6 +131,7 @@ export interface AppContextType {
     // Audio actions
     handleStartReading: (text?: string) => void;
     handleStopReading: () => void;
+    cancelGeneration: () => void;
     handleWordClick: (time: number) => void;
     handleDownloadAudio: () => void;
 

@@ -251,6 +251,15 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     setIsGenerating(false); // Reset isGenerating when stopping reading
   };
 
+  const cancelGeneration = () => {
+    // Cancel synthesis/playback without forcing a mode switch back to editing.
+    // This is intentionally lighter than handleStopReading().
+    tts.stop();
+    setGenerationProgress(0);
+    setIsGenerating(false);
+    setToast({ title: 'Cancelled', message: 'Generation cancelled.', type: 'info' });
+  };
+
   // --- New: Reset playback when input text changes directly ---
   const updateInputText = (text: string) => {
     // If they are actively reading, changing the text should seamlessly restart the generation
@@ -1096,6 +1105,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       setIsExtractingPDF,
       handleStartReading,
       handleStopReading,
+      cancelGeneration,
       handleWordClick,
       handleDownloadAudio,
       handleAcceptModelDownload,
