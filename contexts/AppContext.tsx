@@ -1059,7 +1059,6 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       detectedHardwareReason,
       modelAccepted,
       showModelWarning,
-      normalizeAudio: false,
       selectedModel,
       preferredDevice,
       preferredDtype,

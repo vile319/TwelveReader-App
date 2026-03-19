@@ -16,7 +16,8 @@ import {
 
 // Helper to create WAV for HTMLAudioElement
 const floatToWav = (float32Array: Float32Array, sampleRate: number): Blob => {
-  const wav = new ArrayBuffer(44 + float32Array.length * 2);
+  const dataBytes = float32Array.length * 4; // 4 bytes per Float32 sample
+  const wav = new ArrayBuffer(44 + dataBytes);
   const view = new DataView(wav);
 
   const writeString = (view: DataView, offset: number, string: string) => {
@@ -26,26 +27,21 @@ const floatToWav = (float32Array: Float32Array, sampleRate: number): Blob => {
   };
 
   writeString(view, 0, 'RIFF');
-  view.setUint32(4, 36 + float32Array.length * 2, true);
+  view.setUint32(4, 36 + dataBytes, true);
   writeString(view, 8, 'WAVE');
   writeString(view, 12, 'fmt ');
-  view.setUint32(16, 16, true);
-  view.setUint16(20, 1, true);
-  view.setUint16(22, 1, true);
+  view.setUint32(16, 16, true);        // chunk size
+  view.setUint16(20, 3, true);         // IEEE Float (not PCM=1)
+  view.setUint16(22, 1, true);         // mono
   view.setUint32(24, sampleRate, true);
-  view.setUint32(28, sampleRate * 2, true);
-  view.setUint16(32, 2, true);
-  view.setUint16(34, 16, true);
+  view.setUint32(28, sampleRate * 4, true); // byte rate
+  view.setUint16(32, 4, true);         // block align
+  view.setUint16(34, 32, true);        // bits per sample
   writeString(view, 36, 'data');
-  view.setUint32(40, float32Array.length * 2, true);
+  view.setUint32(40, dataBytes, true);
 
-  const length = float32Array.length;
-  let offset = 44;
-  for (let i = 0; i < length; i++) {
-    const s = Math.max(-1, Math.min(1, float32Array[i]));
-    view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
-    offset += 2;
-  }
+  // Write Float32 samples directly — no conversion, no clipping
+  new Float32Array(wav, 44).set(float32Array);
 
   return new Blob([wav], { type: 'audio/wav' });
 };
@@ -169,9 +165,6 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
 
   // Debug flag to force WASM mode (for WebGPU audio scaling issues)
   const [forceWasmMode, setForceWasmMode] = useState(false);
-
-  // Audio normalization flag to fix scaling issues
-  const [normalizeAudio, setNormalizeAudio] = useState(false);
 
   // New synthesis complete flag
   const [synthesisComplete, setSynthesisComplete] = useState(false);
@@ -403,7 +396,7 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
 
     try {
       if (!audioContextRef.current) {
-        audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+        audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: sampleRateRef.current });
       }
 
       if (audioContextRef.current.state === 'suspended') {
@@ -691,7 +684,7 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
   useEffect(() => {
     if (canScrub && !audioContextRef.current) {
       console.log('🎵 Initializing audio context for scrubbing');
-      audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+      audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
     }
   }, [canScrub]);
 
@@ -700,25 +693,6 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
     setForceWasmMode((prev: boolean) => !prev);
     console.log('🔧 Force WASM mode:', !forceWasmMode);
   }, [forceWasmMode]);
-
-  // Function to toggle audio normalization
-  const toggleNormalizeAudio = useCallback(() => {
-    setNormalizeAudio((prev: boolean) => !prev);
-    console.log('🔧 Audio normalization:', !normalizeAudio);
-  }, [normalizeAudio]);
-
-  // Function to normalize audio if it's clipped/scaled wrong
-  const normalizeAudioData = useCallback((audioData: Float32Array): Float32Array => {
-    if (!normalizeAudio) return audioData;
-
-    const peak = Math.max(...audioData.map(Math.abs));
-    if (peak > 1.0) {
-      const scale = 0.95 / peak;
-      console.log(`🔧 Normalizing audio: peak ${peak.toFixed(4)} → scaling by ${scale.toFixed(4)}`);
-      return audioData.map(sample => sample * scale);
-    }
-    return audioData;
-  }, [normalizeAudio]);
 
   const analyzeAudioData = useCallback((audioData: Float32Array, sampleRate: number, label: string): AudioDiagnostics => {
     let peak = 0;
@@ -1230,8 +1204,8 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
 
             // The API returns a WAV file blob. We need to decode it back into a Float32Array for the chunker.
             const arrayBuffer = await response.arrayBuffer();
-            if (!audioContextRef.current) {
-              audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+                    if (!audioContextRef.current) {
+              audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
             }
             const decodedBuffer = await audioContextRef.current.decodeAudioData(arrayBuffer);
             audioData = new Float32Array(decodedBuffer.getChannelData(0)); // Copy out of AudioBuffer for stable downstream processing
@@ -1286,9 +1260,6 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
             console.error(`❌ No audio data generated for chunk ${i + 1}`);
             continue; // Skip this chunk and continue
           }
-
-          // Normalize first (handles WebGPU fp32 scale issues where peak can be in the millions)
-          audioData = normalizeAudioData(audioData!);
 
           const diagnostics = validateAudioData(
             audioData,
@@ -1957,7 +1928,7 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
   const loadAudioFromBlob = useCallback(async (blob: Blob, savedWordTimings?: Array<{ word: string, start: number, end: number }>) => {
     if (!blob) return;
     if (!audioContextRef.current) {
-      audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+      audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
     }
     try {
       const arrayBuffer = await blob.arrayBuffer();
@@ -2019,7 +1990,7 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
     const unlock = () => {
       try {
         if (!audioContextRef.current) {
-          audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+          audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
         }
         if (audioContextRef.current.state === 'suspended') {
           audioContextRef.current.resume();
@@ -2044,7 +2015,7 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
   const primeAudioContext = useCallback(() => {
     try {
       if (!audioContextRef.current) {
-        audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+        audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
       }
       if (audioContextRef.current.state === 'suspended') {
         audioContextRef.current.resume();
@@ -2107,8 +2078,6 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
     // Debug mode controls
     forceWasmMode,
     toggleForceWasm,
-    normalizeAudio,
-    toggleNormalizeAudio,
     // New synthesis complete flag
     synthesisComplete,
     // Utility: get combined audio buffer as WAV Blob

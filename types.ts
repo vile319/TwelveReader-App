@@ -47,7 +47,6 @@ export interface ModelState {
   detectedHardwareReason?: string | null;
   modelAccepted: boolean;
   showModelWarning: boolean;
-  normalizeAudio: boolean;
   selectedModel: string;
   preferredDevice: 'webgpu' | 'wasm' | 'cpu' | 'serverless';
   preferredDtype: 'fp32' | 'fp16' | 'q8' | 'q4' | 'q4f16';
