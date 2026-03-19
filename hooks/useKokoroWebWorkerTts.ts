@@ -1493,9 +1493,19 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
       if (error.message?.includes('corrupt') && currentDevice === 'webgpu') {
         console.warn('⚠️ WebGPU audio invalid — clearing cache and switching to WASM q8');
         try {
-          // Clear all caches to remove any stale/corrupt model files
+          // Clear Cache API (model files)
           const cacheNames = await caches.keys();
           await Promise.all(cacheNames.filter(n => n !== 'workbox-precache-v2-https://www.pdftoaudio.org/').map(n => caches.delete(n)));
+          // Also clear IndexedDB (transformers.js caches model there too)
+          if ('indexedDB' in window) {
+            try {
+              await new Promise<void>((resolve) => {
+                const req = indexedDB.deleteDatabase('transformers-cache');
+                req.onsuccess = () => resolve();
+                req.onerror = () => resolve();
+              });
+            } catch { /* ignore */ }
+          }
           const wasmTts = await KokoroTTS.from_pretrained('onnx-community/Kokoro-82M-v1.0-ONNX', { dtype: 'q8', device: 'wasm' });
           ttsRef.current = wasmTts;
           setCurrentDevice('wasm');
