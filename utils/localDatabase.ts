@@ -1,7 +1,16 @@
 export const DB_NAME = 'TwelveReaderDB';
 export const STORE_NAME = 'audioBlobs';
 export const STORE_TIMINGS = 'timings';
-export const DB_VERSION = 2;
+export const STORE_GENERATION_CHECKPOINTS = 'generationCheckpoints';
+export const DB_VERSION = 3;
+
+export type GenerationCheckpoint = {
+    setId: string;
+    resumeChunkIndex: number;
+    totalChunks: number;
+    isPartialGeneration: boolean;
+    textHash: string;
+};
 
 export class LocalDatabase {
     private db: IDBDatabase | null = null;
@@ -29,6 +38,9 @@ export class LocalDatabase {
                 }
                 if (!db.objectStoreNames.contains(STORE_TIMINGS)) {
                     db.createObjectStore(STORE_TIMINGS);
+                }
+                if (!db.objectStoreNames.contains(STORE_GENERATION_CHECKPOINTS)) {
+                    db.createObjectStore(STORE_GENERATION_CHECKPOINTS);
                 }
             };
         });
@@ -103,6 +115,42 @@ export class LocalDatabase {
         return new Promise((resolve, reject) => {
             const transaction = this.db!.transaction([STORE_TIMINGS], 'readwrite');
             const store = transaction.objectStore(STORE_TIMINGS);
+            const request = store.delete(id);
+
+            request.onsuccess = () => resolve();
+            request.onerror = () => reject(request.error);
+        });
+    }
+
+    async saveGenerationCheckpoint(id: string, checkpoint: GenerationCheckpoint): Promise<void> {
+        await this.init();
+        return new Promise((resolve, reject) => {
+            const transaction = this.db!.transaction([STORE_GENERATION_CHECKPOINTS], 'readwrite');
+            const store = transaction.objectStore(STORE_GENERATION_CHECKPOINTS);
+            const request = store.put(checkpoint, id);
+
+            request.onsuccess = () => resolve();
+            request.onerror = () => reject(request.error);
+        });
+    }
+
+    async getGenerationCheckpoint(id: string): Promise<GenerationCheckpoint | null> {
+        await this.init();
+        return new Promise((resolve, reject) => {
+            const transaction = this.db!.transaction([STORE_GENERATION_CHECKPOINTS], 'readonly');
+            const store = transaction.objectStore(STORE_GENERATION_CHECKPOINTS);
+            const request = store.get(id);
+
+            request.onsuccess = () => resolve(request.result || null);
+            request.onerror = () => reject(request.error);
+        });
+    }
+
+    async deleteGenerationCheckpoint(id: string): Promise<void> {
+        await this.init();
+        return new Promise((resolve, reject) => {
+            const transaction = this.db!.transaction([STORE_GENERATION_CHECKPOINTS], 'readwrite');
+            const store = transaction.objectStore(STORE_GENERATION_CHECKPOINTS);
             const request = store.delete(id);
 
             request.onsuccess = () => resolve();

@@ -87,6 +87,18 @@ interface UseKokoroWebWorkerTtsProps {
   preferredDtype?: 'fp32' | 'fp16' | 'q8' | 'q4' | 'q4f16'; // New: preferred dtype
 }
 
+type SpeakOptions = {
+  startChunkIndex?: number;
+  preserveStreamingSeed?: boolean;
+  seedWordTimings?: Array<{ word: string; start: number; end: number }>;
+  initialSynthesizedDuration?: number;
+};
+
+export type SpeakResult =
+  | { ok: true; completed: true }
+  | { ok: true; completed: false; cancelled: true; chunksGenerated: number; totalChunks: number }
+  | { ok: false; error: Error };
+
 export interface AudioChunk {
   index: number;
   text: string;
@@ -173,8 +185,7 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
   const [playbackRate, setPlaybackRateState] = useState<number>(1);
   const playbackRateRef = useRef<number>(1);
 
-  // New state for playback trigger
-  const [isFirstChunkReady, setIsFirstChunkReady] = useState(false);
+  const hasAutoStartedStreamingRef = useRef(false);
 
   // Ref for last word update time (reserved for future use)
   const wordTimingsRef = useRef(wordTimings);
@@ -238,6 +249,7 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
   const audioContextRef = useRef<AudioContext | null>(null);
   const sourceNodeRef = useRef<AudioBufferSourceNode | null>(null);
   const currentSynthesisRef = useRef<string | null>(null);
+  const cloudAbortControllerRef = useRef<AbortController | null>(null);
 
   // Enhanced audio refs for scrubbing
   const completeAudioSourceRef = useRef<AudioBufferSourceNode | null>(null);
@@ -270,6 +282,9 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
   const scheduledSourceNodesRef = useRef<AudioBufferSourceNode[]>([]);
   const streamingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const streamInvocationIdRef = useRef<number>(0);
+  const lastChunkListRef = useRef<string[]>([]);
+  const lastSynthesisTextRef = useRef<string>('');
+  const lastSynthesizedSampleRateRef = useRef<number>(24000);
 
   // Complete list of all Kokoro voices from Hugging Face
   const voices = [
@@ -1079,7 +1094,12 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
   }, []);
 
   // Generate speech
-  const speak = useCallback(async (text: string, voice: string = 'af_bella', onProgress?: (progress: number) => void) => {
+  const speak = useCallback(async (
+    text: string,
+    voice: string = 'af_bella',
+    onProgress?: (progress: number) => void,
+    options?: SpeakOptions
+  ): Promise<SpeakResult> => {
     // If it's a Serverless device, it's always "ready". For WebWorker, check ttsRef.
     const isServerless = currentDevice === 'serverless';
     if (!isReady || (!isServerless && !ttsRef.current)) {
@@ -1088,16 +1108,26 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
         title: 'TTS Not Ready',
         message: 'The TTS model is still loading. Please wait...'
       });
-      return;
+      return { ok: false, error: new Error('TTS not ready') };
     }
 
     setIsPlaying(false); // Will be set to true when first chunk starts playing
     currentSynthesisRef.current = text;
+    // New synthesis run: cancel any in-flight cloud request from a prior run
+    if (cloudAbortControllerRef.current) {
+      try { cloudAbortControllerRef.current.abort(); } catch { }
+      cloudAbortControllerRef.current = null;
+    }
     onProgress?.(0);
+
+    const startChunkIndex = options?.startChunkIndex ?? 0;
+    const preserveStreamingSeed = options?.preserveStreamingSeed ?? false;
 
     // Clear previous audio buffer and scrubbing state
     audioBufferRef.current = [];
-    streamingAudioRef.current = [];
+    if (!preserveStreamingSeed) {
+      streamingAudioRef.current = [];
+    }
     isPlaybackActiveRef.current = false;
 
     if (streamingTimeoutRef.current) {
@@ -1122,13 +1152,13 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
 
     setCurrentTimeBoth(0);
     setDurationBoth(0);
-    setSynthesizedDuration(0);
+    setSynthesizedDuration(options?.initialSynthesizedDuration ?? 0);
     setCanScrub(false);
     setIsStreaming(false);
 
     // Reset state before new synthesis
-    setIsFirstChunkReady(false);
-    setWordTimings([]);
+    hasAutoStartedStreamingRef.current = false;
+    setWordTimings(options?.seedWordTimings ?? []);
     setCurrentWordIndex(-1);
     setSynthesisComplete(false);
     console.log('📝 Cleared word timings and reset current word index');
@@ -1139,6 +1169,8 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
 
       // Using larger chunks (600 max, 300 min punctuation cut) for better flow
       const chunks = chunkText(text, 600, 600);
+      lastChunkListRef.current = chunks;
+      lastSynthesisTextRef.current = text;
       console.log(`📝 Split into ${chunks.length} chunks for processing`);
 
       // Process all chunks but in smaller batches to prevent stack overflow
@@ -1153,7 +1185,7 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
       // Process chunks in batches to prevent stack overflow  
       const BATCH_SIZE = 10; // Process 10 chunks at a time
 
-      for (let batchStart = 0; batchStart < chunks.length; batchStart += BATCH_SIZE) {
+      for (let batchStart = startChunkIndex; batchStart < chunks.length; batchStart += BATCH_SIZE) {
         const batchEnd = Math.min(batchStart + BATCH_SIZE, chunks.length);
         console.log(`📦 Processing batch ${Math.floor(batchStart / BATCH_SIZE) + 1}/${Math.ceil(chunks.length / BATCH_SIZE)} (chunks ${batchStart + 1}-${batchEnd})`);
 
@@ -1167,7 +1199,7 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
 
           if (currentSynthesisRef.current !== text) {
             console.log(`🛑 Synthesis stopped after generate() – discarding chunk ${i + 1}`);
-            return; // Exit early, abandon this synthesis entirely
+            return { ok: true, completed: false, cancelled: true, chunksGenerated: allAudioChunks.length, totalChunks: chunks.length };
           }
 
           console.log(`🔄 Processing chunk ${i + 1}: ${chunk.length} characters`);
@@ -1184,16 +1216,24 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
             // === iOS / HuggingFace Space Route ===
             console.log(`☁️ Sending chunk ${i + 1} to HuggingFace TTS API...`);
             const apiStart = performance.now();
+            const abortController = new AbortController();
+            cloudAbortControllerRef.current = abortController;
 
             const response = await fetch(`${HF_TTS_API_URL}/tts`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
+              signal: abortController.signal,
               body: JSON.stringify({
                 text: chunk,
                 voice: voice,
                 speed: 1.0
               })
             });
+
+            // Request finished; clear the controller so stop() doesn't abort unrelated future runs
+            if (cloudAbortControllerRef.current === abortController) {
+              cloudAbortControllerRef.current = null;
+            }
 
             if (!response.ok) {
               const errData = await response.json().catch(() => ({}));
@@ -1253,7 +1293,7 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
           // === New cancellation check ===
           if (currentSynthesisRef.current !== text) {
             console.log(`🛑 Synthesis stopped after generate() – discarding chunk ${i + 1}`);
-            return; // Exit early, abandon this synthesis entirely
+            return { ok: true, completed: false, cancelled: true, chunksGenerated: allAudioChunks.length, totalChunks: chunks.length };
           }
 
           if (!audioData || audioData.length === 0) {
@@ -1277,7 +1317,9 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
 
           // Add to streaming buffer for immediate playback
           streamingAudioRef.current.push(audioData!);
-          const currentStreamDuration = (totalSamples / sampleRate);
+          lastSynthesizedSampleRateRef.current = sampleRate;
+          const baseDuration = options?.initialSynthesizedDuration ?? 0;
+          const currentStreamDuration = baseDuration + (totalSamples / sampleRate);
           setSynthesizedDuration(currentStreamDuration);
 
           // --- New: Use precise word timings if available ---
@@ -1329,11 +1371,14 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
           console.log(`✅ Chunk ${i + 1} processed: ${audioData!.length} samples (${currentStreamDuration.toFixed(1)}s total)`);
 
           // Start streaming playback after first chunk
-          if (i === 0) {
+          if (i === startChunkIndex) {
             setCanScrub(true);
             setIsStreaming(true);
-            console.log('🎵 First chunk is ready. Setting trigger for playback.');
-            setIsFirstChunkReady(true);
+            const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+            if (!isIOS && !hasAutoStartedStreamingRef.current) {
+              hasAutoStartedStreamingRef.current = true;
+              startStreamingFromPosition(0);
+            }
           }
         }
 
@@ -1455,6 +1500,10 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
       setSynthesisComplete(true);
 
     } catch (error: any) {
+      if (error?.name === 'AbortError') {
+        console.log('🛑 Cloud fetch aborted');
+        return { ok: true, completed: false, cancelled: true, chunksGenerated: 0, totalChunks: 0 };
+      }
       console.error('Synthesis error:', error);
       setIsPlaying(false);
       currentSynthesisRef.current = null;
@@ -1485,29 +1534,17 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
         } catch (wasmError: any) {
           onError({ title: 'Synthesis Error', message: `GPU and CPU both failed: ${wasmError.message}` });
         }
-        return;
+        return { ok: false, error: new Error('WebGPU produced corrupt audio; switched to WASM. Please retry synthesis.') };
       }
 
       onError({
         title: 'Synthesis Error',
         message: `Failed to synthesize text: ${error.message}`
       });
+      return { ok: false, error: error instanceof Error ? error : new Error(String(error)) };
     }
+    return { ok: true, completed: true };
   }, [isReady, onError, chunkText, currentDevice]);
-
-  // This effect will trigger playback once the UI is ready after the first chunk,
-  // so that both desktop and mobile behave the same after pressing Listen.
-  useEffect(() => {
-    if (isFirstChunkReady) {
-      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-      if (isIOS) {
-        // iOS blocks autoplay without direct user gesture — skip streaming, wait for tap
-        return;
-      }
-      console.log('▶️ UI is ready, starting playback.');
-      startStreamingFromPosition(0);
-    }
-  }, [isFirstChunkReady, startStreamingFromPosition]);
 
   // Stop current synthesis/playback
   const stop = useCallback(() => {
@@ -1516,6 +1553,12 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
 
     // Stop current synthesis
     currentSynthesisRef.current = null;
+
+    // Abort any in-flight cloud request (serverless chunk fetch)
+    if (cloudAbortControllerRef.current) {
+      try { cloudAbortControllerRef.current.abort(); } catch { }
+      cloudAbortControllerRef.current = null;
+    }
 
     // Stop continuous playback
     isPlaybackActiveRef.current = false;
@@ -1574,8 +1617,7 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
     setDurationBoth(0);
     setCanScrub(false);
 
-    // Completely abort any pending first-chunk autoplay triggers
-    setIsFirstChunkReady(false);
+    hasAutoStartedStreamingRef.current = false;
     // Reset word highlighting
     setWordTimings([]);
     setCurrentWordIndex(-1);
@@ -1924,6 +1966,29 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
     return new Blob([view], { type: 'audio/wav' });
   }, [completeAudioBufferRef, completeAudioSampleRateRef]);
 
+  const getPartialAudioBlob = useCallback((): Blob | null => {
+    const chunks = streamingAudioRef.current;
+    if (!chunks.length) return null;
+    const sampleRate = lastSynthesizedSampleRateRef.current || sampleRateRef.current || 24000;
+    const total = chunks.reduce((sum, c) => sum + c.length, 0);
+    if (total <= 0) return null;
+    const combined = new Float32Array(total);
+    let off = 0;
+    for (const c of chunks) {
+      combined.set(c, off);
+      off += c.length;
+    }
+    return floatToWav(combined, sampleRate);
+  }, []);
+
+  const getSynthesisChunkStats = useCallback(() => {
+    return {
+      chunksGenerated: streamingAudioRef.current.length,
+      totalChunks: lastChunkListRef.current.length,
+      text: lastSynthesisTextRef.current,
+    };
+  }, []);
+
   // Load audio WAV blob back into player (for saved books)
   const loadAudioFromBlob = useCallback(async (blob: Blob, savedWordTimings?: Array<{ word: string, start: number, end: number }>) => {
     if (!blob) return;
@@ -2082,6 +2147,8 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
     synthesisComplete,
     // Utility: get combined audio buffer as WAV Blob
     getAudioBlob,
+    getPartialAudioBlob,
+    getSynthesisChunkStats,
     loadAudioFromBlob,
     seek,
     playbackRate,

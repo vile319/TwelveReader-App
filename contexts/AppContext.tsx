@@ -12,6 +12,13 @@ import JSZip from 'jszip';
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
+const hashText = async (text: string): Promise<string> => {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(text);
+  const digest = await crypto.subtle.digest('SHA-256', data);
+  return Array.from(new Uint8Array(digest)).map((b) => b.toString(16).padStart(2, '0')).join('');
+};
+
 export const useAppContext = () => {
   const context = useContext(AppContext);
   if (!context) {
@@ -101,6 +108,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
   // Generation progress (0-100)
   const [generationProgress, setGenerationProgress] = useState<number>(0);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [generationCheckpoint, setGenerationCheckpoint] = useState<{ setId: string; resumeChunkIndex: number; totalChunks: number } | null>(null);
 
   // Modal states
   const ONBOARDING_KEY = `${BRAND_NAME.toLowerCase()}-onboarding-completed`;
@@ -252,12 +260,94 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
   };
 
   const cancelGeneration = () => {
+    // Phase 2: if we already have generated some audio, persist it as a partial checkpoint.
+    (async () => {
+      try {
+        if (!currentSetId) return;
+        const blob = tts.getPartialAudioBlob();
+        if (!blob) return;
+
+        const cleaned = inputText.trim();
+        if (!cleaned) return;
+
+        // Save partial audio + current timings (if any)
+        await localDB.saveAudioBlob(currentSetId, blob);
+        if (tts.wordTimings && tts.wordTimings.length > 0) {
+          await localDB.saveTimings(currentSetId, tts.wordTimings);
+        }
+
+        const stats = tts.getSynthesisChunkStats();
+        const textHash = await hashText(cleaned);
+        await localDB.saveGenerationCheckpoint(currentSetId, {
+          setId: currentSetId,
+          resumeChunkIndex: stats.chunksGenerated,
+          totalChunks: stats.totalChunks,
+          isPartialGeneration: true,
+          textHash
+        });
+
+        // Mark the active set as having partial audio for UI badge
+        setSavedTextSets((prev: TextSet[]) =>
+          prev.map((s) => (s.id === currentSetId ? { ...s, hasPartialAudio: true } : s))
+        );
+      } catch (e) {
+        // Don't block cancellation if persistence fails (quota, IDB errors, etc.)
+        console.warn('Failed to save partial generation checkpoint:', e);
+      }
+    })();
+
     // Cancel synthesis/playback without forcing a mode switch back to editing.
     // This is intentionally lighter than handleStopReading().
     tts.stop();
     setGenerationProgress(0);
     setIsGenerating(false);
     setToast({ title: 'Cancelled', message: 'Generation cancelled.', type: 'info' });
+  };
+
+  const continueGenerationFromCheckpoint = () => {
+    (async () => {
+      if (!currentSetId || !generationCheckpoint || generationCheckpoint.setId !== currentSetId) return;
+      const set = savedTextSets.find((s) => s.id === currentSetId);
+      if (!set) return;
+
+      const cleaned = set.text.trim();
+      if (!cleaned) return;
+
+      // Re-load partial audio into the player
+      const blob = await localDB.getAudioBlob(currentSetId);
+      const timings = await localDB.getTimings(currentSetId);
+      if (!blob) return;
+
+      await tts.loadAudioFromBlob(blob, timings || undefined);
+
+      setIsReading(true);
+      setCurrentSentence(cleaned);
+      setGenerationProgress(Math.round((generationCheckpoint.resumeChunkIndex / Math.max(1, generationCheckpoint.totalChunks)) * 90));
+      setIsGenerating(true);
+
+      const result = await tts.speak(cleaned, selectedVoice, (p: number) => setGenerationProgress(Math.round(p)), {
+        startChunkIndex: generationCheckpoint.resumeChunkIndex,
+        preserveStreamingSeed: true,
+        seedWordTimings: timings || undefined,
+        initialSynthesizedDuration: (Array.isArray(timings) && timings.length > 0)
+          ? timings[timings.length - 1].end
+          : 0
+      });
+
+      if (result?.ok && result.completed) {
+        await localDB.deleteGenerationCheckpoint(currentSetId);
+        setGenerationCheckpoint(null);
+        setSavedTextSets((prev: TextSet[]) =>
+          prev.map((s) => (s.id === currentSetId ? { ...s, hasPartialAudio: false, audioGenerated: true } : s))
+        );
+        setGenerationProgress(100);
+      }
+
+      setIsGenerating(false);
+    })().catch((e) => {
+      console.warn('Continue generation failed:', e);
+      setIsGenerating(false);
+    });
   };
 
   // --- New: Reset playback when input text changes directly ---
@@ -698,6 +788,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
 
     updateInputText(set.text);
     setCurrentSetId(id);
+    setGenerationCheckpoint(null);
 
     // Attempt to load the audio blob from IndexedDB
     try {
@@ -735,6 +826,22 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       }
     } catch (e) {
       console.error('Failed to load audio blob:', e);
+    }
+
+    // Detect partial-generation checkpoint and surface it to UI
+    try {
+      const checkpoint = await localDB.getGenerationCheckpoint(id);
+      if (checkpoint?.isPartialGeneration) {
+        const currentHash = await hashText(set.text.trim());
+        if (checkpoint.textHash === currentHash) {
+          setGenerationCheckpoint({ setId: id, resumeChunkIndex: checkpoint.resumeChunkIndex, totalChunks: checkpoint.totalChunks });
+        } else {
+          await localDB.deleteGenerationCheckpoint(id);
+          setSavedTextSets((prev: TextSet[]) => prev.map((s) => (s.id === id ? { ...s, hasPartialAudio: false } : s)));
+        }
+      }
+    } catch (e) {
+      console.warn('Failed to read generation checkpoint:', e);
     }
 
     // If we have stored progress, seek after generation is ready
@@ -1094,6 +1201,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     readingProgress,
     generationProgress,
     isGenerating,
+    generationCheckpoint,
   };
 
   // Context value
@@ -1106,6 +1214,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       handleStartReading,
       handleStopReading,
       cancelGeneration,
+      continueGenerationFromCheckpoint,
       handleWordClick,
       handleDownloadAudio,
       handleAcceptModelDownload,

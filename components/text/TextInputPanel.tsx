@@ -71,6 +71,22 @@ const TextInputPanel: FC = () => {
         onScroll={(e: React.UIEvent<HTMLDivElement>) => actions.updateScrollPosition((e.currentTarget).scrollTop)}
         className="flex-1 w-full flex flex-col min-h-[40vh] relative"
       >
+        {/* Continue Generation Prompt */}
+        {state.generationCheckpoint && state.generationCheckpoint.setId === state.currentSetId && !state.isReading && (
+          <div className="absolute top-24 left-1/2 -translate-x-1/2 z-10 bg-amber-500 text-slate-900 px-5 py-3 rounded-sm shadow-2xl flex items-center gap-4 animate-in slide-in-from-top-4 fade-in duration-300">
+            <span className="text-sm font-bold uppercase tracking-wide">
+              Continue generating ({Math.round((state.generationCheckpoint.resumeChunkIndex / Math.max(1, state.generationCheckpoint.totalChunks)) * 100)}%)?
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={actions.continueGenerationFromCheckpoint}
+                className="text-xs bg-slate-900 text-amber-200 hover:bg-black uppercase font-bold px-3 py-1.5 rounded-sm transition-colors"
+              >
+                Continue
+              </button>
+            </div>
+          </div>
+        )}
         {/* Resume Prompt Toast */}
         {resumePrompt && resumePrompt.id === state.currentSetId && !state.isReading && (
           <div className="absolute top-8 left-1/2 -translate-x-1/2 z-10 bg-blue-600 text-white px-5 py-3 rounded-sm shadow-2xl flex items-center gap-4 animate-in slide-in-from-top-4 fade-in duration-300">
@@ -246,6 +262,11 @@ const TextInputPanel: FC = () => {
                     <div className="flex items-center gap-3 overflow-hidden">
                       <div className={cn("w-2 h-2 rounded-sm flex-shrink-0", set.audioGenerated ? "bg-emerald-500" : "bg-slate-600")} />
                       <span className="text-sm font-semibold text-slate-200 truncate pr-8">{set.title}</span>
+                      {set.hasPartialAudio && !set.audioGenerated && (
+                        <span className="px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider bg-amber-500/15 text-amber-400 border border-amber-500/30 rounded-sm">
+                          Partial
+                        </span>
+                      )}
                     </div>
                     <button
                       onClick={(e) => { e.stopPropagation(); actions.deleteTextSet(set.id); }}

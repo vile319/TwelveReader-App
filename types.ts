@@ -62,6 +62,8 @@ export interface TextSet {
   lastPosition?: number; // seconds into the audio where the user left off
   /** Indicates if audio has been generated for this text set */
   audioGenerated?: boolean;
+  /** Indicates some (but not all) audio was generated and saved */
+  hasPartialAudio?: boolean;
   wordTimings?: WordTiming[];
 }
 
@@ -118,6 +120,9 @@ export interface AppState {
 
   /** True while the TTS models/APIs are actively creating chunks */
   isGenerating: boolean;
+
+  /** Partial-generation checkpoint loaded for current set (if any) */
+  generationCheckpoint: { setId: string; resumeChunkIndex: number; totalChunks: number } | null;
 }
 
 export interface AppContextType {
@@ -132,6 +137,7 @@ export interface AppContextType {
     handleStartReading: (text?: string) => void;
     handleStopReading: () => void;
     cancelGeneration: () => void;
+    continueGenerationFromCheckpoint: () => void;
     handleWordClick: (time: number) => void;
     handleDownloadAudio: () => void;
 
@@ -200,7 +206,7 @@ export interface AppContextType {
   // TTS hook data
   tts: {
     voices: Voice[];
-    speak: (text: string, voice: string) => Promise<void>;
+    speak: (text: string, voice: string, onProgress?: (progress: number) => void) => Promise<any>;
     stop: () => void;
     isPlaying: boolean;
     isLoading: boolean;
@@ -216,6 +222,8 @@ export interface AppContextType {
     currentWordIndex: number;
     synthesisComplete: boolean;
     getAudioBlob: () => Blob | null;
+    getPartialAudioBlob: () => Blob | null;
+    getSynthesisChunkStats: () => { chunksGenerated: number; totalChunks: number; text: string };
     loadAudioFromBlob: (blob: Blob, wordTimings?: WordTiming[]) => Promise<void>;
     isReady: boolean;
     setPlaybackRate: (rate: number) => void;
