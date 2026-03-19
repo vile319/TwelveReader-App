@@ -17,7 +17,7 @@ export const inferPreferredDtype = (selectedModel?: string): ModelDtype => {
 export const getDefaultModelForDevice = (device: PreferredDevice): { modelId: string; dtype: ModelDtype } => {
   switch (device) {
     case 'webgpu':
-      return { modelId: 'kokoro-82m-fp16', dtype: 'fp16' };
+      return { modelId: 'kokoro-82m-fp32', dtype: 'fp32' };
     case 'wasm':
     case 'cpu':
       return { modelId: 'kokoro-82m-q8', dtype: 'q8' };
@@ -41,9 +41,9 @@ export const getCompatibleDtypeForDevice = (
   const dtype = requestedDtype ?? inferPreferredDtype(selectedModel);
 
   if (device === 'webgpu') {
-    // fp16 is the correct WebGPU variant; fp32 produces wrong-scale output on WebGPU ONNX backend
-    if (dtype === 'fp32') return 'fp16';
-    return WEBGPU_DTYPES.includes(dtype) ? dtype : 'fp16';
+    // fp32 is the working WebGPU variant; fp16 produces NaN/invalid output on WebGPU ONNX backend
+    if (dtype === 'fp16') return 'fp32';
+    return WEBGPU_DTYPES.includes(dtype) ? dtype : 'fp32';
   }
 
   if (device === 'wasm') {

@@ -1287,7 +1287,6 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
             continue; // Skip this chunk and continue
           }
 
-
           // Normalize first (handles WebGPU fp32 scale issues where peak can be in the millions)
           audioData = normalizeAudioData(audioData!);
 
