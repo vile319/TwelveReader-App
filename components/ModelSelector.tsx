@@ -1,8 +1,6 @@
 import React, { type FC, useState, useEffect, type ChangeEvent, useCallback } from 'react';
 import { modelManager } from '../utils/modelManager';
-import { useModelManager } from '../hooks/useModelManager';
 import { detectGpuCapabilities } from '../utils/gpuCapabilities';
-import { getDefaultModelForDevice, type ModelDtype } from '../utils/modelRuntime';
 
 void React;
 
@@ -13,7 +11,7 @@ export interface ModelConfig {
   size: string;
   quality: 'fast' | 'balanced' | 'high';
   url: string;
-  dtype: 'fp32' | 'fp16' | 'q8' | 'q4' | 'q4f16';
+  dtype: 'fp32' | 'q8';
   device: 'webgpu' | 'wasm' | 'cpu' | 'serverless';
   filename: string;
   isDefault?: boolean;
@@ -22,14 +20,9 @@ export interface ModelConfig {
 }
 
 interface ModelSelectorProps {
-  selectedModel: string;
-  onModelChange: (modelId: string) => void;
   preferredDevice?: 'webgpu' | 'wasm' | 'cpu' | 'serverless';
   disabled?: boolean;
   onDeviceChange?: (device: 'webgpu' | 'wasm' | 'cpu' | 'serverless') => void;
-  onDtypeChange?: (dtype: 'fp32' | 'fp16' | 'q8' | 'q4' | 'q4f16') => void;
-  modelKeepLocal?: Record<string, boolean>;
-  onModelKeepLocalChange?: (modelId: string, keepLocal: boolean) => void;
 }
 
 // Available models configuration with accurate sizes and filenames from Hugging Face
@@ -48,18 +41,6 @@ const AVAILABLE_MODELS: ModelConfig[] = [
     recommended: true
   },
   {
-    id: 'kokoro-82m-fp16',
-    name: 'Voice Engine (FP16)',
-    description: 'Half precision – high quality (GPU-optimized, falls back to CPU if needed)',
-    size: '156MB',
-    quality: 'high',
-    url: 'onnx-community/Kokoro-82M-v1.0-ONNX',
-    dtype: 'fp16',
-    device: 'webgpu',
-    filename: 'model_fp16.onnx',
-    recommended: true
-  },
-  {
     id: 'kokoro-82m-q8',
     name: 'Voice Engine (Q8)',
     description: '8-bit quantised – balanced quality and speed',
@@ -70,28 +51,6 @@ const AVAILABLE_MODELS: ModelConfig[] = [
     device: 'wasm',
     filename: 'model_q8f16.onnx',
     recommended: true
-  },
-  {
-    id: 'kokoro-82m-q4',
-    name: 'Voice Engine (Q4)',
-    description: '4-bit quantised – fastest, works on all devices',
-    size: '290MB',
-    quality: 'fast',
-    url: 'onnx-community/Kokoro-82M-v1.0-ONNX',
-    dtype: 'q4',
-    device: 'wasm',
-    filename: 'model_q4.onnx'
-  },
-  {
-    id: 'kokoro-82m-q4f16',
-    name: 'Voice Engine (Q4F16)',
-    description: '4-bit with FP16 fallback – good balance',
-    size: '147MB',
-    quality: 'fast',
-    url: 'onnx-community/Kokoro-82M-v1.0-ONNX',
-    dtype: 'q4f16',
-    device: 'wasm',
-    filename: 'model_q4f16.onnx'
   },
 ];
 
@@ -114,14 +73,9 @@ export const getRecommendedModels = (device: 'webgpu' | 'wasm' | 'cpu' | 'server
 };
 
 const ModelSelector: FC<ModelSelectorProps> = ({
-  selectedModel,
-  onModelChange,
   preferredDevice: preferredDeviceProp,
   disabled = false,
-  onDeviceChange,
-  onDtypeChange,
-  modelKeepLocal = {},
-  onModelKeepLocalChange
+  onDeviceChange
 }: ModelSelectorProps) => {
   const [preferredDevice, setPreferredDevice] = useState<'webgpu' | 'wasm' | 'cpu' | 'serverless'>(
     () => {
@@ -139,8 +93,6 @@ const ModelSelector: FC<ModelSelectorProps> = ({
   const [gpuAvailable, setGpuAvailable] = useState(false);
   const [gpuCheckComplete, setGpuCheckComplete] = useState(false);
   const [gpuUnavailableReason, setGpuUnavailableReason] = useState<string | null>(null);
-  const { downloadedModels: downloadedModelIds } = useModelManager();
-  const downloadedModels = new Set(downloadedModelIds);
 
   // Check GPU availability on mount
   useEffect(() => {
@@ -180,90 +132,17 @@ const ModelSelector: FC<ModelSelectorProps> = ({
         ? 'serverless'
         : (preferences.preferredDevice as 'webgpu' | 'wasm' | 'cpu' | 'serverless')
     );
-
-    // Use the saved model if exists
-    if (preferences.selectedModel) {
-      onModelChange(preferences.selectedModel);
-    }
-  }, [onModelChange]);
-
-  // Save preferences using model manager
-  const savePreferences = useCallback(
-    (
-      newSelectedModel: string,
-      newPreferredDevice: 'webgpu' | 'wasm' | 'cpu' | 'serverless',
-      newPreferredDtype: ModelDtype
-    ) => {
-      modelManager.savePreferences({
-        selectedModel: newSelectedModel,
-        preferredDevice: newPreferredDevice,
-        preferredDtype: newPreferredDtype
-      });
-    },
-    []
-  );
-
-  const getBestModelForDevice = useCallback((device: string): ModelConfig => {
-    switch (device) {
-      case 'webgpu':
-        return AVAILABLE_MODELS.find(m => m.dtype === 'fp32') || AVAILABLE_MODELS[0];
-      case 'wasm':
-        return AVAILABLE_MODELS.find(m => m.dtype === 'q8') || AVAILABLE_MODELS[2];
-      case 'cpu':
-        return AVAILABLE_MODELS.find(m => m.dtype === 'q8') || AVAILABLE_MODELS[2];
-      case 'serverless':
-        return AVAILABLE_MODELS.find(m => m.dtype === 'fp32') || AVAILABLE_MODELS[0];
-      default:
-        return AVAILABLE_MODELS[0];
-    }
   }, []);
 
   const handleDeviceChange = useCallback(
     (e: ChangeEvent<HTMLSelectElement>) => {
       const device = e.target.value as 'webgpu' | 'wasm' | 'cpu' | 'serverless';
       setPreferredDevice(device);
-
-      const bestModel = getBestModelForDevice(device);
-      onModelChange(bestModel.id);
-      onDtypeChange?.(bestModel.dtype);
-
-      savePreferences(bestModel.id, device, bestModel.dtype);
+      modelManager.savePreferences({ preferredDevice: device });
       onDeviceChange?.(device);
     },
-    [getBestModelForDevice, onDeviceChange, onDtypeChange, onModelChange, savePreferences]
+    [onDeviceChange]
   );
-
-  const handleModelChange = useCallback(
-    (modelId: string) => {
-      onModelChange(modelId);
-
-      const model = AVAILABLE_MODELS.find(m => m.id === modelId);
-      if (model) {
-        onDtypeChange?.(model.dtype);
-
-        let nextDevice = effectiveDevice;
-
-        // When a local model is picked, switch the local runtime to a compatible device family
-        // so the saved UI choice matches the actual runtime the hook will use.
-        if (effectiveDevice !== 'serverless') {
-          nextDevice = model.device === 'webgpu' ? 'webgpu' : (effectiveDevice === 'cpu' ? 'cpu' : 'wasm');
-          onDeviceChange?.(nextDevice);
-        }
-
-        savePreferences(modelId, nextDevice, model.dtype);
-      }
-    },
-    [onDeviceChange, onDtypeChange, onModelChange, effectiveDevice, savePreferences]
-  );
-
-  const getQualityBadge = useCallback((quality: string) => {
-    switch (quality) {
-      case 'fast': return { label: 'fast', cls: 'text-green-400 bg-green-400/10 border-green-400/30' };
-      case 'balanced': return { label: 'balanced', cls: 'text-yellow-400 bg-yellow-400/10 border-yellow-400/30' };
-      case 'high': return { label: 'high', cls: 'text-blue-400 bg-blue-400/10 border-blue-400/30' };
-      default: return { label: quality, cls: 'text-slate-400' };
-    }
-  }, []);
 
   // After the useEffect for loading preferences, add this new useEffect for device fallback
   useEffect(() => {
@@ -273,21 +152,14 @@ const ModelSelector: FC<ModelSelectorProps> = ({
 
       setPreferredDevice(newDevice);
 
-      const bestModel = getDefaultModelForDevice(newDevice);
-      onModelChange(bestModel.modelId);
-      onDtypeChange?.(bestModel.dtype);
-
-      savePreferences(bestModel.modelId, newDevice, bestModel.dtype);
+      modelManager.savePreferences({ preferredDevice: newDevice });
       onDeviceChange?.(newDevice);
     }
   }, [
     gpuCheckComplete,
     gpuAvailable,
     effectiveDevice,
-    onDeviceChange,
-    onDtypeChange,
-    onModelChange,
-    savePreferences
+    onDeviceChange
   ]);
 
   const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
@@ -337,79 +209,6 @@ const ModelSelector: FC<ModelSelectorProps> = ({
             Local mode works offline but may crash on iPhone. Use cloud for best experience.
           </p>
         )}
-      </div>
-
-      {/* All Models — flat list, always visible */}
-      <div>
-        <h4 className="text-xs font-semibold text-slate-400 mb-2 uppercase tracking-wide">
-          Models ({AVAILABLE_MODELS.length})
-        </h4>
-        <div className="space-y-2">
-          {AVAILABLE_MODELS.map((model) => {
-            const isSelected = selectedModel === model.id;
-            const isDownloaded = downloadedModels.has(model.id);
-            const { label: qLabel, cls: qCls } = getQualityBadge(model.quality);
-            return (
-              <div
-                key={model.id}
-                className={`p-3 rounded-sm border cursor-pointer transition-all duration-200 ${isSelected
-                  ? 'border-blue-500 bg-blue-500/10'
-                  : 'border-slate-700 bg-[#111827] hover:border-slate-500'
-                  } ${disabled ? 'cursor-not-allowed opacity-50' : ''}`}
-                onClick={() => !disabled && handleModelChange(model.id)}
-              >
-                <div className="flex items-center justify-between gap-2">
-                  {/* Left: name + badges */}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-1.5 flex-wrap mb-0.5">
-                      <span className="font-medium text-slate-200 text-sm">{model.name}</span>
-                      {model.isDefault && (
-                        <span className="px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider bg-blue-600 text-white rounded-sm">Default</span>
-                      )}
-                      {model.recommended && (
-                        <span className="px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded-sm">⭐ rec</span>
-                      )}
-                      <span className={`px-1.5 py-0.5 text-[10px] uppercase font-bold tracking-wider border rounded-sm ${qCls}`}>{qLabel}</span>
-                    </div>
-                    <p className="text-xs text-slate-400 mb-1.5 leading-snug">{model.description}</p>
-                    {/* Stats row */}
-                    <div className="flex items-center gap-3 text-xs">
-                      <span className="text-slate-500">{model.size}</span>
-                      {/* Download status — always shown */}
-                      {isDownloaded ? (
-                        <span className="text-emerald-400 font-medium">✓ Cached</span>
-                      ) : (
-                        <span className="text-slate-600">○ Not cached</span>
-                      )}
-                    </div>
-                    {/* Keep local toggle */}
-                    <label className="flex items-center gap-1.5 mt-1.5 text-xs text-slate-400 cursor-pointer" onClick={e => e.stopPropagation()}>
-                      <input
-                        type="checkbox"
-                        checked={modelKeepLocal[model.id] ?? false}
-                        onChange={(e) => onModelKeepLocalChange?.(model.id, e.target.checked)}
-                        disabled={disabled}
-                        className="w-3 h-3 text-blue-600 bg-slate-700 border-slate-600 rounded"
-                      />
-                      Keep cached between refreshes
-                    </label>
-                  </div>
-                  {/* Right: radio */}
-                  <input
-                    type="radio"
-                    name="model-selection"
-                    value={model.id}
-                    checked={isSelected}
-                    onChange={() => !disabled && handleModelChange(model.id)}
-                    disabled={disabled}
-                    className="w-4 h-4 text-blue-600 bg-slate-700 border-slate-600 shrink-0"
-                    onClick={e => e.stopPropagation()}
-                  />
-                </div>
-              </div>
-            );
-          })}
-        </div>
       </div>
     </div>
   );

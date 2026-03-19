@@ -263,14 +263,9 @@ const Sidebar: FC = () => {
                 </p>
               </div>
               <ModelSelector
-                selectedModel={state.model.selectedModel}
-                onModelChange={actions.setSelectedModel}
                 preferredDevice={state.model.preferredDevice}
                 onDeviceChange={actions.setPreferredDevice}
-                onDtypeChange={actions.setPreferredDtype}
                 disabled={state.audio.isLoading}
-                modelKeepLocal={state.model.modelKeepLocal}
-                onModelKeepLocalChange={actions.setModelKeepLocal}
               />
             </div>
 

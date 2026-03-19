@@ -1,12 +1,12 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import useKokoroWebWorkerTts from '../hooks/useKokoroWebWorkerTts';
 import { BRAND_NAME } from '../utils/branding';
-import { AppContextType, AppState, AppToast, SampleText, TextSet } from '../types';
+import { AppContextType, AppState, AppToast, SampleText, TextSet } from '../types.ts';
 import { driveSync } from '../utils/GoogleDriveSync';
 import { localDB } from '../utils/localDatabase';
 import { modelManager } from '../utils/modelManager';
 import { detectGpuCapabilities } from '../utils/gpuCapabilities';
-import { getDefaultModelForDevice, inferPreferredDtype } from '../utils/modelRuntime';
+import { getDefaultModelForDevice } from '../utils/modelRuntime';
 import { useGoogleLogin } from '@react-oauth/google';
 import JSZip from 'jszip';
 
@@ -76,26 +76,19 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
   const [showModelWarning, setShowModelWarning] = useState(false);
   const [modelAccepted, setModelAccepted] = useState(false);
 
-  // Model selection state - initialized from model manager
-  const [selectedModel, setSelectedModel] = useState(() => {
-    const preferences = modelManager.getPreferences();
-    return preferences.selectedModel;
-  });
+  // Processing mode selection state - initialized from model manager
   const [preferredDevice, setPreferredDevice] = useState<'webgpu' | 'wasm' | 'cpu' | 'serverless'>(() => {
     const preferences = modelManager.getPreferences();
     return preferences.preferredDevice === 'auto' ? 'serverless' : (preferences.preferredDevice as 'webgpu' | 'wasm' | 'cpu' | 'serverless');
-  });
-  const [preferredDtype, setPreferredDtype] = useState<'fp32' | 'fp16' | 'q8' | 'q4' | 'q4f16'>(() => {
-    const preferences = modelManager.getPreferences();
-    return preferences.preferredDtype ?? inferPreferredDtype(preferences.selectedModel);
   });
   const [autoSelect, setAutoSelect] = useState(false);
   const [keepLocal, setKeepLocal] = useState(true);
   const [detectedHardwareLabel, setDetectedHardwareLabel] = useState('Detecting...');
   const [detectedHardwareReason, setDetectedHardwareReason] = useState<string | null>(null);
-  const [modelKeepLocal, setModelKeepLocal] = useState<Record<string, boolean>>(() => {
-    return modelManager.getAllKeepLocalSettings();
-  });
+
+  const derivedModelConfig = getDefaultModelForDevice(preferredDevice);
+  const selectedModel = derivedModelConfig.modelId;
+  const preferredDtype = derivedModelConfig.dtype;
 
   // Store pending read request during model download
   const [pendingRead, setPendingRead] = useState<{ text: string; voice: string } | null>(null);
@@ -472,16 +465,9 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
   };
 
   const handleCancelModelDownload = () => {
-    const cloudDefaults = getDefaultModelForDevice('serverless');
     setShowModelWarning(false);
     setPreferredDevice('serverless');
-    setSelectedModel(cloudDefaults.modelId);
-    setPreferredDtype(cloudDefaults.dtype);
-    modelManager.savePreferences({
-      preferredDevice: 'serverless',
-      selectedModel: cloudDefaults.modelId,
-      preferredDtype: cloudDefaults.dtype
-    });
+    modelManager.savePreferences({ preferredDevice: 'serverless' });
   };
 
   const handleDownloadAudio = () => {
@@ -512,11 +498,6 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       setShowModelWarning(true);
     }
   }, [modelAccepted]);
-
-  const handleDtypeChange = useCallback((dtype: 'fp32' | 'fp16' | 'q8' | 'q4' | 'q4f16') => {
-    setPreferredDtype(dtype);
-    modelManager.savePreferences({ preferredDtype: dtype });
-  }, []);
 
   const handleCloseOnboarding = () => {
     setShowOnboarding(false);
@@ -577,22 +558,6 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     loadDetectedHardware();
   }, []);
 
-  // Init default device automatically based on hardware support
-  useEffect(() => {
-    const preferences = modelManager.getPreferences();
-    const inferredDtype = preferences.preferredDtype ?? inferPreferredDtype(preferences.selectedModel);
-
-    if (inferredDtype !== preferredDtype) {
-      setPreferredDtype(inferredDtype);
-    }
-
-    if (preferences.preferredDtype !== inferredDtype) {
-      modelManager.savePreferences({ preferredDtype: inferredDtype });
-    }
-    // Intentionally run once to repair older saved preferences.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
   useEffect(() => {
     const initDevice = async () => {
       const preferences = modelManager.getPreferences();
@@ -623,15 +588,8 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
           console.log(`📡 Offline detected. Defaulting to local CPU mode (wasm). ${gpuCaps.localGpuUnavailableReason ?? 'Local GPU is unavailable.'}`);
         }
 
-        const defaultModelConfig = getDefaultModelForDevice(defaultDevice);
         setPreferredDevice(defaultDevice);
-        setSelectedModel(defaultModelConfig.modelId);
-        setPreferredDtype(defaultModelConfig.dtype);
-        modelManager.savePreferences({
-          preferredDevice: defaultDevice,
-          selectedModel: defaultModelConfig.modelId,
-          preferredDtype: defaultModelConfig.dtype
-        });
+        modelManager.savePreferences({ preferredDevice: defaultDevice });
       }
     };
     initDevice();
@@ -774,7 +732,6 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       }, 500);
       return () => clearTimeout(timer);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tts.synthesisComplete]);
 
   const loadTextSet = async (id: string) => {
@@ -988,7 +945,6 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     if (localStorage.getItem('twelvereader-drive-linked') === 'true') {
       loginToDriveSilent();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const linkGoogleDrive = () => {
@@ -1180,7 +1136,6 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       preferredDtype,
       autoSelect,
       keepLocal,
-      modelKeepLocal,
     },
     selectedVoice,
     toast,
@@ -1229,15 +1184,9 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
           handleStopReading();
         }
       },
-      setSelectedModel,
       setPreferredDevice: handleDeviceChange,
-      setPreferredDtype: handleDtypeChange,
       setAutoSelect,
       setKeepLocal,
-      setModelKeepLocal: (modelId: string, keepLocal: boolean) => {
-        setModelKeepLocal((prev: Record<string, boolean>) => ({ ...prev, [modelId]: keepLocal }));
-        modelManager.setModelKeepLocal(modelId, keepLocal);
-      },
       setToast,
       setIsSeekingHover,
       setHoverTime,

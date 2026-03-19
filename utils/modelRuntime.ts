@@ -1,16 +1,13 @@
-export type ModelDtype = 'fp32' | 'fp16' | 'q8' | 'q4' | 'q4f16';
+export type ModelDtype = 'fp32' | 'q8';
 export type PreferredDevice = 'webgpu' | 'wasm' | 'cpu' | 'serverless';
 export type RuntimeDevice = 'webgpu' | 'wasm' | 'serverless';
 
-const WEBGPU_DTYPES: ModelDtype[] = ['fp32', 'fp16'];
-const WASM_DTYPES: ModelDtype[] = ['q8', 'q4', 'q4f16', 'fp32'];
+const WEBGPU_DTYPES: ModelDtype[] = ['fp32'];
+const WASM_DTYPES: ModelDtype[] = ['q8'];
 
 export const inferPreferredDtype = (selectedModel?: string): ModelDtype => {
   if (!selectedModel) return 'fp32';
-  if (selectedModel.includes('q4f16')) return 'q4f16';
-  if (selectedModel.includes('q4')) return 'q4';
   if (selectedModel.includes('q8')) return 'q8';
-  if (selectedModel.includes('fp16')) return 'fp16';
   return 'fp32';
 };
 
@@ -23,7 +20,7 @@ export const getDefaultModelForDevice = (device: PreferredDevice): { modelId: st
       return { modelId: 'kokoro-82m-q8', dtype: 'q8' };
     case 'serverless':
     default:
-      return { modelId: 'kokoro-82m-fp32', dtype: 'fp32' };
+      return { modelId: 'kokoro-82m-q8', dtype: 'q8' };
   }
 };
 
@@ -41,8 +38,6 @@ export const getCompatibleDtypeForDevice = (
   const dtype = requestedDtype ?? inferPreferredDtype(selectedModel);
 
   if (device === 'webgpu') {
-    // fp32 is the working WebGPU variant; fp16 produces NaN/invalid output on WebGPU ONNX backend
-    if (dtype === 'fp16') return 'fp32';
     return WEBGPU_DTYPES.includes(dtype) ? dtype : 'fp32';
   }
 
@@ -50,7 +45,7 @@ export const getCompatibleDtypeForDevice = (
     return WASM_DTYPES.includes(dtype) ? dtype : 'q8';
   }
 
-  return 'fp32';
+  return 'q8';
 };
 
 export const isLocalDevice = (device?: PreferredDevice | RuntimeDevice | null): boolean =>

@@ -83,8 +83,8 @@ interface UseKokoroWebWorkerTtsProps {
   onError: (error: { title: string; message: string }) => void;
   enabled?: boolean; // if false, delay model initialization
   selectedModel?: string; // New: selected model ID
-  preferredDevice?: 'webgpu' | 'wasm' | 'cpu' | 'serverless'; // New: preferred device
-  preferredDtype?: 'fp32' | 'fp16' | 'q8' | 'q4' | 'q4f16'; // New: preferred dtype
+  preferredDevice?: PreferredDevice; // New: preferred device
+  preferredDtype?: ModelDtype; // New: preferred dtype
 }
 
 type SpeakOptions = {

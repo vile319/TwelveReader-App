@@ -49,10 +49,9 @@ export interface ModelState {
   showModelWarning: boolean;
   selectedModel: string;
   preferredDevice: 'webgpu' | 'wasm' | 'cpu' | 'serverless';
-  preferredDtype: 'fp32' | 'fp16' | 'q8' | 'q4' | 'q4f16';
+  preferredDtype: 'fp32' | 'q8';
   autoSelect: boolean;
   keepLocal: boolean;
-  modelKeepLocal: Record<string, boolean>; // Per-model local storage preferences
 }
 
 export interface TextSet {
@@ -154,12 +153,9 @@ export interface AppContextType {
     setSelectedVoice: (voice: string) => void;
 
     // Model selection actions
-    setSelectedModel: (modelId: string) => void;
     setPreferredDevice: (device: 'webgpu' | 'wasm' | 'cpu' | 'serverless') => void;
-    setPreferredDtype: (dtype: 'fp32' | 'fp16' | 'q8' | 'q4' | 'q4f16') => void;
     setAutoSelect: (enabled: boolean) => void;
     setKeepLocal: (enabled: boolean) => void;
-    setModelKeepLocal: (modelId: string, keepLocal: boolean) => void;
 
     // UI actions
     setToast: (toast: AppToast | null) => void;
