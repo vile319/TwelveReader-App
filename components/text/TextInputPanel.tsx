@@ -13,6 +13,7 @@ const TextInputPanel: FC = () => {
   const [saveTitle, setSaveTitle] = useState('');
   const [isSaved, setIsSaved] = useState(false);
   const [resumePrompt, setResumePrompt] = useState<{ id: string; time: number } | null>(null);
+  const [pdfExtractProgress, setPdfExtractProgress] = useState<{ page: number; total: number } | null>(null);
   const currentDeviceLabel =
     state.model.currentDevice === 'webgpu'
       ? 'Local GPU (WebGPU)'
@@ -63,6 +64,13 @@ const TextInputPanel: FC = () => {
       }
     }
   }, [state.currentSetId, state.readingProgress]);
+
+  // Clear extraction progress when done
+  useEffect(() => {
+    if (!state.isExtractingPDF) {
+      setPdfExtractProgress(null);
+    }
+  }, [state.isExtractingPDF]);
 
   const renderContent = () => {
     return (
@@ -298,19 +306,31 @@ const TextInputPanel: FC = () => {
       {/* Inline Generate Button / Loading State */}
       {state.inputText.trim().length > 0 && (
         <div className="flex justify-center mt-8 w-full">
-          {state.audio.isLoading || state.isGenerating ? (
+          {state.isExtractingPDF || state.audio.isLoading || state.isGenerating ? (
             <div className="fixed top-24 left-1/2 -translate-x-1/2 w-full max-w-sm space-y-3 z-50 bg-[#0f172a] p-5 rounded-sm border border-slate-700 shadow-2xl animate-in slide-in-from-top-4 fade-in duration-300">
               <div className="flex justify-between text-xs font-bold uppercase tracking-wider text-slate-300">
                 <span className="flex items-center gap-2">
                   <svg className="animate-spin h-4 w-4 text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-                  {state.isGenerating ? 'Generating Audio...' : (state.model.status || 'Loading Engine...')}
+                  {state.isExtractingPDF
+                    ? `Extracting PDF${pdfExtractProgress ? ` (${pdfExtractProgress.page}/${pdfExtractProgress.total})` : ''}...`
+                    : state.isGenerating
+                      ? 'Generating Audio...'
+                      : (state.model.status || 'Loading Engine...')}
                 </span>
-                <span className="text-blue-400">{state.generationProgress}%</span>
+                <span className="text-blue-400">
+                  {state.isExtractingPDF
+                    ? `${Math.round(((pdfExtractProgress?.page ?? 0) / (pdfExtractProgress?.total ?? 1)) * 100)}%`
+                    : `${state.generationProgress}%`}
+                </span>
               </div>
               <div className="w-full bg-[#020617] rounded-sm h-2.5 overflow-hidden border border-slate-800">
                 <div
                   className="bg-blue-600 h-2.5 rounded-sm transition-all duration-300 ease-out shadow-[0_0_10px_rgba(37,99,235,0.5)]"
-                  style={{ width: `${state.generationProgress}%` }}
+                  style={{
+                    width: state.isExtractingPDF
+                      ? `${((pdfExtractProgress?.page ?? 0) / (pdfExtractProgress?.total ?? 1)) * 100}%`
+                      : `${state.generationProgress}%`
+                  }}
                 />
               </div>
               {state.isGenerating && (
@@ -353,6 +373,7 @@ const TextInputPanel: FC = () => {
           <PDFReader
             file={state.uploadedPDF}
             onTextExtracted={actions.handlePDFTextExtracted}
+            onProgress={(page, total) => setPdfExtractProgress({ page, total })}
             currentSentence={state.currentSentence}
             wordTimings={state.audio.wordTimings}
             currentWordIndex={state.audio.currentWordIndex}

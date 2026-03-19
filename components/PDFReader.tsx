@@ -49,6 +49,7 @@ const loadPdfJs = () => {
 interface PDFReaderProps {
   file: File;
   onTextExtracted: (text: string) => void;
+  onProgress?: (page: number, totalPages: number) => void;
   currentSentence: string;
   wordTimings?: Array<{word: string, start: number, end: number}>;
   currentWordIndex?: number;
@@ -57,6 +58,7 @@ interface PDFReaderProps {
 const PDFReader: FC<PDFReaderProps> = ({ 
   file, 
   onTextExtracted, 
+  onProgress,
   currentSentence,
   wordTimings = [],
   currentWordIndex = -1
@@ -93,11 +95,12 @@ const PDFReader: FC<PDFReaderProps> = ({
       console.log(`📚 PDF loaded: ${pdf.numPages} pages`);
       
       let allText = '';
-      const maxPages = Math.min(pdf.numPages, 50); // Limit for performance
+      const totalPages = pdf.numPages;
       
-      for (let i = 1; i <= maxPages; i++) {
+      for (let i = 1; i <= totalPages; i++) {
         try {
-          console.log(`📖 Extracting page ${i}/${maxPages}...`);
+          onProgress?.(i, totalPages);
+          console.log(`📖 Extracting page ${i}/${totalPages}...`);
           const page = await pdf.getPage(i);
           const textContent = await page.getTextContent();
           
@@ -112,13 +115,18 @@ const PDFReader: FC<PDFReaderProps> = ({
             allText += pageText + ' ';
             console.log(`✅ Page ${i}: ${pageText.length} characters`);
           }
+
+          // Yield occasionally to keep the UI responsive on large PDFs.
+          if (i % 5 === 0) {
+            await new Promise<void>((r) => setTimeout(() => r(), 0));
+          }
         } catch (pageError) {
           console.warn(`⚠️ Failed to extract page ${i}:`, pageError);
           continue;
         }
       }
       
-      if (allText.trim() && allText.length > 50 && allText.length < 1000000) { // Reasonable text length
+      if (allText.trim() && allText.length > 50) {
         // Clean up the final text for TTS
         const finalText = allText
           .replace(/\s+/g, ' ') // Normalize whitespace
