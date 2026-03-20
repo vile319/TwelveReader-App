@@ -1167,8 +1167,11 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
     try {
       console.log(`📚 Processing text (${text.length} characters)`);
 
-      // Using larger chunks (600 max, 300 min punctuation cut) for better flow
-      const chunks = chunkText(text, 600, 600);
+      // fp32/WebGPU uses fewer chars per chunk to avoid token-limit truncation.
+      // The Kokoro model has a ~510 phoneme-token cap; fp32 on WebGPU may silently
+      // drop tokens beyond that, causing whole sentences to disappear from the output.
+      const maxChunkChars = currentDevice === 'webgpu' ? 400 : 600;
+      const chunks = chunkText(text, maxChunkChars, maxChunkChars);
       lastChunkListRef.current = chunks;
       lastSynthesisTextRef.current = text;
       console.log(`📝 Split into ${chunks.length} chunks for processing`);
@@ -1259,33 +1262,64 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
             audioObject = { alignments: null };
 
           } else {
-            // === Desktop/Android / Local WASM Route ===
-            // Request word alignments for precise timing
-            audioObject = await ttsRef.current.generate(chunk, {
-              voice: voice,
-              return_alignments: true
-            });
+            // === Desktop/Android / Local WASM/WebGPU Route ===
+            const extractAudio = (obj: any): { data: Float32Array | null; sr: number } => {
+              if (!obj || typeof obj !== 'object') return { data: null, sr: 24000 };
+              if (obj.audio instanceof Float32Array) return { data: obj.audio, sr: obj.sample_rate || obj.sampling_rate || 24000 };
+              if (obj.data instanceof Float32Array) return { data: obj.data, sr: obj.sample_rate || obj.sampling_rate || 24000 };
+              if (obj instanceof Float32Array) return { data: obj, sr: sampleRate };
+              for (const v of Object.values(obj)) {
+                if (v instanceof Float32Array) return { data: v as Float32Array, sr: (obj as any).sample_rate || (obj as any).sampling_rate || 24000 };
+              }
+              return { data: null, sr: 24000 };
+            };
 
-            // Extract audio data
-            if (audioObject && typeof audioObject === 'object') {
-              if (audioObject.audio && audioObject.audio instanceof Float32Array) {
-                audioData = audioObject.audio;
-                sampleRate = audioObject.sample_rate || audioObject.sampling_rate || 24000;
-              } else if (audioObject.data && audioObject.data instanceof Float32Array) {
-                audioData = audioObject.data;
-                sampleRate = audioObject.sample_rate || audioObject.sampling_rate || 24000;
-              } else if (audioObject instanceof Float32Array) {
-                audioData = audioObject;
-                // Float32Array carries no metadata — keep whatever sampleRate the model reported earlier (or default 24000)
-              } else {
-                for (const value of Object.values(audioObject)) {
-                  if (value instanceof Float32Array) {
-                    audioData = value;
-                    break;
-                  }
+            const runGenerate = async (inputChunk: string) => {
+              try {
+                const result = await ttsRef.current!.generate(inputChunk, { voice });
+                return { result, threw: false };
+              } catch (genErr: any) {
+                console.error(`❌ generate() threw for chunk ${i + 1} (${inputChunk.length} chars):`, genErr?.message ?? genErr);
+                return { result: null, threw: true };
+              }
+            };
+
+            // First attempt
+            const attempt1 = await runGenerate(chunk);
+            audioObject = attempt1.result;
+            let extracted = extractAudio(audioObject);
+            audioData = extracted.data;
+            if (extracted.sr) sampleRate = extracted.sr;
+
+            // If audio is empty/null, log diagnostics and retry once
+            if (!audioData || audioData.length === 0) {
+              const audioLen = audioObject?.audio instanceof Float32Array ? audioObject.audio.length : 'n/a';
+              console.warn(
+                `⚠️ Empty audio on first attempt for chunk ${i + 1}/${chunks.length}`,
+                `| chars: ${chunk.length}`,
+                `| device: ${currentDevice}`,
+                `| threw: ${attempt1.threw}`,
+                `| audioObject keys: ${audioObject ? Object.keys(audioObject).join(', ') : 'null'}`,
+                `| .audio length: ${audioLen}`
+              );
+
+              if (!attempt1.threw) {
+                console.log(`🔁 Retrying chunk ${i + 1}...`);
+                const attempt2 = await runGenerate(chunk);
+                audioObject = attempt2.result;
+                extracted = extractAudio(audioObject);
+                audioData = extracted.data;
+                if (extracted.sr) sampleRate = extracted.sr;
+
+                if (!audioData || audioData.length === 0) {
+                  console.error(
+                    `❌ Chunk ${i + 1} still empty after retry — skipping.`,
+                    `| audioObject: ${JSON.stringify(audioObject)?.slice(0, 200)}`
+                  );
                 }
               }
             }
+
             // Keep sampleRateRef in sync for streaming path consistency
             sampleRateRef.current = sampleRate;
           }
@@ -1297,19 +1331,26 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
           }
 
           if (!audioData || audioData.length === 0) {
-            console.error(`❌ No audio data generated for chunk ${i + 1}`);
-            continue; // Skip this chunk and continue
+            console.error(`❌ No audio data generated for chunk ${i + 1} (chars: ${chunks[i].length}, device: ${currentDevice}) — skipping`);
+            continue;
           }
 
+          // fp32/WebGPU produces more energetic full-precision audio that can
+          // falsely trigger the "broadband noise/clipped" heuristics. Don't abort
+          // the entire synthesis for a single suspicious chunk; log and continue.
           const diagnostics = validateAudioData(
             audioData,
             sampleRate,
             `${isServerless ? 'cloud-decoded' : 'local-generated'} chunk ${i + 1}`,
-            { failOnSuspicion: !isServerless }
+            { failOnSuspicion: !isServerless && currentDevice !== 'webgpu' }
           );
 
-          if (diagnostics.suspicionReason && isServerless) {
-            setStatus(`⚠️ Cloud audio looks suspicious: ${diagnostics.suspicionReason}`);
+          if (diagnostics.suspicionReason) {
+            if (isServerless) {
+              setStatus(`⚠️ Cloud audio looks suspicious: ${diagnostics.suspicionReason}`);
+            } else {
+              console.warn(`⚠️ Chunk ${i + 1} flagged suspicious (${diagnostics.suspicionReason}) but including anyway [device: ${currentDevice}]`);
+            }
           }
 
           allAudioChunks.push(audioData!);
