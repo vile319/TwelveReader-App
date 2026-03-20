@@ -187,63 +187,81 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
 
   const hasAutoStartedStreamingRef = useRef(false);
 
-  // Ref for last word update time (reserved for future use)
+  // Always-fresh mirror of wordTimings so updateCurrentWordIndex never reads stale closure state.
   const wordTimingsRef = useRef(wordTimings);
   wordTimingsRef.current = wordTimings;
 
+  // Accumulator ref: word timings are pushed here during synthesis and
+  // batch-committed to React state periodically rather than on every chunk.
+  // This eliminates 50+ consecutive setWordTimings calls (and re-renders) for large PDFs.
+  const wordTimingsAccumRef = useRef<Array<{ word: string; start: number; end: number }>>([]);
+
   const lastTimeUpdateRef = useRef(0);
+  // Gate for throttling setCurrentWordIndex — only emit ~15 times per second.
+  const lastWordIndexUpdateRef = useRef(0);
+  const WORD_INDEX_THROTTLE_MS = 66; // ~15 Hz
 
-  // Helper function to update current word index based on time
-  const updateCurrentWordIndex = useCallback((currentTime: number) => {
+  // Flush accumulated word timings into React state and the always-fresh ref.
+  // Call after all synthesis is done OR periodically during streaming.
+  const flushWordTimings = useCallback(() => {
+    const pending = wordTimingsAccumRef.current;
+    if (pending.length === 0) return;
+    setWordTimings(prev => {
+      const merged = [...prev, ...pending];
+      wordTimingsRef.current = merged;
+      return merged;
+    });
+    wordTimingsAccumRef.current = [];
+  }, []);
+
+  // Binary-search helper: find the index of the word playing at `currentTime`.
+  // O(log n) — safe to call 15× per second even for 30 000-word books.
+  const findWordIndexBinary = useCallback((currentTime: number): number => {
     const timings = wordTimingsRef.current;
-    if (timings.length === 0) {
-      console.log('📝 No word timings available');
-      return;
-    }
+    if (timings.length === 0) return -1;
 
-    // Find the current word index based on time
-    let newIndex = -1;
-    for (let i = 0; i < timings.length; i++) {
-      const timing = timings[i];
-      if (currentTime >= timing.start && currentTime < timing.end) {
-        newIndex = i;
-        break;
+    // Fast path: check if time is past everything
+    if (currentTime >= (timings[timings.length - 1]?.end ?? 0)) return -1;
+
+    let lo = 0, hi = timings.length - 1;
+    while (lo <= hi) {
+      const mid = (lo + hi) >>> 1;
+      const t = timings[mid];
+      if (currentTime < t.start) {
+        hi = mid - 1;
+      } else if (currentTime >= t.end) {
+        lo = mid + 1;
+      } else {
+        return mid; // currentTime is inside [start, end)
       }
     }
 
-    // If we're past the last word, set to -1
-    if (newIndex === -1 && currentTime > (timings[timings.length - 1]?.end || 0)) {
-      newIndex = -1;
+    // Between two words — return the word whose start is closest (handles inter-word gaps)
+    if (lo > 0 && lo < timings.length) {
+      const distPrev = currentTime - timings[lo - 1].end;
+      const distNext = timings[lo].start - currentTime;
+      return distPrev <= distNext ? lo - 1 : lo;
     }
+    return lo < timings.length ? lo : timings.length - 1;
+  }, []);
 
-    // If we didn't find a word but we're in the middle of the text, find the closest word
-    if (newIndex === -1 && currentTime > 0 && currentTime < (timings[timings.length - 1]?.end || 0)) {
-      // Find the word we're closest to
-      let closestIndex = 0;
-      let closestDistance = Math.abs(currentTime - timings[0].start);
+  // Helper to update current word index — throttled to WORD_INDEX_THROTTLE_MS.
+  // Uses binary search so even large PDFs don't cause jank.
+  const updateCurrentWordIndex = useCallback((currentTime: number) => {
+    // Throttle: only update state up to ~15 times/second
+    const now = performance.now();
+    if (now - lastWordIndexUpdateRef.current < WORD_INDEX_THROTTLE_MS) return;
+    lastWordIndexUpdateRef.current = now;
 
-      for (let i = 1; i < timings.length; i++) {
-        const distance = Math.abs(currentTime - timings[i].start);
-        if (distance < closestDistance) {
-          closestDistance = distance;
-          closestIndex = i;
-        }
-      }
-      newIndex = closestIndex;
-    }
+    const newIndex = findWordIndexBinary(currentTime);
 
-    // Update the index using a setter function to avoid stale closure
     setCurrentWordIndex((prevIndex: number) => {
       if (newIndex !== prevIndex) {
-        console.log(`📝 Word highlight: ${prevIndex} → ${newIndex} (time: ${currentTime.toFixed(2)}s)`);
-        if (newIndex >= 0 && newIndex < timings.length) {
-          console.log(`📝 Current word: "${timings[newIndex].word}" (${timings[newIndex].start.toFixed(2)}s - ${timings[newIndex].end.toFixed(2)}s)`);
-        }
         return newIndex;
       }
       return prevIndex;
     });
-  }, [setCurrentWordIndex]);
+  }, [findWordIndexBinary]);
 
   const ttsRef = useRef<any>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -1161,7 +1179,10 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
 
     // Reset state before new synthesis
     hasAutoStartedStreamingRef.current = false;
-    setWordTimings(options?.seedWordTimings ?? []);
+    const seedTimings = options?.seedWordTimings ?? [];
+    setWordTimings(seedTimings);
+    wordTimingsRef.current = seedTimings;
+    wordTimingsAccumRef.current = []; // Clear accumulator for fresh run
     setCurrentWordIndex(-1);
     setSynthesisComplete(false);
     console.log('📝 Cleared word timings and reset current word index');
@@ -1366,7 +1387,9 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
           const currentStreamDuration = baseDuration + (totalSamples / sampleRate);
           setSynthesizedDuration(currentStreamDuration);
 
-          // --- New: Use precise word timings if available ---
+          // --- Accumulate word timings into ref; batch-flush to React state after each BATCH ---
+          // This avoids one setWordTimings React state update per chunk (which triggers
+          // re-renders of the entire text display on every chunk for large PDFs).
           if (audioObject && audioObject.alignments) {
             const chunkOffset = currentStreamDuration - (audioData!.length / sampleRate);
             const alignedTimings = (audioObject.alignments as Alignment[]).map((alignment) => ({
@@ -1374,10 +1397,9 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
               start: chunkOffset + alignment.start_time,
               end: chunkOffset + alignment.end_time
             }));
-
             if (alignedTimings.length > 0) {
               console.log(`📊 Received ${alignedTimings.length} precise word timings for chunk ${i + 1}.`);
-              setWordTimings((prev: { word: string; start: number; end: number }[]) => [...prev, ...alignedTimings]);
+              wordTimingsAccumRef.current.push(...alignedTimings);
             }
           } else {
             // Fallback to provisional timings if alignments are not available
@@ -1408,14 +1430,16 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
             });
 
             if (provisionalTimings.length) {
-              setWordTimings((prev: { word: string; start: number; end: number }[]) => [...prev, ...provisionalTimings]);
+              wordTimingsAccumRef.current.push(...provisionalTimings);
             }
           }
 
           console.log(`✅ Chunk ${i + 1} processed: ${audioData!.length} samples (${currentStreamDuration.toFixed(1)}s total)`);
 
-          // Start streaming playback after first chunk
+          // Start streaming playback after first chunk.
+          // Flush timings immediately so the highlighter has them from the very first word.
           if (i === startChunkIndex) {
+            flushWordTimings();
             setCanScrub(true);
             setIsStreaming(true);
             const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
@@ -1426,11 +1450,18 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
           }
         }
 
+        // Flush accumulated word timings to React state once per batch (not once per chunk).
+        // This gives the UI an update ~every 10 chunks instead of every chunk.
+        flushWordTimings();
+
         // Allow event loop to breathe between batches
         if (batchEnd < chunks.length) {
           await new Promise(resolve => setTimeout(resolve, 10));
         }
       }
+
+      // Final flush of any remaining accumulated word timings before we mark synthesis complete
+      flushWordTimings();
 
       // Combine all audio chunks
       setStatus('🔄 Combining audio chunks...');
