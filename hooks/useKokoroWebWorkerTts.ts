@@ -1065,14 +1065,17 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
       let endIndex = Math.min(currentIndex + currentSize, text.length);
 
       if (endIndex < text.length) {
-        // Try to split at a sentence/clause boundary for smoother audio
+        // Try to split at a sentence/clause boundary for smoother audio.
+        // Prefer hard stops (. ! ?) over commas — splitting at a comma can
+        // cause the TTS engine to produce awkward pauses mid-clause.
         const substr = text.slice(currentIndex, endIndex);
-        const lastPunc = Math.max(
+        const lastHardStop = Math.max(
           substr.lastIndexOf('. '),
           substr.lastIndexOf('! '),
-          substr.lastIndexOf('? '),
-          substr.lastIndexOf(', ')
+          substr.lastIndexOf('? ')
         );
+        // Only fall back to comma if no hard stop is found past the minimum
+        const lastPunc = lastHardStop > 300 ? lastHardStop : Math.max(lastHardStop, substr.lastIndexOf(', '));
 
         if (lastPunc > 300) {
           endIndex = currentIndex + lastPunc + 1; // Include the punctuation
