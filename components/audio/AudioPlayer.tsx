@@ -52,7 +52,12 @@ const AudioPlayer: FC = () => {
           <button
             onClick={() => {
               actions.primeAudioContext();
-              if (state.isReading && !state.audio.canScrub && !state.audio.isPlaying) {
+              if (!state.isReading && (state.audio.canScrub || state.inputText.trim())) {
+                // Not in reading mode yet — enter reading mode properly
+                // (handles both pre-loaded audio and fresh text)
+                actions.handleStartReading();
+              } else if (state.isReading && !state.audio.canScrub && !state.audio.isPlaying) {
+                // In reading mode but no audio ready — trigger generation
                 actions.handleStartReading();
               } else {
                 actions.togglePlayPause();

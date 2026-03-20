@@ -180,11 +180,18 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       const currentSet = savedTextSets.find(s => s.id === currentSetId);
       if (currentSet && currentSet.text.trim() === textToRead) {
         console.log('🎵 Audio already loaded for this text, transitioning to player view...');
+
+        // If we weren't in reading mode, reset to the start for a clean experience.
+        // This prevents desynced highlighting when audio was playing in the background
+        // without the highlighting view active.
+        if (!isReading) {
+          tts.seekToTime(0);
+        }
+
         setIsReading(true);
         setCurrentSentence(textToRead);
 
-        // Let the AudioPlayer component handle actual playback state,
-        // but if it's not playing, we can kick it off
+        // Start playback if not already playing
         if (!tts.isPlaying) {
           tts.togglePlayPause();
         }
