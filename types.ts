@@ -38,7 +38,6 @@ export interface AudioState {
   /** True while the synthesis loop is actively running (chunks being generated) */
   isSynthesizing: boolean;
   wordTimings: WordTiming[];
-  wordTimingsCount: number;
   currentWordIndex: number;
   playbackRate: number;
 }
@@ -220,7 +219,6 @@ export interface AppContextType {
     skipForward: () => void;
     skipBackward: () => void;
     wordTimingsRef: MutableRefObject<WordTiming[]>;
-    wordTimingsCount: number;
     currentWordIndex: number;
     synthesisComplete: boolean;
     isSynthesizing: boolean;

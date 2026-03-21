@@ -174,9 +174,7 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
   const [isStreaming, setIsStreaming] = useState<boolean>(false);
 
   // Word timing for highlighting — using a pure ref to avoid massive array copies.
-  // wordTimingsCount acts as a lightweight trigger for React to know new words arrived.
   const wordTimingsRef = useRef<Array<{ word: string, start: number, end: number }>>([]);
-  const [wordTimingsCount, setWordTimingsCount] = useState(0);
   const [currentWordIndex, setCurrentWordIndex] = useState(-1);
   // Always-fresh ref mirror of currentWordIndex for rAF consumers to poll
   const currentWordIndexRef = useRef(-1);
@@ -215,7 +213,6 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
     // Mutate the ref directly to avoid O(n) array copy GC spikes for huge books
     wordTimingsRef.current.push(...pending);
     wordTimingsAccumRef.current = [];
-    setWordTimingsCount(c => c + 1);
   }, []);
 
   // Binary-search helper: find the index of the word playing at `currentTime`.
@@ -1174,7 +1171,6 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
     hasAutoStartedStreamingRef.current = false;
     const seedTimings = options?.seedWordTimings ?? [];
     wordTimingsRef.current = seedTimings;
-    setWordTimingsCount(0);
     wordTimingsAccumRef.current = []; // Clear accumulator for fresh run
     setCurrentWordIndex(-1);
     setSynthesisComplete(false);
@@ -1699,7 +1695,6 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
     hasAutoStartedStreamingRef.current = false;
     // Reset word highlighting
     wordTimingsRef.current = [];
-    setWordTimingsCount(0);
     setCurrentWordIndex(-1);
 
     // Clear any pending seek operations and progress updates
@@ -2112,10 +2107,8 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
       // Use specifically saved wordTimings if available
       if (savedWordTimings && savedWordTimings.length > 0) {
         wordTimingsRef.current = savedWordTimings;
-        setWordTimingsCount(c => c + 1);
       } else {
         wordTimingsRef.current = [];
-        setWordTimingsCount(0);
         console.warn("No word timings were attached to this saved audio file. Word highlighting will be disabled during playback.");
       }
 
@@ -2237,7 +2230,6 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
     skipBackward,
     // Word highlighting
     wordTimingsRef,
-    wordTimingsCount,
     currentWordIndex,
     // Debug mode controls
     forceWasmMode,

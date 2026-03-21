@@ -7,10 +7,9 @@ import { TextSet } from '../../types';
 
 // Thin wrapper that polls currentWordIndexRef at ~15Hz during playback.
 // Only this component re-renders when the word changes — not the entire TextInputPanel.
-const LiveHighlightedText = memo(({ text, wordTimings, wordTimingsCount, isPlaying, stateWordIndex, wordIndexRef, onWordClick, style }: {
+const LiveHighlightedText = memo(({ text, wordTimingsRef, isPlaying, stateWordIndex, wordIndexRef, onWordClick, style }: {
   text: string;
-  wordTimings: Array<{ word: string; start: number; end: number }>;
-  wordTimingsCount: number;
+  wordTimingsRef: React.MutableRefObject<Array<{ word: string; start: number; end: number }>>;
   isPlaying: boolean;
   stateWordIndex: number;
   wordIndexRef: { current: number };
@@ -18,26 +17,31 @@ const LiveHighlightedText = memo(({ text, wordTimings, wordTimingsCount, isPlayi
   style?: React.CSSProperties;
 }) => {
   const [displayIndex, setDisplayIndex] = useState(stateWordIndex);
+  const [timingsCount, setTimingsCount] = useState(0);
 
   // Read the variable so the linter knows it's used to trigger React.memo
-  void wordTimingsCount;
+  void timingsCount;
 
   useEffect(() => {
     if (isPlaying) {
       const id = setInterval(() => {
         const idx = wordIndexRef.current;
         setDisplayIndex(prev => prev === idx ? prev : idx);
+        
+        const len = wordTimingsRef.current.length;
+        setTimingsCount(prev => prev === len ? prev : len);
       }, 250);  // 4Hz — words are spoken at ~2-3/sec
       return () => clearInterval(id);
     } else {
       setDisplayIndex(stateWordIndex);
+      setTimingsCount(wordTimingsRef.current.length);
     }
-  }, [isPlaying, stateWordIndex, wordIndexRef]);
+  }, [isPlaying, stateWordIndex, wordIndexRef, wordTimingsRef]);
 
   return (
     <HighlightedText
       text={text}
-      wordTimings={wordTimings}
+      wordTimings={wordTimingsRef.current}
       currentWordIndex={displayIndex}
       onWordClick={onWordClick}
       style={style}
@@ -167,8 +171,7 @@ const TextInputPanel: FC = () => {
         {state.inputText.length > 0 ? (
           <LiveHighlightedText
             text={state.inputText}
-            wordTimings={state.audio.wordTimings}
-            wordTimingsCount={state.audio.wordTimingsCount}
+            wordTimingsRef={tts.wordTimingsRef}
             isPlaying={state.audio.isPlaying}
             stateWordIndex={state.audio.currentWordIndex}
             wordIndexRef={tts.currentWordIndexRef}

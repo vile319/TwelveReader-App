@@ -1128,7 +1128,6 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       synthesisComplete: tts.synthesisComplete,
       isSynthesizing: tts.isSynthesizing,
       wordTimings: tts.wordTimingsRef.current,
-      wordTimingsCount: tts.wordTimingsCount,
       currentWordIndex: tts.currentWordIndex,
       playbackRate: tts.playbackRate,
     },
