@@ -181,6 +181,9 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
   // New synthesis complete flag
   const [synthesisComplete, setSynthesisComplete] = useState(false);
 
+  // Track whether the synthesis loop is actively running (so UI can distinguish pause vs cancel)
+  const [isSynthesizing, setIsSynthesizing] = useState(false);
+
   // === Playback Rate State ===
   const [playbackRate, setPlaybackRateState] = useState<number>(1);
   const playbackRateRef = useRef<number>(1);
@@ -457,6 +460,9 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
       if (!isPlaying) setIsPlaying(true);
 
       // Start progress tracking for streaming
+      // NOTE: We update currentTimeRef on every frame for accurate seeking/highlighting,
+      // but only push React state (setCurrentTime) at ~20Hz to avoid 60fps re-renders
+      // that lag the entire UI (speed dropdown, buttons, etc.).
       const trackStreamingProgress = () => {
         if (isPlaybackActiveRef.current && audioContextRef.current) {
           // elapsed in audio-time (already accounts for playback rate via AudioContext scheduling)
@@ -466,10 +472,18 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
           const maxStreamTime = totalStreamingSamples / samplesPerSecond;
           // DO NOT multiply elapsed by playbackRate again — it was already applied above
           const currentPos = Math.max(0, Math.min(elapsed, maxStreamTime));
-          setCurrentTimeBoth(currentPos);
+          // Always update the ref (used by seeking, word-index lookup, etc.)
+          currentTimeRef.current = currentPos;
 
-          // Update current word index for highlighting (un-throttled for accuracy)
+          // Update current word index for highlighting (~15Hz throttle inside)
           updateCurrentWordIndex(currentPos);
+
+          // Throttle React state update to ~20Hz to prevent 60fps re-renders
+          const now = performance.now();
+          if (now - lastTimeUpdateRef.current > 50) {
+            lastTimeUpdateRef.current = now;
+            setCurrentTime(currentPos);
+          }
 
           requestAnimationFrame(trackStreamingProgress);
         }
@@ -1133,6 +1147,7 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
     }
 
     setIsPlaying(false); // Will be set to true when first chunk starts playing
+    setIsSynthesizing(true); // Mark synthesis as active
     currentSynthesisRef.current = text;
     // New synthesis run: cancel any in-flight cloud request from a prior run
     if (cloudAbortControllerRef.current) {
@@ -1226,6 +1241,7 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
 
           if (currentSynthesisRef.current !== text) {
             console.log(`🛑 Synthesis stopped after generate() – discarding chunk ${i + 1}`);
+            setIsSynthesizing(false);
             return { ok: true, completed: false, cancelled: true, chunksGenerated: allAudioChunks.length, totalChunks: chunks.length };
           }
 
@@ -1351,6 +1367,7 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
           // === New cancellation check ===
           if (currentSynthesisRef.current !== text) {
             console.log(`🛑 Synthesis stopped after generate() – discarding chunk ${i + 1}`);
+            setIsSynthesizing(false);
             return { ok: true, completed: false, cancelled: true, chunksGenerated: allAudioChunks.length, totalChunks: chunks.length };
           }
 
@@ -1573,14 +1590,17 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
 
       // After synthesis finishes (where you set canScrub true), also set synthesisComplete true
       setSynthesisComplete(true);
+      setIsSynthesizing(false);
 
     } catch (error: any) {
       if (error?.name === 'AbortError') {
         console.log('🛑 Cloud fetch aborted');
+        setIsSynthesizing(false);
         return { ok: true, completed: false, cancelled: true, chunksGenerated: 0, totalChunks: 0 };
       }
       console.error('Synthesis error:', error);
       setIsPlaying(false);
+      setIsSynthesizing(false);
       currentSynthesisRef.current = null;
 
       // WebGPU produced invalid/corrupt audio — auto-fallback to WASM q8
@@ -1618,6 +1638,7 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
       });
       return { ok: false, error: error instanceof Error ? error : new Error(String(error)) };
     }
+    setIsSynthesizing(false);
     return { ok: true, completed: true };
   }, [isReady, onError, chunkText, currentDevice]);
 
@@ -1628,6 +1649,7 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
 
     // Stop current synthesis
     currentSynthesisRef.current = null;
+    setIsSynthesizing(false);
 
     // Abort any in-flight cloud request (serverless chunk fetch)
     if (cloudAbortControllerRef.current) {
@@ -2220,6 +2242,7 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
     toggleForceWasm,
     // New synthesis complete flag
     synthesisComplete,
+    isSynthesizing,
     // Utility: get combined audio buffer as WAV Blob
     getAudioBlob,
     getPartialAudioBlob,

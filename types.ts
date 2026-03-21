@@ -33,6 +33,8 @@ export interface AudioState {
   isStreaming: boolean;
   canScrub: boolean;
   synthesisComplete: boolean;
+  /** True while the synthesis loop is actively running (chunks being generated) */
+  isSynthesizing: boolean;
   wordTimings: WordTiming[];
   currentWordIndex: number;
   playbackRate: number;

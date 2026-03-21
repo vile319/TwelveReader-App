@@ -52,7 +52,12 @@ const AudioPlayer: FC = () => {
           <button
             onClick={() => {
               actions.primeAudioContext();
-              if (!state.isReading && (state.audio.canScrub || state.inputText.trim())) {
+              // If synthesis is actively running (chunks being generated), only
+              // toggle playback — never call handleStartReading which calls
+              // tts.stop() and kills the generation.
+              if (state.audio.isSynthesizing) {
+                actions.togglePlayPause();
+              } else if (!state.isReading && (state.audio.canScrub || state.inputText.trim())) {
                 // Not in reading mode yet — enter reading mode properly
                 // (handles both pre-loaded audio and fresh text)
                 actions.handleStartReading();
