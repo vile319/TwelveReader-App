@@ -44,7 +44,6 @@ export interface AudioState {
 
 export interface ModelState {
   isReady: boolean;
-  status: string;
   /** Actual runtime backend chosen by the TTS hook */
   currentDevice?: 'webgpu' | 'wasm' | 'cpu' | 'serverless' | null;
   detectedHardwareLabel: string;
@@ -113,9 +112,6 @@ export interface AppState {
 
   // Progress map
   readingProgress: Record<string, ReadingProgressEntry>;
-
-  /** Progress percentage while generating audio (0-100). 0 when idle */
-  generationProgress: number;
 
   /** True while the TTS models/APIs are actively creating chunks */
   isGenerating: boolean;
@@ -227,5 +223,7 @@ export interface AppContextType {
     currentTimeRef: { current: number };
     /** Ref for real-time polling (no re-renders). React state flushed on pause/stop. */
     currentWordIndexRef: { current: number };
+    generationProgressRef: React.MutableRefObject<number>;
+    statusRef: React.MutableRefObject<string>;
   };
 }

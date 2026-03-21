@@ -148,7 +148,9 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
   const [isReady, setIsReady] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [status, setStatus] = useState('Ready to generate audio');
+  const statusRef = useRef<string>('Ready to generate audio');
+  const setStatus = useCallback((s: string) => { statusRef.current = s; }, []);
+  const generationProgressRef = useRef<number>(0);
   const [currentDevice, setCurrentDevice] = useState<'webgpu' | 'wasm' | 'cpu' | 'serverless' | null>(null);
   const [debugMode, setDebugMode] = useState(false);
   const [storedChunks, setStoredChunks] = useState<AudioChunk[]>([]);
@@ -1211,6 +1213,7 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
           const chunkProgress = (i / chunks.length) * 90; // Save 10% for combining
 
           setStatus(`🎯 Synthesizing chunk ${i + 1}/${chunks.length} (${chunkProgress.toFixed(0)}%)...`);
+          generationProgressRef.current = Math.round(chunkProgress);
           onProgress?.(chunkProgress);
 
           if (currentSynthesisRef.current !== text) {
@@ -2261,6 +2264,8 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
     // (React state is only flushed on pause/stop to avoid re-rendering the full tree)
     currentTimeRef,
     currentWordIndexRef,
+    generationProgressRef,
+    statusRef,
     // Utility: get combined audio buffer as WAV Blob
     getAudioBlob,
     getPartialAudioBlob,

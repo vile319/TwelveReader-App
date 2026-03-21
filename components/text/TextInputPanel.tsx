@@ -57,6 +57,20 @@ const TextInputPanel: FC = () => {
   const [showLibrary, setShowLibrary] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [saveTitle, setSaveTitle] = useState('');
+  
+  const [localProgress, setLocalProgress] = useState(0);
+  const [localStatus, setLocalStatus] = useState('');
+
+  // Isolate UI progress rendering from global context to stop DOM diffing lag
+  useEffect(() => {
+    if (state.isGenerating || state.audio.isLoading) {
+      const id = setInterval(() => {
+        if (tts.generationProgressRef) setLocalProgress(tts.generationProgressRef.current);
+        if (tts.statusRef) setLocalStatus(tts.statusRef.current);
+      }, 150);
+      return () => clearInterval(id);
+    }
+  }, [state.isGenerating, state.audio.isLoading, tts]);
   const [isSaved, setIsSaved] = useState(false);
   const [resumePrompt, setResumePrompt] = useState<{ id: string; time: number } | null>(null);
   const [pdfExtractProgress, setPdfExtractProgress] = useState<{ page: number; total: number } | null>(null);
@@ -367,12 +381,12 @@ const TextInputPanel: FC = () => {
                     ? `Extracting PDF${pdfExtractProgress ? ` (${pdfExtractProgress.page}/${pdfExtractProgress.total})` : ''}...`
                     : state.isGenerating
                       ? 'Generating Audio...'
-                      : (state.model.status || 'Loading Engine...')}
+                      : (localStatus || 'Loading Engine...')}
                 </span>
                 <span className="text-blue-400">
                   {state.isExtractingPDF
                     ? `${Math.round(((pdfExtractProgress?.page ?? 0) / (pdfExtractProgress?.total ?? 1)) * 100)}%`
-                    : `${state.generationProgress}%`}
+                    : `${localProgress}%`}
                 </span>
               </div>
               <div className="w-full bg-[#020617] rounded-sm h-2.5 overflow-hidden border border-slate-800">
@@ -381,7 +395,7 @@ const TextInputPanel: FC = () => {
                   style={{
                     width: state.isExtractingPDF
                       ? `${((pdfExtractProgress?.page ?? 0) / (pdfExtractProgress?.total ?? 1)) * 100}%`
-                      : `${state.generationProgress}%`
+                      : `${localProgress}%`
                   }}
                 />
               </div>

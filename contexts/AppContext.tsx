@@ -95,8 +95,6 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
 
   // Seeking state (Moved to AudioPlayer)
 
-  // Generation progress (0-100)
-  const [generationProgress, setGenerationProgress] = useState<number>(0);
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationCheckpoint, setGenerationCheckpoint] = useState<{ setId: string; resumeChunkIndex: number; totalChunks: number } | null>(null);
 
@@ -197,7 +195,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     }
 
     // Reset generation progress
-    setGenerationProgress(0);
+    if (tts.generationProgressRef) tts.generationProgressRef.current = 0;
 
     // Stop any previous audio before starting anew
     tts.stop();
@@ -225,10 +223,10 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
 
     try {
       // Fire and forget, don't await to block UI state. The player will handle playback.
-      tts.speak(textToRead, selectedVoice, (p: number) => setGenerationProgress(Math.round(p)))
+      tts.speak(textToRead, selectedVoice)
         .then(() => {
           console.log('✅ Audio generation completed');
-          setGenerationProgress(100);
+          if (tts.generationProgressRef) tts.generationProgressRef.current = 100;
           setIsGenerating(false); // Reset isGenerating on success
         })
         .catch(error => {
@@ -252,7 +250,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     setCurrentSentence('');
 
     // Reset progress
-    setGenerationProgress(0);
+    if (tts.generationProgressRef) tts.generationProgressRef.current = 0;
     setIsGenerating(false); // Reset isGenerating when stopping reading
   };
 
@@ -296,7 +294,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     // Cancel synthesis/playback without forcing a mode switch back to editing.
     // This is intentionally lighter than handleStopReading().
     tts.stop();
-    setGenerationProgress(0);
+    if (tts.generationProgressRef) tts.generationProgressRef.current = 0;
     setIsGenerating(false);
     setToast({ title: 'Cancelled', message: 'Generation cancelled.', type: 'info' });
   };
@@ -319,10 +317,10 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
 
       setIsReading(true);
       setCurrentSentence(cleaned);
-      setGenerationProgress(Math.round((generationCheckpoint.resumeChunkIndex / Math.max(1, generationCheckpoint.totalChunks)) * 90));
+      if (tts.generationProgressRef) tts.generationProgressRef.current = Math.round((generationCheckpoint.resumeChunkIndex / Math.max(1, generationCheckpoint.totalChunks)) * 90);
       setIsGenerating(true);
 
-      const result = await tts.speak(cleaned, selectedVoice, (p: number) => setGenerationProgress(Math.round(p)), {
+      const result = await tts.speak(cleaned, selectedVoice, undefined, {
         startChunkIndex: generationCheckpoint.resumeChunkIndex,
         preserveStreamingSeed: true,
         seedWordTimings: timings || undefined,
@@ -337,7 +335,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
         setSavedTextSets((prev: TextSet[]) =>
           prev.map((s) => (s.id === currentSetId ? { ...s, hasPartialAudio: false, audioGenerated: true } : s))
         );
-        setGenerationProgress(100);
+        if (tts.generationProgressRef) tts.generationProgressRef.current = 100;
       }
 
       setIsGenerating(false);
@@ -1130,7 +1128,6 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     },
     model: {
       isReady: tts.isReady,
-      status: tts.status,
       currentDevice: tts.currentDevice,
       detectedHardwareLabel,
       detectedHardwareReason,
@@ -1156,7 +1153,6 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     userEmail,
     isPremium,
     readingProgress,
-    generationProgress,
     isGenerating,
     generationCheckpoint,
   };
