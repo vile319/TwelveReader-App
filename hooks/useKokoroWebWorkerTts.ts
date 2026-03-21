@@ -457,20 +457,19 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
       if (!isPlaying) setIsPlaying(true);
 
       // Progress tracking for streaming — ref-only, NO React state updates.
-      // AudioPlayer and HighlightedText poll the refs with their own rAF loops.
-      const trackStreamingProgress = () => {
-        if (isPlaybackActiveRef.current && audioContextRef.current) {
-          const elapsed = (audioContextRef.current.currentTime - streamingStartTimeRef.current) * playbackRateRef.current;
-          const totalStreamingSamples = streamingAudioRef.current.reduce((sum: number, chunk: Float32Array) => sum + chunk.length, 0);
-          const maxStreamTime = totalStreamingSamples / samplesPerSecond;
-          const currentPos = Math.max(0, Math.min(elapsed, maxStreamTime));
-          currentTimeRef.current = currentPos;
-          updateCurrentWordIndex(currentPos);
-          requestAnimationFrame(trackStreamingProgress);
+      // AudioPlayer and HighlightedText poll the refs with their own intervals.
+      const trackStreamingProgressId = setInterval(() => {
+        if (!isPlaybackActiveRef.current || !audioContextRef.current) {
+          clearInterval(trackStreamingProgressId);
+          return;
         }
-      };
-
-      trackStreamingProgress();
+        const elapsed = (audioContextRef.current.currentTime - streamingStartTimeRef.current) * playbackRateRef.current;
+        const totalStreamingSamples = streamingAudioRef.current.reduce((sum: number, chunk: Float32Array) => sum + chunk.length, 0);
+        const maxStreamTime = totalStreamingSamples / samplesPerSecond;
+        const currentPos = Math.max(0, Math.min(elapsed, maxStreamTime));
+        currentTimeRef.current = currentPos;
+        updateCurrentWordIndex(currentPos);
+      }, 250); // 4Hz is plenty for word highlighting and progress bar
       if (audioContextRef.current) {
         playStreamingChunks(chunkIndex, targetSample - currentSample, audioContextRef.current.currentTime, currentStreamId);
       }
@@ -581,18 +580,18 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
     try {
       audio.currentTime = startTime;
       audio.playbackRate = playbackRateRef.current;
-      audio.preservesPitch = true;
 
-      const progressAnimationRef = { current: 0 };
       // PERF: Only update refs during playback — no React state updates.
       // AudioPlayer polls currentTimeRef. HighlightedText polls currentWordIndexRef.
-      const updateProgress = () => {
-        if (!isPlaybackActiveRef.current) return;
+      const updateProgressId = setInterval(() => {
+        if (!isPlaybackActiveRef.current) {
+          clearInterval(updateProgressId);
+          return;
+        }
         const currentPos = audio.currentTime;
         currentTimeRef.current = currentPos;
         updateCurrentWordIndex(currentPos);
-        progressAnimationRef.current = requestAnimationFrame(updateProgress);
-      };
+      }, 250); // 4Hz
 
       audio.onended = () => {
         if (intentionalStopRef.current) {
@@ -608,13 +607,10 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
         updateCurrentWordIndex(finalDuration);
         setCurrentWordIndex(currentWordIndexRef.current);
 
-        if (progressAnimationRef.current) {
-          cancelAnimationFrame(progressAnimationRef.current);
-        }
+        clearInterval(updateProgressId);
       };
 
       await audio.play();
-      progressAnimationRef.current = requestAnimationFrame(updateProgress);
       console.log(`▶️ Started HTML audio from ${startTime.toFixed(2)}s`);
 
     } catch (error) {
