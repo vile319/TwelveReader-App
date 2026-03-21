@@ -1198,8 +1198,8 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
       let sampleRate = 24000;
       const startTime = performance.now();
 
-      // Process chunks in batches to prevent stack overflow  
-      const BATCH_SIZE = 10; // Process 10 chunks at a time
+      // Process chunks one at a time to allow the event loop to breathe (keeps UI responsive)  
+      const BATCH_SIZE = 1; 
 
       for (let batchStart = startChunkIndex; batchStart < chunks.length; batchStart += BATCH_SIZE) {
         const batchEnd = Math.min(batchStart + BATCH_SIZE, chunks.length);

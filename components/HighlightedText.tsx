@@ -87,7 +87,44 @@ const RenderLine = memo(({ index, style: rowStyle, data }: ListChildComponentPro
   );
 });
 
-RenderLine.displayName = 'RenderLine';
+const renderLineAreEqual = (prevProps: ListChildComponentProps, nextProps: ListChildComponentProps) => {
+  if (prevProps.index !== nextProps.index || prevProps.style !== nextProps.style) return false;
+  
+  const prev = prevProps.data as LineData;
+  const next = nextProps.data as LineData;
+  if (prev.textLines !== next.textLines || prev.wordTimings !== next.wordTimings) return false;
+
+  const range = prev.lineWordRanges[prevProps.index];
+  if (!range) return prev.currentWordIndex === next.currentWordIndex;
+
+  const prevWordIdx = prev.currentWordIndex;
+  const nextWordIdx = next.currentWordIndex;
+  
+  if (prevWordIdx === nextWordIdx) return true;
+
+  const startWord = range.startWord;
+  const endWord = range.startWord + range.wordCount;
+
+  // Did the current word move INTO or OUT OF this line?
+  const movedInto = nextWordIdx >= startWord && nextWordIdx < endWord;
+  const movedOutOf = prevWordIdx >= startWord && prevWordIdx < endWord;
+  if (movedInto || movedOutOf) return false;
+
+  // Did the line transition entirely between Future and Past?
+  const wasPast = prevWordIdx >= endWord;
+  const isPast = nextWordIdx >= endWord;
+  if (wasPast !== isPast) return false;
+
+  const wasFuture = prevWordIdx < startWord;
+  const isFuture = nextWordIdx < startWord;
+  if (wasFuture !== isFuture) return false;
+
+  // If none of the conditions above triggered, this line's rendering hasn't visually changed.
+  return true; 
+};
+
+const MemoizedRenderLine = memo(RenderLine, renderLineAreEqual);
+MemoizedRenderLine.displayName = 'RenderLine';
 
 const HighlightedText: FC<HighlightedTextProps> = memo((props) => {
   const textLines = useMemo(() => props.text.split('\n'), [props.text]);
@@ -171,7 +208,7 @@ const HighlightedText: FC<HighlightedTextProps> = memo((props) => {
         itemData={itemData}
         ref={listRef}
       >
-        {RenderLine}
+        {MemoizedRenderLine}
       </FixedSizeList>
     </div>
   );
