@@ -93,10 +93,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
   // Store pending read request during model download
   const [pendingRead, setPendingRead] = useState<{ text: string; voice: string } | null>(null);
 
-  // Seeking state
-  const [isSeekingHover, setIsSeekingHover] = useState(false);
-  const [hoverTime, setHoverTime] = useState(0);
-  const [isDragging, setIsDragging] = useState(false);
+  // Seeking state (Moved to AudioPlayer)
 
   // Generation progress (0-100)
   const [generationProgress, setGenerationProgress] = useState<number>(0);
@@ -1149,9 +1146,6 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     toast,
     isReading,
     currentSentence,
-    isSeekingHover,
-    hoverTime,
-    isDragging,
     pendingRead,
     showOnboarding,
     showHelp,
@@ -1194,9 +1188,6 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     setAutoSelect,
     setKeepLocal,
     setToast,
-    setIsSeekingHover,
-    setHoverTime,
-    setIsDragging,
     formatTime,
     handleShowOnboarding,
     handleCloseOnboarding,

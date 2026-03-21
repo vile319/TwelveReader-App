@@ -1265,7 +1265,18 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
               audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
             }
             const decodedBuffer = await audioContextRef.current.decodeAudioData(arrayBuffer);
-            audioData = new Float32Array(decodedBuffer.getChannelData(0)); // Copy out of AudioBuffer for stable downstream processing
+            const rawAudioData = new Float32Array(decodedBuffer.getChannelData(0)); // Copy out of AudioBuffer for stable downstream processing
+            
+            // Trim leading silence from HF API responses (Fixes ~3s delay between highlight and speech)
+            let startTrim = 0;
+            while (startTrim < rawAudioData.length && Math.abs(rawAudioData[startTrim]) < 0.015) {
+              startTrim++;
+            }
+            let endTrim = rawAudioData.length - 1;
+            while (endTrim > startTrim && Math.abs(rawAudioData[endTrim]) < 0.015) {
+              endTrim--;
+            }
+            audioData = startTrim >= endTrim ? new Float32Array(0) : rawAudioData.slice(startTrim, endTrim + 1);
             // IMPORTANT: use the rate from the decoded buffer (which is the AudioContext's actual rate after resampling)
             // This ensures all timing math (duration, word timings, progress) uses the right denominator
             sampleRate = decodedBuffer.sampleRate;
@@ -1302,7 +1313,16 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
             const attempt1 = await runGenerate(chunk);
             audioObject = attempt1.result;
             let extracted = extractAudio(audioObject);
-            audioData = extracted.data;
+            
+            const trimLocalSilence = (arr: Float32Array | null) => {
+              if (!arr || arr.length === 0) return arr;
+              let s = 0;
+              while (s < arr.length && Math.abs(arr[s]) < 0.01) s++;
+              let e = arr.length - 1;
+              while (e > s && Math.abs(arr[e]) < 0.01) e--;
+              return s >= e ? new Float32Array(0) : arr.slice(s, e + 1);
+            };
+            audioData = trimLocalSilence(extracted.data);
             if (extracted.sr) sampleRate = extracted.sr;
 
             // If audio is empty/null, log diagnostics and retry once
@@ -1322,7 +1342,7 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
                 const attempt2 = await runGenerate(chunk);
                 audioObject = attempt2.result;
                 extracted = extractAudio(audioObject);
-                audioData = extracted.data;
+                audioData = trimLocalSilence(extracted.data);
                 if (extracted.sr) sampleRate = extracted.sr;
 
                 if (!audioData || audioData.length === 0) {

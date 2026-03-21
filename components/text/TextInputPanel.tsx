@@ -53,6 +53,7 @@ LiveHighlightedText.displayName = 'LiveHighlightedText';
 const TextInputPanel: FC = () => {
   const { state, actions, tts } = useAppContext();
   const contentRef = useRef<HTMLDivElement>(null);
+  const scrollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [showLibrary, setShowLibrary] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [saveTitle, setSaveTitle] = useState('');
@@ -121,7 +122,11 @@ const TextInputPanel: FC = () => {
     return (
       <div
         ref={contentRef}
-        onScroll={(e: React.UIEvent<HTMLDivElement>) => actions.updateScrollPosition((e.currentTarget).scrollTop)}
+        onScroll={(e: React.UIEvent<HTMLDivElement>) => {
+          const top = (e.currentTarget).scrollTop;
+          if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
+          scrollTimeoutRef.current = setTimeout(() => actions.updateScrollPosition(top), 100);
+        }}
         className="flex-1 w-full flex flex-col min-h-[40vh] relative"
       >
         {/* Continue Generation Prompt */}

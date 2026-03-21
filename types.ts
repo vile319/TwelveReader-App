@@ -93,10 +93,6 @@ export interface AppState {
   isReading: boolean;
   currentSentence: string;
 
-  // Seeking state
-  isSeekingHover: boolean;
-  hoverTime: number;
-  isDragging: boolean;
 
   // Pending read state
   pendingRead: { text: string; voice: string } | null;
@@ -163,9 +159,6 @@ export interface AppContextType {
 
     // UI actions
     setToast: (toast: AppToast | null) => void;
-    setIsSeekingHover: (hover: boolean) => void;
-    setHoverTime: (time: number) => void;
-    setIsDragging: (dragging: boolean) => void;
 
     // Utility functions
     formatTime: (seconds: number) => string;

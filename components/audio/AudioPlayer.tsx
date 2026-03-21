@@ -14,6 +14,8 @@ const fmt = (s: number) => {
 const AudioPlayer: FC = () => {
   const { state, actions, tts } = useAppContext();
   const [showDriveMenu, setShowDriveMenu] = useState(false);
+  const [isSeekingHover, setIsSeekingHover] = useState(false);
+  const [hoverTime, setHoverTime] = useState(0);
 
   // === DOM refs for direct manipulation (no React re-renders during playback) ===
   const progressFillRef = useRef<HTMLDivElement>(null);
@@ -150,21 +152,20 @@ const AudioPlayer: FC = () => {
                 if (!state.audio.canScrub) return;
                 const rect = e.currentTarget.getBoundingClientRect();
                 const hoverPosition = (e.clientX - rect.left) / rect.width;
-                actions.setHoverTime(hoverPosition * safeDuration);
-                actions.setIsSeekingHover(true);
+                setHoverTime(hoverPosition * safeDuration);
+                setIsSeekingHover(true);
               }}
               onMouseLeave={() => {
                 if (!state.audio.canScrub) return;
-                actions.setIsSeekingHover(false);
+                setIsSeekingHover(false);
               }}
               onMouseDown={(e: React.MouseEvent<HTMLDivElement>) => {
                 if (!state.audio.canScrub) return;
-                actions.setIsDragging(true);
                 const rect = e.currentTarget.getBoundingClientRect();
                 const clickPosition = (e.clientX - rect.left) / rect.width;
                 actions.seekToTime(clickPosition * safeDuration);
               }}
-              onMouseUp={() => { if (!state.audio.canScrub) return; actions.setIsDragging(false); }}
+              onMouseUp={() => { if (!state.audio.canScrub) return; }}
             >
               {/* Progress Fill — updated via ref during playback */}
               <div
@@ -174,12 +175,12 @@ const AudioPlayer: FC = () => {
               />
 
               {/* Hover Tooltip */}
-              {state.isSeekingHover && (
+              {isSeekingHover && (
                 <div
                   className="absolute -top-8 -translate-x-1/2 px-2 py-0.5 bg-slate-800 text-white text-[10px] font-medium rounded border border-slate-700 shadow-lg z-10"
-                  style={{ left: `${(state.hoverTime / (safeDuration || 1)) * 100}%` }}
+                  style={{ left: `${(hoverTime / (safeDuration || 1)) * 100}%` }}
                 >
-                  {fmt(state.hoverTime)}
+                  {fmt(hoverTime)}
                 </div>
               )}
             </div>
