@@ -17,22 +17,14 @@ const LiveHighlightedText = memo(({ text, wordTimings, isPlaying, stateWordIndex
   style?: React.CSSProperties;
 }) => {
   const [displayIndex, setDisplayIndex] = useState(stateWordIndex);
-  const rafRef = useRef(0);
-  const lastUpdateRef = useRef(0);
 
   useEffect(() => {
     if (isPlaying) {
-      const tick = () => {
-        const now = performance.now();
-        if (now - lastUpdateRef.current > 66) {        // ~15Hz
-          lastUpdateRef.current = now;
-          const idx = wordIndexRef.current;
-          setDisplayIndex(prev => prev === idx ? prev : idx);
-        }
-        rafRef.current = requestAnimationFrame(tick);
-      };
-      rafRef.current = requestAnimationFrame(tick);
-      return () => cancelAnimationFrame(rafRef.current);
+      const id = setInterval(() => {
+        const idx = wordIndexRef.current;
+        setDisplayIndex(prev => prev === idx ? prev : idx);
+      }, 250);  // 4Hz — words are spoken at ~2-3/sec
+      return () => clearInterval(id);
     } else {
       setDisplayIndex(stateWordIndex);
     }

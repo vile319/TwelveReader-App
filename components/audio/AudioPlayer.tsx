@@ -18,7 +18,6 @@ const AudioPlayer: FC = () => {
   // === DOM refs for direct manipulation (no React re-renders during playback) ===
   const progressFillRef = useRef<HTMLDivElement>(null);
   const currentTimeTextRef = useRef<HTMLSpanElement>(null);
-  const rafRef = useRef(0);
   // Mirror of safeDuration for the rAF loop (sync'd via useEffect)
   const safeDurationRef = useRef(0);
 
@@ -26,9 +25,8 @@ const AudioPlayer: FC = () => {
   const safeDuration = (state.audio.isStreaming ? state.audio.synthesizedDuration : state.audio.duration) || 0;
   useEffect(() => { safeDurationRef.current = safeDuration; }, [safeDuration]);
 
-  // rAF loop: directly mutate DOM for progress bar + time text during playback.
-  // This avoids ALL React re-renders during playback, so the speed dropdown
-  // and other controls remain perfectly stable and responsive.
+  // Poll at 4Hz (250ms) — plenty fast for a progress bar / time display.
+  // Direct DOM mutation, zero React re-renders during playback.
   useEffect(() => {
     if (!state.audio.isPlaying) {
       // Stopped/paused — sync DOM from flushed React state
@@ -41,7 +39,7 @@ const AudioPlayer: FC = () => {
       return;
     }
 
-    const tick = () => {
+    const id = setInterval(() => {
       const dur = safeDurationRef.current;
       const time = Math.min(tts.currentTimeRef.current, dur);
       if (currentTimeTextRef.current) currentTimeTextRef.current.textContent = fmt(time);
@@ -49,10 +47,8 @@ const AudioPlayer: FC = () => {
         const pct = dur > 0 ? (time / dur) * 100 : 0;
         progressFillRef.current.style.width = `${pct}%`;
       }
-      rafRef.current = requestAnimationFrame(tick);
-    };
-    rafRef.current = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(rafRef.current);
+    }, 250);
+    return () => clearInterval(id);
   }, [state.audio.isPlaying, state.audio.currentTime, safeDuration, tts.currentTimeRef]);
 
 
