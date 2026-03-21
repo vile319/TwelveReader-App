@@ -452,9 +452,7 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
       }
 
       // Start playback from the appropriate chunk
-      // Streaming always plays at 1x (AudioBufferSourceNode has no preservesPitch).
-      // Speed is applied when synthesis completes and switches to HTMLAudioElement.
-      streamingStartTimeRef.current = audioContextRef.current.currentTime - startTime;
+      streamingStartTimeRef.current = audioContextRef.current.currentTime - startTime / playbackRateRef.current;
 
       if (!isPlaying) setIsPlaying(true);
 
@@ -462,7 +460,7 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
       // AudioPlayer and HighlightedText poll the refs with their own rAF loops.
       const trackStreamingProgress = () => {
         if (isPlaybackActiveRef.current && audioContextRef.current) {
-          const elapsed = audioContextRef.current.currentTime - streamingStartTimeRef.current;
+          const elapsed = (audioContextRef.current.currentTime - streamingStartTimeRef.current) * playbackRateRef.current;
           const totalStreamingSamples = streamingAudioRef.current.reduce((sum: number, chunk: Float32Array) => sum + chunk.length, 0);
           const maxStreamTime = totalStreamingSamples / samplesPerSecond;
           const currentPos = Math.max(0, Math.min(elapsed, maxStreamTime));
@@ -505,9 +503,9 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
 
       const source = audioContextRef.current.createBufferSource();
       source.buffer = audioBuffer;
-      // NOTE: Do NOT set source.playbackRate — AudioBufferSourceNode has no
-      // preservesPitch and would cause chipmunking. Streaming always plays at 1x;
-      // speed is applied when switching to HTMLAudioElement after synthesis.
+      try {
+        source.playbackRate.value = playbackRateRef.current;
+      } catch { }
       source.connect(audioContextRef.current.destination);
       scheduledSourceNodesRef.current.push(source);
 
@@ -517,8 +515,8 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
       source.start(nextPlayTime);
       console.log(`🎵 Scheduled streaming chunk ${i + 1}/${streamingAudioRef.current.length} at ${nextPlayTime.toFixed(2)}s`);
 
-      // Chunk always plays at 1x during streaming
-      const chunkDuration = actualChunk.length / sampleRateRef.current;
+      // Calculate duration of this chunk considering playback rate
+      const chunkDuration = (actualChunk.length / sampleRateRef.current) / playbackRateRef.current;
       nextPlayTime += chunkDuration;
 
       chunksProcessed++;
@@ -2189,7 +2187,23 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
     } catch (e) {
       console.warn('⚠️ Unable to set playbackRate on current source:', e);
     }
-  }, [sourceNodeRef]);
+
+    // If streaming is active, restart from the current position so ALL chunks
+    // use the new rate consistently (avoids some chunks at old rate, some at new).
+    if (isPlaybackActiveRef.current && scheduledSourceNodesRef.current.length > 0) {
+      const pos = currentTimeRef.current;
+      // Stop current streaming nodes
+      isPlaybackActiveRef.current = false;
+      scheduledSourceNodesRef.current.forEach(n => { try { n.stop(); } catch {} });
+      scheduledSourceNodesRef.current = [];
+      if (streamingTimeoutRef.current) {
+        clearTimeout(streamingTimeoutRef.current);
+        streamingTimeoutRef.current = null;
+      }
+      // Restart streaming from current position (will pick up new playbackRateRef)
+      setTimeout(() => startStreamingFromPosition(pos), 0);
+    }
+  }, [sourceNodeRef, startStreamingFromPosition]);
 
   return {
     speak,

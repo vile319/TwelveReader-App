@@ -3,33 +3,57 @@ import { type FC, useState, useEffect, useRef } from 'react';
 import { useAppContext } from '../../contexts/AppContext';
 import { cn } from '../../utils/cn';
 
+// Inline format helper so we don't depend on context reference inside rAF
+const fmt = (s: number) => {
+  if (!isFinite(s) || s < 0) return '0:00';
+  const m = Math.floor(s / 60);
+  const sec = Math.floor(s % 60);
+  return `${m}:${sec.toString().padStart(2, '0')}`;
+};
+
 const AudioPlayer: FC = () => {
   const { state, actions, tts } = useAppContext();
   const [showDriveMenu, setShowDriveMenu] = useState(false);
 
-  // === LOCAL display time — polled from tts.currentTimeRef during playback ===
-  // This avoids re-rendering the entire AppContext tree on every frame.
-  const [displayTime, setDisplayTime] = useState(0);
+  // === DOM refs for direct manipulation (no React re-renders during playback) ===
+  const progressFillRef = useRef<HTMLDivElement>(null);
+  const currentTimeTextRef = useRef<HTMLSpanElement>(null);
   const rafRef = useRef(0);
-  const lastUpdateRef = useRef(0);
+  // Mirror of safeDuration for the rAF loop (sync'd via useEffect)
+  const safeDurationRef = useRef(0);
 
+  // Keep safeDurationRef in sync with React state (changes ~once per chunk)
+  const safeDuration = (state.audio.isStreaming ? state.audio.synthesizedDuration : state.audio.duration) || 0;
+  useEffect(() => { safeDurationRef.current = safeDuration; }, [safeDuration]);
+
+  // rAF loop: directly mutate DOM for progress bar + time text during playback.
+  // This avoids ALL React re-renders during playback, so the speed dropdown
+  // and other controls remain perfectly stable and responsive.
   useEffect(() => {
-    if (state.audio.isPlaying) {
-      const tick = () => {
-        const now = performance.now();
-        if (now - lastUpdateRef.current > 50) {          // ~20Hz
-          lastUpdateRef.current = now;
-          setDisplayTime(tts.currentTimeRef.current);
-        }
-        rafRef.current = requestAnimationFrame(tick);
-      };
-      rafRef.current = requestAnimationFrame(tick);
-      return () => cancelAnimationFrame(rafRef.current);
-    } else {
-      // When not playing, sync from React state (flushed on pause/stop)
-      setDisplayTime(state.audio.currentTime);
+    if (!state.audio.isPlaying) {
+      // Stopped/paused — sync DOM from flushed React state
+      const time = Math.min(state.audio.currentTime, safeDuration);
+      if (currentTimeTextRef.current) currentTimeTextRef.current.textContent = fmt(time);
+      if (progressFillRef.current) {
+        const pct = safeDuration > 0 ? (time / safeDuration) * 100 : 0;
+        progressFillRef.current.style.width = `${pct}%`;
+      }
+      return;
     }
-  }, [state.audio.isPlaying, state.audio.currentTime, tts.currentTimeRef]);
+
+    const tick = () => {
+      const dur = safeDurationRef.current;
+      const time = Math.min(tts.currentTimeRef.current, dur);
+      if (currentTimeTextRef.current) currentTimeTextRef.current.textContent = fmt(time);
+      if (progressFillRef.current) {
+        const pct = dur > 0 ? (time / dur) * 100 : 0;
+        progressFillRef.current.style.width = `${pct}%`;
+      }
+      rafRef.current = requestAnimationFrame(tick);
+    };
+    rafRef.current = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(rafRef.current);
+  }, [state.audio.isPlaying, state.audio.currentTime, safeDuration, tts.currentTimeRef]);
 
 
   // Close drive menu when clicking outside
@@ -47,10 +71,7 @@ const AudioPlayer: FC = () => {
   }
 
   const disabled = !state.audio.canScrub && !state.isReading;
-
-  // During streaming, use synthesizedDuration (grows per chunk); after synthesis use final duration
-  const safeDuration = (state.audio.isStreaming ? state.audio.synthesizedDuration : state.audio.duration) || 0;
-  const safeCurrentTime = Math.min(displayTime, safeDuration);
+  const safeCurrentTime = Math.min(state.audio.currentTime, safeDuration);
   const progressPercent = safeDuration > 0 ? (safeCurrentTime / safeDuration) * 100 : 0;
 
   return (
@@ -76,17 +97,11 @@ const AudioPlayer: FC = () => {
           <button
             onClick={() => {
               actions.primeAudioContext();
-              // If synthesis is actively running (chunks being generated), only
-              // toggle playback — never call handleStartReading which calls
-              // tts.stop() and kills the generation.
               if (state.audio.isSynthesizing) {
                 actions.togglePlayPause();
               } else if (!state.isReading && (state.audio.canScrub || state.inputText.trim())) {
-                // Not in reading mode yet — enter reading mode properly
-                // (handles both pre-loaded audio and fresh text)
                 actions.handleStartReading();
               } else if (state.isReading && !state.audio.canScrub && !state.audio.isPlaying) {
-                // In reading mode but no audio ready — trigger generation
                 actions.handleStartReading();
               } else {
                 actions.togglePlayPause();
@@ -123,8 +138,9 @@ const AudioPlayer: FC = () => {
 
         {/* Progress Bar Area */}
         <div className="flex-1 w-full flex items-center gap-4">
-          <span className="text-xs font-medium text-slate-500 tabular-nums shrink-0">
-            {actions.formatTime(safeCurrentTime)}
+          {/* Current time — updated via ref during playback, never causes re-render */}
+          <span ref={currentTimeTextRef} className="text-xs font-medium text-slate-500 tabular-nums shrink-0">
+            {fmt(safeCurrentTime)}
           </span>
 
           <div className="relative flex-1 group h-8 flex items-center">
@@ -154,9 +170,10 @@ const AudioPlayer: FC = () => {
               }}
               onMouseUp={() => { if (!state.audio.canScrub) return; actions.setIsDragging(false); }}
             >
-              {/* Progress Fill */}
+              {/* Progress Fill — updated via ref during playback */}
               <div
-                className="absolute left-0 top-0 h-full bg-blue-500 rounded-sm transition-[width] duration-100 ease-out"
+                ref={progressFillRef}
+                className="absolute left-0 top-0 h-full bg-blue-500 rounded-sm"
                 style={{ width: `${progressPercent}%` }}
               />
 
@@ -166,14 +183,14 @@ const AudioPlayer: FC = () => {
                   className="absolute -top-8 -translate-x-1/2 px-2 py-0.5 bg-slate-800 text-white text-[10px] font-medium rounded border border-slate-700 shadow-lg z-10"
                   style={{ left: `${(state.hoverTime / (safeDuration || 1)) * 100}%` }}
                 >
-                  {actions.formatTime(state.hoverTime)}
+                  {fmt(state.hoverTime)}
                 </div>
               )}
             </div>
           </div>
 
           <span className="text-xs font-medium text-slate-500 tabular-nums shrink-0">
-            {actions.formatTime(safeDuration)}
+            {fmt(safeDuration)}
           </span>
         </div>
 
