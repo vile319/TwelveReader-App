@@ -82,7 +82,8 @@ function detectGpuCapabilitiesImpl(): Promise<GpuCapabilities> {
   const run = async (): Promise<GpuCapabilities> => {
     if (navAny.gpu) {
       try {
-        const adapter: GPUAdapter | null = await navAny.gpu.requestAdapter();
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const adapter: any = await navAny.gpu.requestAdapter();
 
         if (!adapter) {
           reason = 'request-adapter-null';

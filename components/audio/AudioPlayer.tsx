@@ -14,6 +14,7 @@ const fmt = (s: number) => {
 const AudioPlayer: FC = () => {
   const { state, actions, tts } = useAppContext();
   const [showDriveMenu, setShowDriveMenu] = useState(false);
+  const [showSpeedMenu, setShowSpeedMenu] = useState(false);
   const tooltipRef = useRef<HTMLDivElement>(null);
   // === DOM refs for direct manipulation (no React re-renders during playback) ===
   const progressFillRef = useRef<HTMLDivElement>(null);
@@ -53,14 +54,15 @@ const AudioPlayer: FC = () => {
   }, [state.audio.isPlaying, state.audio.currentTime, safeDuration, tts.currentTimeRef]);
 
 
-  // Close drive menu when clicking outside
+  // Close menus when clicking outside
   useEffect(() => {
     const handleClickOutside = () => {
       if (showDriveMenu) setShowDriveMenu(false);
+      if (showSpeedMenu) setShowSpeedMenu(false);
     };
     document.addEventListener('click', handleClickOutside);
     return () => document.removeEventListener('click', handleClickOutside);
-  }, [showDriveMenu]);
+  }, [showDriveMenu, showSpeedMenu]);
 
   // If there's no text and no audio, don't show the player to keep UI clean
   if (!state.inputText.trim() && !state.audio.canScrub && !state.isReading) {
@@ -193,17 +195,37 @@ const AudioPlayer: FC = () => {
 
         {/* Utilities: Speed, Download, Sync */}
         <div className="flex items-center gap-2 shrink-0">
-          <select
-            value={state.audio.playbackRate}
-            onChange={(e: React.ChangeEvent<HTMLSelectElement>) => actions.setPlaybackRate(parseFloat(e.target.value))}
-            className="appearance-none bg-transparent hover:bg-slate-800 text-slate-300 text-xs font-medium py-1.5 px-2 rounded cursor-pointer focus:outline-none focus:ring-1 focus:ring-indigo-500 transition-colors"
-          >
-            <option value="0.75">0.75×</option>
-            <option value="1">1.0×</option>
-            <option value="1.25">1.25×</option>
-            <option value="1.5">1.5×</option>
-            <option value="2">2.0×</option>
-          </select>
+          {/* Custom Speed Dropdown to bypass Chromium compositor bugs with native selects */}
+          <div className="relative" onClick={(e) => e.stopPropagation()}>
+            <button
+              onClick={() => {
+                setShowSpeedMenu(!showSpeedMenu);
+                setShowDriveMenu(false);
+              }}
+              className="appearance-none bg-transparent hover:bg-slate-800 text-slate-300 text-xs font-medium py-1.5 px-2 rounded cursor-pointer focus:outline-none focus:ring-1 focus:ring-indigo-500 transition-colors flex items-center gap-1"
+            >
+              {state.audio.playbackRate === 1 ? '1.0' : state.audio.playbackRate}×
+            </button>
+            {showSpeedMenu && (
+              <div className="absolute bottom-full mb-1 left-0 bg-[#1e293b] border border-slate-700 rounded-sm shadow-2xl z-50 animate-in fade-in py-1 duration-100 overflow-hidden flex flex-col min-w-[3rem]">
+                {[0.75, 1.0, 1.25, 1.5, 2.0].map(rate => (
+                  <button
+                    key={rate}
+                    onClick={() => {
+                      actions.setPlaybackRate(rate);
+                      setShowSpeedMenu(false);
+                    }}
+                    className={cn(
+                      "w-full text-left px-3 py-1.5 text-xs font-medium transition-colors",
+                      state.audio.playbackRate === rate ? "bg-blue-600 text-white" : "text-slate-300 hover:bg-slate-700 hover:text-white"
+                    )}
+                  >
+                    {rate === 1 ? '1.0' : rate}×
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
 
           <button
             onClick={actions.handleDownloadAudio}
@@ -221,6 +243,7 @@ const AudioPlayer: FC = () => {
           <div className="relative" onClick={(e) => e.stopPropagation()}>
             <button
               onClick={() => {
+                setShowSpeedMenu(false);
                 if (state.googleDriveLinked) setShowDriveMenu(!showDriveMenu);
                 else actions.linkGoogleDrive();
               }}
