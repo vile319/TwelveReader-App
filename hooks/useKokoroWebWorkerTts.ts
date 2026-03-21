@@ -1448,11 +1448,11 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
               startStreamingFromPosition(0);
             }
           }
-        }
 
-        // Flush accumulated word timings to React state once per batch (not once per chunk).
-        // This gives the UI an update ~every 10 chunks instead of every chunk.
-        flushWordTimings();
+          // Flush word timings EVERY chunk so that the UI highlighter always has the latest data
+          // to stay ahead of the streaming audio playback.
+          flushWordTimings();
+        }
 
         // Allow event loop to breathe between batches
         if (batchEnd < chunks.length) {
