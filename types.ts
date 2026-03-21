@@ -219,6 +219,7 @@ export interface AppContextType {
     wordTimings: WordTiming[];
     currentWordIndex: number;
     synthesisComplete: boolean;
+    isSynthesizing: boolean;
     getAudioBlob: () => Blob | null;
     getPartialAudioBlob: () => Blob | null;
     getSynthesisChunkStats: () => { chunksGenerated: number; totalChunks: number; text: string };
@@ -227,5 +228,9 @@ export interface AppContextType {
     setPlaybackRate: (rate: number) => void;
     playbackRate: number;
     primeAudioContext: () => void;
+    /** Ref for real-time polling (no re-renders). React state flushed on pause/stop. */
+    currentTimeRef: { current: number };
+    /** Ref for real-time polling (no re-renders). React state flushed on pause/stop. */
+    currentWordIndexRef: { current: number };
   };
 }

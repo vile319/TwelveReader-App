@@ -1,11 +1,35 @@
 import type React from 'react';
-import { type FC, useState, useEffect } from 'react';
+import { type FC, useState, useEffect, useRef } from 'react';
 import { useAppContext } from '../../contexts/AppContext';
 import { cn } from '../../utils/cn';
 
 const AudioPlayer: FC = () => {
-  const { state, actions } = useAppContext();
+  const { state, actions, tts } = useAppContext();
   const [showDriveMenu, setShowDriveMenu] = useState(false);
+
+  // === LOCAL display time — polled from tts.currentTimeRef during playback ===
+  // This avoids re-rendering the entire AppContext tree on every frame.
+  const [displayTime, setDisplayTime] = useState(0);
+  const rafRef = useRef(0);
+  const lastUpdateRef = useRef(0);
+
+  useEffect(() => {
+    if (state.audio.isPlaying) {
+      const tick = () => {
+        const now = performance.now();
+        if (now - lastUpdateRef.current > 50) {          // ~20Hz
+          lastUpdateRef.current = now;
+          setDisplayTime(tts.currentTimeRef.current);
+        }
+        rafRef.current = requestAnimationFrame(tick);
+      };
+      rafRef.current = requestAnimationFrame(tick);
+      return () => cancelAnimationFrame(rafRef.current);
+    } else {
+      // When not playing, sync from React state (flushed on pause/stop)
+      setDisplayTime(state.audio.currentTime);
+    }
+  }, [state.audio.isPlaying, state.audio.currentTime, tts.currentTimeRef]);
 
 
   // Close drive menu when clicking outside
@@ -26,7 +50,7 @@ const AudioPlayer: FC = () => {
 
   // During streaming, use synthesizedDuration (grows per chunk); after synthesis use final duration
   const safeDuration = (state.audio.isStreaming ? state.audio.synthesizedDuration : state.audio.duration) || 0;
-  const safeCurrentTime = Math.min(state.audio.currentTime, safeDuration);
+  const safeCurrentTime = Math.min(displayTime, safeDuration);
   const progressPercent = safeDuration > 0 ? (safeCurrentTime / safeDuration) * 100 : 0;
 
   return (

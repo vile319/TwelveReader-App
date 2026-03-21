@@ -174,6 +174,8 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
   // Word timing for highlighting
   const [wordTimings, setWordTimings] = useState<Array<{ word: string, start: number, end: number }>>([]);
   const [currentWordIndex, setCurrentWordIndex] = useState(-1);
+  // Always-fresh ref mirror of currentWordIndex for rAF consumers to poll
+  const currentWordIndexRef = useRef(-1);
 
   // Debug flag to force WASM mode (for WebGPU audio scaling issues)
   const [forceWasmMode, setForceWasmMode] = useState(false);
@@ -199,7 +201,7 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
   // This eliminates 50+ consecutive setWordTimings calls (and re-renders) for large PDFs.
   const wordTimingsAccumRef = useRef<Array<{ word: string; start: number; end: number }>>([]);
 
-  const lastTimeUpdateRef = useRef(0);
+
   // Gate for throttling setCurrentWordIndex — only emit ~15 times per second.
   const lastWordIndexUpdateRef = useRef(0);
   const WORD_INDEX_THROTTLE_MS = 66; // ~15 Hz
@@ -250,20 +252,15 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
 
   // Helper to update current word index — throttled to WORD_INDEX_THROTTLE_MS.
   // Uses binary search so even large PDFs don't cause jank.
+  // PERF: Only updates the ref, never React state. Consumers (HighlightedText)
+  // poll currentWordIndexRef directly. React state is flushed on pause/stop.
   const updateCurrentWordIndex = useCallback((currentTime: number) => {
-    // Throttle: only update state up to ~15 times/second
     const now = performance.now();
     if (now - lastWordIndexUpdateRef.current < WORD_INDEX_THROTTLE_MS) return;
     lastWordIndexUpdateRef.current = now;
 
     const newIndex = findWordIndexBinary(currentTime);
-
-    setCurrentWordIndex((prevIndex: number) => {
-      if (newIndex !== prevIndex) {
-        return newIndex;
-      }
-      return prevIndex;
-    });
+    currentWordIndexRef.current = newIndex;
   }, [findWordIndexBinary]);
 
   const ttsRef = useRef<any>(null);
@@ -455,36 +452,22 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
       }
 
       // Start playback from the appropriate chunk
-      streamingStartTimeRef.current = audioContextRef.current.currentTime - startTime / playbackRateRef.current;
+      // Streaming always plays at 1x (AudioBufferSourceNode has no preservesPitch).
+      // Speed is applied when synthesis completes and switches to HTMLAudioElement.
+      streamingStartTimeRef.current = audioContextRef.current.currentTime - startTime;
 
       if (!isPlaying) setIsPlaying(true);
 
-      // Start progress tracking for streaming
-      // NOTE: We update currentTimeRef on every frame for accurate seeking/highlighting,
-      // but only push React state (setCurrentTime) at ~20Hz to avoid 60fps re-renders
-      // that lag the entire UI (speed dropdown, buttons, etc.).
+      // Progress tracking for streaming — ref-only, NO React state updates.
+      // AudioPlayer and HighlightedText poll the refs with their own rAF loops.
       const trackStreamingProgress = () => {
         if (isPlaybackActiveRef.current && audioContextRef.current) {
-          // elapsed in audio-time (already accounts for playback rate via AudioContext scheduling)
-          const elapsed = (audioContextRef.current.currentTime - streamingStartTimeRef.current) * playbackRateRef.current;
-          // Calculate max time from streaming audio length
+          const elapsed = audioContextRef.current.currentTime - streamingStartTimeRef.current;
           const totalStreamingSamples = streamingAudioRef.current.reduce((sum: number, chunk: Float32Array) => sum + chunk.length, 0);
           const maxStreamTime = totalStreamingSamples / samplesPerSecond;
-          // DO NOT multiply elapsed by playbackRate again — it was already applied above
           const currentPos = Math.max(0, Math.min(elapsed, maxStreamTime));
-          // Always update the ref (used by seeking, word-index lookup, etc.)
           currentTimeRef.current = currentPos;
-
-          // Update current word index for highlighting (~15Hz throttle inside)
           updateCurrentWordIndex(currentPos);
-
-          // Throttle React state update to ~20Hz to prevent 60fps re-renders
-          const now = performance.now();
-          if (now - lastTimeUpdateRef.current > 50) {
-            lastTimeUpdateRef.current = now;
-            setCurrentTime(currentPos);
-          }
-
           requestAnimationFrame(trackStreamingProgress);
         }
       };
@@ -522,9 +505,9 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
 
       const source = audioContextRef.current.createBufferSource();
       source.buffer = audioBuffer;
-      try {
-        source.playbackRate.value = playbackRateRef.current;
-      } catch { }
+      // NOTE: Do NOT set source.playbackRate — AudioBufferSourceNode has no
+      // preservesPitch and would cause chipmunking. Streaming always plays at 1x;
+      // speed is applied when switching to HTMLAudioElement after synthesis.
       source.connect(audioContextRef.current.destination);
       scheduledSourceNodesRef.current.push(source);
 
@@ -534,8 +517,8 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
       source.start(nextPlayTime);
       console.log(`🎵 Scheduled streaming chunk ${i + 1}/${streamingAudioRef.current.length} at ${nextPlayTime.toFixed(2)}s`);
 
-      // Calculate duration of this chunk considering playback rate
-      const chunkDuration = (actualChunk.length / sampleRateRef.current) / playbackRateRef.current;
+      // Chunk always plays at 1x during streaming
+      const chunkDuration = actualChunk.length / sampleRateRef.current;
       nextPlayTime += chunkDuration;
 
       chunksProcessed++;
@@ -603,17 +586,13 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
       audio.preservesPitch = true;
 
       const progressAnimationRef = { current: 0 };
+      // PERF: Only update refs during playback — no React state updates.
+      // AudioPlayer polls currentTimeRef. HighlightedText polls currentWordIndexRef.
       const updateProgress = () => {
         if (!isPlaybackActiveRef.current) return;
-
         const currentPos = audio.currentTime;
+        currentTimeRef.current = currentPos;
         updateCurrentWordIndex(currentPos);
-
-        const now = performance.now();
-        if (now - lastTimeUpdateRef.current > 50) {
-          lastTimeUpdateRef.current = now;
-          setCurrentTimeBoth(currentPos);
-        }
         progressAnimationRef.current = requestAnimationFrame(updateProgress);
       };
 
@@ -626,8 +605,10 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
         console.log(`🏁 Audio ended naturally at ${finalDuration.toFixed(2)}s`);
         setIsPlaying(false);
         isPlaybackActiveRef.current = false;
+        // Flush refs to React state on natural end (infrequent)
         setCurrentTimeBoth(finalDuration);
         updateCurrentWordIndex(finalDuration);
+        setCurrentWordIndex(currentWordIndexRef.current);
 
         if (progressAnimationRef.current) {
           cancelAnimationFrame(progressAnimationRef.current);
@@ -674,6 +655,10 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
 
       setIsPlaying(false);
       isPlaybackActiveRef.current = false; // Stop streaming playback
+
+      // Flush refs → React state so paused UI shows correct values
+      setCurrentTime(currentTimeRef.current);
+      setCurrentWordIndex(currentWordIndexRef.current);
 
       // Also explicitly stop any currently scheduled streaming audio nodes
       scheduledSourceNodesRef.current.forEach(node => {
@@ -2243,6 +2228,10 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
     // New synthesis complete flag
     synthesisComplete,
     isSynthesizing,
+    // Refs for real-time polling by AudioPlayer / HighlightedText
+    // (React state is only flushed on pause/stop to avoid re-rendering the full tree)
+    currentTimeRef,
+    currentWordIndexRef,
     // Utility: get combined audio buffer as WAV Blob
     getAudioBlob,
     getPartialAudioBlob,

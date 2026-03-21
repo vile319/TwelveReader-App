@@ -1,12 +1,57 @@
-import React, { type FC, type ChangeEvent, useRef, useEffect, useState } from 'react';
+import React, { type FC, type ChangeEvent, useRef, useEffect, useState, memo } from 'react';
 import { useAppContext, sampleTexts } from '../../contexts/AppContext';
 import HighlightedText from '../HighlightedText';
 import PDFReader from '../PDFReader';
 import { cn } from '../../utils/cn';
 import { TextSet } from '../../types';
 
+// Thin wrapper that polls currentWordIndexRef at ~15Hz during playback.
+// Only this component re-renders when the word changes — not the entire TextInputPanel.
+const LiveHighlightedText = memo(({ text, wordTimings, isPlaying, stateWordIndex, wordIndexRef, onWordClick, style }: {
+  text: string;
+  wordTimings: Array<{ word: string; start: number; end: number }>;
+  isPlaying: boolean;
+  stateWordIndex: number;
+  wordIndexRef: { current: number };
+  onWordClick?: (time: number) => void;
+  style?: React.CSSProperties;
+}) => {
+  const [displayIndex, setDisplayIndex] = useState(stateWordIndex);
+  const rafRef = useRef(0);
+  const lastUpdateRef = useRef(0);
+
+  useEffect(() => {
+    if (isPlaying) {
+      const tick = () => {
+        const now = performance.now();
+        if (now - lastUpdateRef.current > 66) {        // ~15Hz
+          lastUpdateRef.current = now;
+          const idx = wordIndexRef.current;
+          setDisplayIndex(prev => prev === idx ? prev : idx);
+        }
+        rafRef.current = requestAnimationFrame(tick);
+      };
+      rafRef.current = requestAnimationFrame(tick);
+      return () => cancelAnimationFrame(rafRef.current);
+    } else {
+      setDisplayIndex(stateWordIndex);
+    }
+  }, [isPlaying, stateWordIndex, wordIndexRef]);
+
+  return (
+    <HighlightedText
+      text={text}
+      wordTimings={wordTimings}
+      currentWordIndex={displayIndex}
+      onWordClick={onWordClick}
+      style={style}
+    />
+  );
+});
+LiveHighlightedText.displayName = 'LiveHighlightedText';
+
 const TextInputPanel: FC = () => {
-  const { state, actions } = useAppContext();
+  const { state, actions, tts } = useAppContext();
   const contentRef = useRef<HTMLDivElement>(null);
   const [showLibrary, setShowLibrary] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -124,10 +169,12 @@ const TextInputPanel: FC = () => {
         )}
 
         {state.inputText.length > 0 ? (
-          <HighlightedText
+          <LiveHighlightedText
             text={state.inputText}
             wordTimings={state.audio.wordTimings}
-            currentWordIndex={state.audio.currentWordIndex}
+            isPlaying={state.audio.isPlaying}
+            stateWordIndex={state.audio.currentWordIndex}
+            wordIndexRef={tts.currentWordIndexRef}
             onWordClick={actions.handleWordClick}
             style={{ overflowY: 'visible' }}
           />
