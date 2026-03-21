@@ -30,7 +30,7 @@ const LiveHighlightedText = memo(({ text, wordTimingsRef, isPlaying, stateWordIn
         
         const len = wordTimingsRef.current.length;
         setTimingsCount(prev => prev === len ? prev : len);
-      }, 250);  // 4Hz — words are spoken at ~2-3/sec
+      }, 30);  // ~30Hz — words are spoken fast, ensures highlighter glides through text seamlessly
       return () => clearInterval(id);
     } else {
       setDisplayIndex(stateWordIndex);
@@ -67,7 +67,7 @@ const TextInputPanel: FC = () => {
       const id = setInterval(() => {
         if (tts.generationProgressRef) setLocalProgress(tts.generationProgressRef.current);
         if (tts.statusRef) setLocalStatus(tts.statusRef.current);
-      }, 150);
+      }, 30); // Accelerated refresh for satisfying loader bar gliding
       return () => clearInterval(id);
     }
   }, [state.isGenerating, state.audio.isLoading, tts]);
@@ -139,7 +139,7 @@ const TextInputPanel: FC = () => {
         onScroll={(e: React.UIEvent<HTMLDivElement>) => {
           const top = (e.currentTarget).scrollTop;
           if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
-          scrollTimeoutRef.current = setTimeout(() => actions.updateScrollPosition(top), 100);
+          scrollTimeoutRef.current = setTimeout(() => actions.updateScrollPosition(top), 30);
         }}
         className="flex-1 w-full flex flex-col min-h-[40vh] relative"
       >
@@ -391,11 +391,11 @@ const TextInputPanel: FC = () => {
               </div>
               <div className="w-full bg-[#020617] rounded-sm h-2.5 overflow-hidden border border-slate-800">
                 <div
-                  className="bg-blue-600 h-2.5 rounded-sm transition-all duration-300 ease-out shadow-[0_0_10px_rgba(37,99,235,0.5)]"
+                  className="bg-blue-600 h-2.5 rounded-sm transition-transform duration-300 ease-out shadow-[0_0_10px_rgba(37,99,235,0.5)] origin-left w-full"
                   style={{
-                    width: state.isExtractingPDF
-                      ? `${((pdfExtractProgress?.page ?? 0) / (pdfExtractProgress?.total ?? 1)) * 100}%`
-                      : `${localProgress}%`
+                    transform: `scaleX(${state.isExtractingPDF
+                      ? ((pdfExtractProgress?.page ?? 0) / (pdfExtractProgress?.total ?? 1))
+                      : (localProgress / 100)})`
                   }}
                 />
               </div>

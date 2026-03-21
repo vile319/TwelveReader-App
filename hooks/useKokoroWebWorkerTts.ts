@@ -467,7 +467,7 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
         const currentPos = Math.max(0, Math.min(elapsed, maxStreamTime));
         currentTimeRef.current = currentPos;
         updateCurrentWordIndex(currentPos);
-      }, 250); // 4Hz is plenty for word highlighting and progress bar
+      }, 16); // 60Hz is essential for keeping track accuracy on par with visual scrubber UI
       if (audioContextRef.current) {
         playStreamingChunks(chunkIndex, targetSample - currentSample, audioContextRef.current.currentTime, currentStreamId);
       }
@@ -586,10 +586,10 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
           clearInterval(updateProgressId);
           return;
         }
-        const currentPos = audio.currentTime;
-        currentTimeRef.current = currentPos;
-        updateCurrentWordIndex(currentPos);
-      }, 250); // 4Hz
+        const timeToReport = audio.currentTime;
+        currentTimeRef.current = timeToReport;
+        updateCurrentWordIndex(timeToReport);
+      }, 16); // Match 60hz for complete audio tracker
 
       audio.onended = () => {
         if (intentionalStopRef.current) {

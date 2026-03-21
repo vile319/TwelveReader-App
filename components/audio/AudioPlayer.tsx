@@ -14,9 +14,7 @@ const fmt = (s: number) => {
 const AudioPlayer: FC = () => {
   const { state, actions, tts } = useAppContext();
   const [showDriveMenu, setShowDriveMenu] = useState(false);
-  const [isSeekingHover, setIsSeekingHover] = useState(false);
-  const [hoverTime, setHoverTime] = useState(0);
-
+  const tooltipRef = useRef<HTMLDivElement>(null);
   // === DOM refs for direct manipulation (no React re-renders during playback) ===
   const progressFillRef = useRef<HTMLDivElement>(null);
   const currentTimeTextRef = useRef<HTMLSpanElement>(null);
@@ -35,21 +33,22 @@ const AudioPlayer: FC = () => {
       const time = Math.min(state.audio.currentTime, safeDuration);
       if (currentTimeTextRef.current) currentTimeTextRef.current.textContent = fmt(time);
       if (progressFillRef.current) {
-        const pct = safeDuration > 0 ? (time / safeDuration) * 100 : 0;
-        progressFillRef.current.style.width = `${pct}%`;
+        const pct = safeDuration > 0 ? (time / safeDuration) : 0;
+        progressFillRef.current.style.transform = `scaleX(${pct})`;
       }
       return;
     }
 
+    // Actively playing — poll the ref directly at 60Hz to bypass React VDOM completely while keeping butter-smooth anims
     const id = setInterval(() => {
       const dur = safeDurationRef.current;
       const time = Math.min(tts.currentTimeRef.current, dur);
       if (currentTimeTextRef.current) currentTimeTextRef.current.textContent = fmt(time);
       if (progressFillRef.current) {
-        const pct = dur > 0 ? (time / dur) * 100 : 0;
-        progressFillRef.current.style.width = `${pct}%`;
+        const pct = dur > 0 ? (time / dur) : 0;
+        progressFillRef.current.style.transform = `scaleX(${pct})`;
       }
-    }, 250);
+    }, 16);
     return () => clearInterval(id);
   }, [state.audio.isPlaying, state.audio.currentTime, safeDuration, tts.currentTimeRef]);
 
@@ -152,12 +151,16 @@ const AudioPlayer: FC = () => {
                 if (!state.audio.canScrub) return;
                 const rect = e.currentTarget.getBoundingClientRect();
                 const hoverPosition = (e.clientX - rect.left) / rect.width;
-                setHoverTime(hoverPosition * safeDuration);
-                setIsSeekingHover(true);
+                const time = hoverPosition * safeDuration;
+                if (tooltipRef.current) {
+                  tooltipRef.current.style.opacity = '1';
+                  tooltipRef.current.style.left = `${(time / (safeDuration || 1)) * 100}%`;
+                  tooltipRef.current.textContent = fmt(time);
+                }
               }}
               onMouseLeave={() => {
                 if (!state.audio.canScrub) return;
-                setIsSeekingHover(false);
+                if (tooltipRef.current) tooltipRef.current.style.opacity = '0';
               }}
               onMouseDown={(e: React.MouseEvent<HTMLDivElement>) => {
                 if (!state.audio.canScrub) return;
@@ -167,22 +170,19 @@ const AudioPlayer: FC = () => {
               }}
               onMouseUp={() => { if (!state.audio.canScrub) return; }}
             >
-              {/* Progress Fill — updated via ref during playback */}
+              {/* Progress Fill — updated via ref during playback using GPU-accelerated transform */}
               <div
                 ref={progressFillRef}
-                className="absolute left-0 top-0 h-full bg-blue-500 rounded-sm"
-                style={{ width: `${progressPercent}%` }}
+                className="absolute left-0 top-0 h-full bg-blue-500 rounded-sm origin-left pointer-events-none"
+                style={{ width: '100%', transform: `scaleX(${progressPercent / 100})` }}
               />
 
-              {/* Hover Tooltip */}
-              {isSeekingHover && (
-                <div
-                  className="absolute -top-8 -translate-x-1/2 px-2 py-0.5 bg-slate-800 text-white text-[10px] font-medium rounded border border-slate-700 shadow-lg z-10"
-                  style={{ left: `${(hoverTime / (safeDuration || 1)) * 100}%` }}
-                >
-                  {fmt(hoverTime)}
-                </div>
-              )}
+              {/* Hover Tooltip - always mounted, handled via direct DOM to bypass React */}
+              <div
+                ref={tooltipRef}
+                className="absolute -top-8 -translate-x-1/2 px-2 py-0.5 bg-slate-800 text-white text-[10px] font-medium rounded border border-slate-700 shadow-lg z-10 pointer-events-none"
+                style={{ opacity: 0, transition: 'opacity 0.1s' }}
+              />
             </div>
           </div>
 
