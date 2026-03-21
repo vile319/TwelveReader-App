@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import useKokoroWebWorkerTts from '../hooks/useKokoroWebWorkerTts';
 import { BRAND_NAME } from '../utils/branding';
 import { AppContextType, AppState, AppToast, SampleText, TextSet } from '../types.ts';
@@ -272,8 +272,8 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
 
         // Save partial audio + current timings (if any)
         await localDB.saveAudioBlob(currentSetId, blob);
-        if (tts.wordTimings && tts.wordTimings.length > 0) {
-          await localDB.saveTimings(currentSetId, tts.wordTimings);
+        if (tts.wordTimingsRef.current && tts.wordTimingsRef.current.length > 0) {
+          await localDB.saveTimings(currentSetId, tts.wordTimingsRef.current);
         }
 
         const stats = tts.getSynthesisChunkStats();
@@ -603,7 +603,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
   }, []);
 
   // -------- Cloud sync helpers --------
-  const handleDriveError = (e: any, context: string) => {
+  const handleDriveError = useCallback((e: any, context: string) => {
     console.warn(`[Drive Error] ${context}:`, e);
     if (e instanceof Error && e.message.includes('token expired')) {
       setGoogleDriveLinked(false);
@@ -617,7 +617,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
         type: 'error'
       });
     }
-  };
+  }, []);
 
   // -------- Library actions --------
   const saveCurrentTextSet = async (title?: string, suppressPrompt: boolean = false): Promise<boolean> => {
@@ -646,11 +646,11 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       }
 
       // Also ensure exact word timings are saved/synced for existing items 
-      if (tts.wordTimings && tts.wordTimings.length > 0) {
+      if (tts.wordTimingsRef.current && tts.wordTimingsRef.current.length > 0) {
         try {
-          await localDB.saveTimings(existingSet.id, tts.wordTimings);
+          await localDB.saveTimings(existingSet.id, tts.wordTimingsRef.current);
           if (googleDriveLinked && driveSync.hasToken()) {
-            driveSync.uploadTimings(existingSet.id, tts.wordTimings).catch(e => console.error('Failed to sync timings (existing)', e));
+            driveSync.uploadTimings(existingSet.id, tts.wordTimingsRef.current).catch(e => console.error('Failed to sync timings (existing)', e));
           }
         } catch (e) {
           console.error('Failed to save timings (existing):', e);
@@ -683,11 +683,11 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     };
 
     // Save timings separately
-    if (tts.wordTimings && tts.wordTimings.length > 0) {
+    if (tts.wordTimingsRef.current && tts.wordTimingsRef.current.length > 0) {
       try {
-        await localDB.saveTimings(newSet.id, tts.wordTimings);
+        await localDB.saveTimings(newSet.id, tts.wordTimingsRef.current);
         if (googleDriveLinked && driveSync.hasToken()) {
-          driveSync.uploadTimings(newSet.id, tts.wordTimings).catch(e => console.error('Failed to sync timings', e));
+          driveSync.uploadTimings(newSet.id, tts.wordTimingsRef.current).catch(e => console.error('Failed to sync timings', e));
         }
       } catch (e) {
         console.error('Failed to save timings:', e);
@@ -1127,7 +1127,8 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       canScrub: tts.canScrub,
       synthesisComplete: tts.synthesisComplete,
       isSynthesizing: tts.isSynthesizing,
-      wordTimings: tts.wordTimings,
+      wordTimings: tts.wordTimingsRef.current,
+      wordTimingsCount: tts.wordTimingsCount,
       currentWordIndex: tts.currentWordIndex,
       playbackRate: tts.playbackRate,
     },
@@ -1167,63 +1168,72 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     generationCheckpoint,
   };
 
+  // Memoize actions so consumers (and React.memo components like LiveHighlightedText)
+  // don't get new function references on every AppContext render.
+  const actions = useMemo(() => ({
+    setInputText: updateInputText,
+    setUploadedPDF,
+    setIsExtractingPDF,
+    handleStartReading,
+    handleStopReading,
+    cancelGeneration,
+    continueGenerationFromCheckpoint,
+    handleWordClick,
+    handleDownloadAudio,
+    handleAcceptModelDownload,
+    handleCancelModelDownload,
+    handleFileUpload,
+    handlePDFTextExtracted,
+    handlePDFError,
+    setSelectedVoice: (voice: string) => {
+      setSelectedVoice(voice);
+      if (isReading) {
+        handleStopReading();
+      }
+    },
+    setPreferredDevice: handleDeviceChange,
+    setAutoSelect,
+    setKeepLocal,
+    setToast,
+    setIsSeekingHover,
+    setHoverTime,
+    setIsDragging,
+    formatTime,
+    handleShowOnboarding,
+    handleCloseOnboarding,
+    handleShowHelp,
+    handleCloseHelp,
+    seekToTime: tts.seekToTime,
+    togglePlayPause: tts.togglePlayPause,
+    skipForward: tts.skipForward,
+    skipBackward: tts.skipBackward,
+    getAudioBlob: tts.getAudioBlob,
+    setPlaybackRate: tts.setPlaybackRate,
+    primeAudioContext: tts.primeAudioContext,
+    saveCurrentTextSet,
+    loadTextSet,
+    deleteTextSet,
+    linkGoogleDrive,
+    disconnectDrive,
+    forceSyncDrive,
+    loginUser,
+    logoutUser,
+    updateScrollPosition,
+  }), [
+    updateInputText, handleStartReading, handleStopReading, cancelGeneration,
+    continueGenerationFromCheckpoint, handleWordClick, handleDownloadAudio,
+    handleAcceptModelDownload, handleCancelModelDownload, handleFileUpload,
+    handlePDFTextExtracted, handlePDFError, isReading, handleDeviceChange,
+    tts.seekToTime, tts.togglePlayPause, tts.skipForward, tts.skipBackward,
+    tts.getAudioBlob, tts.setPlaybackRate, tts.primeAudioContext,
+    saveCurrentTextSet, loadTextSet, deleteTextSet, linkGoogleDrive,
+    disconnectDrive, forceSyncDrive, loginUser, logoutUser
+  ]);
+
   // Context value
   const contextValue: AppContextType = {
     state,
-    actions: {
-      setInputText: updateInputText,
-      setUploadedPDF,
-      setIsExtractingPDF,
-      handleStartReading,
-      handleStopReading,
-      cancelGeneration,
-      continueGenerationFromCheckpoint,
-      handleWordClick,
-      handleDownloadAudio,
-      handleAcceptModelDownload,
-      handleCancelModelDownload,
-      handleFileUpload,
-      handlePDFTextExtracted,
-      handlePDFError,
-      setSelectedVoice: (voice: string) => {
-        setSelectedVoice(voice);
-        // If actively reading, changing the voice should stop playback so the user can manually restart
-        if (isReading) {
-          handleStopReading();
-        }
-      },
-      setPreferredDevice: handleDeviceChange,
-      setAutoSelect,
-      setKeepLocal,
-      setToast,
-      setIsSeekingHover,
-      setHoverTime,
-      setIsDragging,
-      formatTime,
-      handleShowOnboarding,
-      handleCloseOnboarding,
-      handleShowHelp,
-      handleCloseHelp,
-      seekToTime: tts.seekToTime,
-      togglePlayPause: tts.togglePlayPause,
-      skipForward: tts.skipForward,
-      skipBackward: tts.skipBackward,
-      getAudioBlob: tts.getAudioBlob,
-      setPlaybackRate: tts.setPlaybackRate,
-      primeAudioContext: tts.primeAudioContext,
-      // Library
-      saveCurrentTextSet,
-      loadTextSet,
-      deleteTextSet,
-      // Cloud Sync
-      linkGoogleDrive,
-      disconnectDrive,
-      forceSyncDrive,
-      // Identity
-      loginUser,
-      logoutUser,
-      updateScrollPosition,
-    },
+    actions,
     tts,
   };
 

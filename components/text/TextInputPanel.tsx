@@ -7,9 +7,10 @@ import { TextSet } from '../../types';
 
 // Thin wrapper that polls currentWordIndexRef at ~15Hz during playback.
 // Only this component re-renders when the word changes — not the entire TextInputPanel.
-const LiveHighlightedText = memo(({ text, wordTimings, isPlaying, stateWordIndex, wordIndexRef, onWordClick, style }: {
+const LiveHighlightedText = memo(({ text, wordTimings, wordTimingsCount, isPlaying, stateWordIndex, wordIndexRef, onWordClick, style }: {
   text: string;
   wordTimings: Array<{ word: string; start: number; end: number }>;
+  wordTimingsCount: number;
   isPlaying: boolean;
   stateWordIndex: number;
   wordIndexRef: { current: number };
@@ -17,6 +18,9 @@ const LiveHighlightedText = memo(({ text, wordTimings, isPlaying, stateWordIndex
   style?: React.CSSProperties;
 }) => {
   const [displayIndex, setDisplayIndex] = useState(stateWordIndex);
+
+  // Read the variable so the linter knows it's used to trigger React.memo
+  void wordTimingsCount;
 
   useEffect(() => {
     if (isPlaying) {
@@ -164,6 +168,7 @@ const TextInputPanel: FC = () => {
           <LiveHighlightedText
             text={state.inputText}
             wordTimings={state.audio.wordTimings}
+            wordTimingsCount={state.audio.wordTimingsCount}
             isPlaying={state.audio.isPlaying}
             stateWordIndex={state.audio.currentWordIndex}
             wordIndexRef={tts.currentWordIndexRef}

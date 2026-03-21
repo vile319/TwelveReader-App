@@ -168,11 +168,15 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
   const durationRef = useRef<number>(0);
   const setDurationBoth = useCallback((d: number) => { durationRef.current = d; setDuration(d); }, []);
   const [synthesizedDuration, setSynthesizedDuration] = useState<number>(0);
+  // Always-fresh ref for synthesizedDuration to prevent React re-renders on every chunk
+  const synthesizedDurationRef = useRef<number>(0);
   const [canScrub, setCanScrub] = useState<boolean>(false);
   const [isStreaming, setIsStreaming] = useState<boolean>(false);
 
-  // Word timing for highlighting
-  const [wordTimings, setWordTimings] = useState<Array<{ word: string, start: number, end: number }>>([]);
+  // Word timing for highlighting — using a pure ref to avoid massive array copies.
+  // wordTimingsCount acts as a lightweight trigger for React to know new words arrived.
+  const wordTimingsRef = useRef<Array<{ word: string, start: number, end: number }>>([]);
+  const [wordTimingsCount, setWordTimingsCount] = useState(0);
   const [currentWordIndex, setCurrentWordIndex] = useState(-1);
   // Always-fresh ref mirror of currentWordIndex for rAF consumers to poll
   const currentWordIndexRef = useRef(-1);
@@ -192,10 +196,6 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
 
   const hasAutoStartedStreamingRef = useRef(false);
 
-  // Always-fresh mirror of wordTimings so updateCurrentWordIndex never reads stale closure state.
-  const wordTimingsRef = useRef(wordTimings);
-  wordTimingsRef.current = wordTimings;
-
   // Accumulator ref: word timings are pushed here during synthesis and
   // batch-committed to React state periodically rather than on every chunk.
   // This eliminates 50+ consecutive setWordTimings calls (and re-renders) for large PDFs.
@@ -206,17 +206,16 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
   const lastWordIndexUpdateRef = useRef(0);
   const WORD_INDEX_THROTTLE_MS = 66; // ~15 Hz
 
-  // Flush accumulated word timings into React state and the always-fresh ref.
+  // Flush accumulated word timings into the mutable ref and emit a lightweight count update.
   // Call after all synthesis is done OR periodically during streaming.
   const flushWordTimings = useCallback(() => {
     const pending = wordTimingsAccumRef.current;
     if (pending.length === 0) return;
-    setWordTimings(prev => {
-      const merged = [...prev, ...pending];
-      wordTimingsRef.current = merged;
-      return merged;
-    });
+    
+    // Mutate the ref directly to avoid O(n) array copy GC spikes for huge books
+    wordTimingsRef.current.push(...pending);
     wordTimingsAccumRef.current = [];
+    setWordTimingsCount(c => c + 1);
   }, []);
 
   // Binary-search helper: find the index of the word playing at `currentTime`.
@@ -1174,8 +1173,8 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
     // Reset state before new synthesis
     hasAutoStartedStreamingRef.current = false;
     const seedTimings = options?.seedWordTimings ?? [];
-    setWordTimings(seedTimings);
     wordTimingsRef.current = seedTimings;
+    setWordTimingsCount(0);
     wordTimingsAccumRef.current = []; // Clear accumulator for fresh run
     setCurrentWordIndex(-1);
     setSynthesisComplete(false);
@@ -1381,7 +1380,11 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
           lastSynthesizedSampleRateRef.current = sampleRate;
           const baseDuration = options?.initialSynthesizedDuration ?? 0;
           const currentStreamDuration = baseDuration + (totalSamples / sampleRate);
-          setSynthesizedDuration(currentStreamDuration);
+          synthesizedDurationRef.current = currentStreamDuration;
+          
+          // Only update React state on the first chunk so the UI knows streaming started,
+          // otherwise AudioPlayer polls the ref.
+          if (i === 0) setSynthesizedDuration(currentStreamDuration);
 
           // --- Accumulate word timings into ref; batch-flush to React state after each BATCH ---
           // This avoids one setWordTimings React state update per chunk (which triggers
@@ -1695,7 +1698,8 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
 
     hasAutoStartedStreamingRef.current = false;
     // Reset word highlighting
-    setWordTimings([]);
+    wordTimingsRef.current = [];
+    setWordTimingsCount(0);
     setCurrentWordIndex(-1);
 
     // Clear any pending seek operations and progress updates
@@ -2107,9 +2111,11 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
 
       // Use specifically saved wordTimings if available
       if (savedWordTimings && savedWordTimings.length > 0) {
-        setWordTimings(savedWordTimings);
+        wordTimingsRef.current = savedWordTimings;
+        setWordTimingsCount(c => c + 1);
       } else {
-        setWordTimings([]);
+        wordTimingsRef.current = [];
+        setWordTimingsCount(0);
         console.warn("No word timings were attached to this saved audio file. Word highlighting will be disabled during playback.");
       }
 
@@ -2230,7 +2236,8 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
     skipForward,
     skipBackward,
     // Word highlighting
-    wordTimings,
+    wordTimingsRef,
+    wordTimingsCount,
     currentWordIndex,
     // Debug mode controls
     forceWasmMode,

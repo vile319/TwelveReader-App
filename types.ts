@@ -1,5 +1,7 @@
 /// <reference types="react" />
 
+import React, { MutableRefObject } from 'react';
+
 export interface AppToast {
   title?: string;
   message: string;
@@ -36,6 +38,7 @@ export interface AudioState {
   /** True while the synthesis loop is actively running (chunks being generated) */
   isSynthesizing: boolean;
   wordTimings: WordTiming[];
+  wordTimingsCount: number;
   currentWordIndex: number;
   playbackRate: number;
 }
@@ -216,7 +219,8 @@ export interface AppContextType {
     togglePlayPause: () => void;
     skipForward: () => void;
     skipBackward: () => void;
-    wordTimings: WordTiming[];
+    wordTimingsRef: MutableRefObject<WordTiming[]>;
+    wordTimingsCount: number;
     currentWordIndex: number;
     synthesisComplete: boolean;
     isSynthesizing: boolean;
