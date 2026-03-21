@@ -374,9 +374,6 @@ const TextInputPanel: FC = () => {
             file={state.uploadedPDF}
             onTextExtracted={actions.handlePDFTextExtracted}
             onProgress={(page, total) => setPdfExtractProgress({ page, total })}
-            currentSentence={state.currentSentence}
-            wordTimings={state.audio.wordTimings}
-            currentWordIndex={state.audio.currentWordIndex}
           />
         </div>
       )}
