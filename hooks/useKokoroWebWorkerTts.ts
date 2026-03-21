@@ -479,21 +479,26 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
     }
   }, []);
 
-  // Play streaming chunks sequentially using precise AudioContext scheduling
+  // Play streaming chunks sequentially using precise AudioContext scheduling with lazy buffering
   const playStreamingChunks = useCallback(async (startChunkIndex: number = 0, offsetSamples: number = 0, initialNextTime?: number, streamId?: number) => {
     if (!isPlaybackActiveRef.current || !audioContextRef.current) return;
     if (streamId !== undefined && streamId !== streamInvocationIdRef.current) return;
 
     let nextPlayTime = initialNextTime || audioContextRef.current.currentTime;
     let chunksProcessed = 0;
+    const MAX_SCHEDULE_AHEAD = 5; // Only schedule 5 chunks ahead to keep UI thread instant on seek/pause
 
-    for (let i = startChunkIndex; i < streamingAudioRef.current.length && isPlaybackActiveRef.current; i++) {
+    for (let i = startChunkIndex; i < streamingAudioRef.current.length && isPlaybackActiveRef.current && chunksProcessed < MAX_SCHEDULE_AHEAD; i++) {
       const chunk = streamingAudioRef.current[i];
       const actualChunk = offsetSamples > 0 && i === startChunkIndex
         ? chunk.slice(offsetSamples)
         : chunk;
 
-      if (actualChunk.length === 0) continue;
+      if (actualChunk.length === 0) {
+        offsetSamples = 0;
+        chunksProcessed++;
+        continue;
+      }
 
       const audioBuffer = audioContextRef.current.createBuffer(1, actualChunk.length, sampleRateRef.current);
       audioBuffer.getChannelData(0).set(actualChunk);
@@ -522,10 +527,14 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
 
     const nextStartIndex = startChunkIndex + chunksProcessed;
 
-    // Check if we need to wait for more chunks or if synthesis is complete
+    // Check if we need to schedule more chunks
     if (isPlaybackActiveRef.current) {
-      if (currentSynthesisRef.current && !synthesisComplete) {
-        // Still synthesizing, check for new chunks shortly
+      if (nextStartIndex < streamingAudioRef.current.length || (currentSynthesisRef.current && !synthesisComplete)) {
+        // We have more chunks already generated, OR we're still waiting for them
+        const timeUntilNextPlay = nextPlayTime - audioContextRef.current.currentTime;
+        // Wait until we only have ~1 second of buffered audio remaining before parsing next batch
+        const waitTimeMs = Math.max(50, (timeUntilNextPlay - 1.0) * 1000);
+
         if (streamingTimeoutRef.current) {
           clearTimeout(streamingTimeoutRef.current);
         }
@@ -533,7 +542,7 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
           if (isPlaybackActiveRef.current) {
             playStreamingChunks(nextStartIndex, 0, nextPlayTime, streamId);
           }
-        }, 100);
+        }, waitTimeMs);
       } else if (nextStartIndex >= streamingAudioRef.current.length) {
         // Synthesis complete and all chunks scheduled.
         // We wait for the scheduled time to pass before declaring playback ended.
