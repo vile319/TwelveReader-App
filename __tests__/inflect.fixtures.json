@@ -1,0 +1,209 @@
+{
+  "normalize": [
+    {
+      "input": "It wasn't until later that I realized what had actually happened.",
+      "expected": "It wasn't until later that I realized what had actually happened."
+    },
+    {
+      "input": "First, close the window; second, turn off the lamp; finally, lock the door.",
+      "expected": "First, close the window; second, turn off the lamp; finally, lock the door."
+    },
+    {
+      "input": "The package weighs twelve point six kilograms and arrived on July twenty-first.",
+      "expected": "The package weighs twelve point six kilograms and arrived on July twenty-first."
+    },
+    {
+      "input": "Gwendolyn photographed the eucalyptus trees outside Ljubljana.",
+      "expected": "Gwendolyn photographed the eucalyptus trees outside Ljubljana."
+    },
+    {
+      "input": "The system runs on three core components that all have to stay in sync.",
+      "expected": "The system runs on three core components that all have to stay in sync."
+    },
+    {
+      "input": "It cost $1,234.56 and shipped on 07/25/2026 at 3:05 PM.",
+      "expected": "It cost one thousand two hundred and thirty four dollars and fifty six cents and shipped on July twenty fifth two thousand and twenty six at three oh five p m."
+    },
+    {
+      "input": "Call 555-0134 before 7pm.",
+      "expected": "Call five five five, zero one three four before seven p m."
+    },
+    {
+      "input": "We upgraded to version 1.2.3 on the RTX 4090 using PyTorch and SQLite.",
+      "expected": "We upgraded to version one point two point three on the ar tee ex forty ninety using pie torch and ess cue lite."
+    },
+    {
+      "input": "Dr. Chen and Mr. Alvarez met at St. Mary's, e.g. around 11:00 a.m.",
+      "expected": "doctor Chen and mister Alvarez met at saint Mary's, for example around eleven o clock a m."
+    },
+    {
+      "input": "The U.S.A. team placed 1st, 2nd and 23rd.",
+      "expected": "The U S A team placed first, second and twenty third."
+    },
+    {
+      "input": "Room 4B is past gate 12, near apartment 007.",
+      "expected": "Room four bee is past gate twelve, near apartment zero oh seven."
+    },
+    {
+      "input": "742 North Maple Street — see the map (page 3).",
+      "expected": "seven four two North Maple Street, see the map, page three."
+    },
+    {
+      "input": "NASA and the FBI confirmed 100000 units at $0.99 each.",
+      "expected": "en ay ess ay and the eff bee eye confirmed one zero zero zero zero zero units at zero dollars and ninety nine cents each."
+    },
+    {
+      "input": "She paid $1 for 1 item; he paid $2.05 for 12,345 items.",
+      "expected": "She paid one dollar for one item; he paid two dollars and five cents for one two three four five items."
+    },
+    {
+      "input": "The temperature was 98.6 degrees at 12:00 and 6:30 am.",
+      "expected": "The temperature was ninety eight point six degrees at twelve o clockand six thirty a m."
+    },
+    {
+      "input": "“Curly quotes” and ‘apostrophes’ … plus an en–dash.",
+      "expected": "\"Curly quotes\" and 'apostrophes'. . . plus an en-dash."
+    },
+    {
+      "input": "Order 42 ships 12/31/1999; invoice 0042 does not.",
+      "expected": "Order forty two ships December thirty first one thousand nine hundred and ninety nine; invoice zero oh four two does not."
+    },
+    {
+      "input": "2024 was fine but 31337 was not, and 20250 is a year-ish number.",
+      "expected": "two thousand and twenty four was fine but three one three three seven was not, and twenty thousand two hundred and fifty is a year-ish number."
+    }
+  ],
+  "split": [
+    {
+      "input": "Hello world. How are you? I am fine; thanks: really.",
+      "expected": [
+        "Hello world.",
+        "How are you?",
+        "I am fine;",
+        "thanks:",
+        "really."
+      ]
+    },
+    {
+      "input": "The quick brown fox jumps over the lazy dog, and then keeps running for a very long time indeed, because this sentence needs to exceed the two hundred and eighty character chunking limit so that the splitter actually has to do some work; it should break at a comma if one is available in the second half of the window, otherwise at a space, otherwise hard at the limit. ",
+      "expected": [
+        "The quick brown fox jumps over the lazy dog, and then keeps running for a very long time indeed, because this sentence needs to exceed the two hundred and eighty character chunking limit so that the splitter actually has to do some work;",
+        "it should break at a comma if one is available in the second half of the window, otherwise at a space, otherwise hard at the limit."
+      ]
+    },
+    {
+      "input": "The quick brown fox jumps over the lazy dog, and then keeps running for a very long time indeed, because this sentence needs to exceed the two hundred and eighty character chunking limit so that the splitter actually has to do some work; it should break at a comma if one is available in the second half of the window, otherwise at a space, otherwise hard at the limit. The quick brown fox jumps over the lazy dog, and then keeps running for a very long time indeed, because this sentence needs to exceed the two hundred and eighty character chunking limit so that the splitter actually has to do some work; it should break at a comma if one is available in the second half of the window, otherwise at a space, otherwise hard at the limit. ",
+      "expected": [
+        "The quick brown fox jumps over the lazy dog, and then keeps running for a very long time indeed, because this sentence needs to exceed the two hundred and eighty character chunking limit so that the splitter actually has to do some work;",
+        "it should break at a comma if one is available in the second half of the window, otherwise at a space, otherwise hard at the limit.",
+        "The quick brown fox jumps over the lazy dog, and then keeps running for a very long time indeed, because this sentence needs to exceed the two hundred and eighty character chunking limit so that the splitter actually has to do some work;",
+        "it should break at a comma if one is available in the second half of the window, otherwise at a space, otherwise hard at the limit."
+      ]
+    },
+    {
+      "input": "Nopunctuationatallherexxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      "expected": [
+        "Nopunctuationatallherexxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+      ]
+    },
+    {
+      "input": "Short one.",
+      "expected": [
+        "Short one."
+      ]
+    }
+  ],
+  "symbols": {
+    "count": 178,
+    "mapSize": 177,
+    "joined": "_;:,.!?¡¿—…\"«»“” ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzɑɐɒæɓʙβɔɕçɗɖðʤəɘɚɛɜɝɞɟʄɡɠɢʛɦɧħɥʜɨɪʝɭɬɫɮʟɱɯɰŋɳɲɴøɵɸθœɶʘɹɺɾɻʀʁɽʂʃʈʧʉʊʋⱱʌɣɤʍχʎʏʑʐʒʔʡʕʢǀǁǂǃˈˌːˑʼʴʰʱʲʷˠˤ˞↓↑→↗↘'̩'ᵻ",
+    "spaceId": 16,
+    "apostropheId": 176,
+    "probe": {
+      "_": 0,
+      ";": 1,
+      ":": 2,
+      " ": 16,
+      ",": 3,
+      ".": 4,
+      "!": 5,
+      "?": 6,
+      "A": 17,
+      "a": 43,
+      "z": 68,
+      "ɑ": 69,
+      "ˈ": 156,
+      "ː": 158,
+      "ᵻ": 177
+    }
+  },
+  "tokens": [
+    {
+      "phonemes": "hɛlˈoʊ",
+      "expected": [
+        0,
+        50,
+        0,
+        86,
+        0,
+        54,
+        0,
+        156,
+        0,
+        57,
+        0,
+        135,
+        0
+      ]
+    },
+    {
+      "phonemes": "ðɪs ɪz ɐ tˈɛst.",
+      "expected": [
+        0,
+        81,
+        0,
+        102,
+        0,
+        61,
+        0,
+        16,
+        0,
+        102,
+        0,
+        68,
+        0,
+        16,
+        0,
+        70,
+        0,
+        16,
+        0,
+        62,
+        0,
+        156,
+        0,
+        86,
+        0,
+        61,
+        0,
+        62,
+        0,
+        4,
+        0
+      ]
+    },
+    {
+      "phonemes": "ˈeɪ",
+      "expected": [
+        0,
+        156,
+        0,
+        47,
+        0,
+        102,
+        0
+      ]
+    }
+  ]
+}

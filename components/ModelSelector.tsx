@@ -1,6 +1,11 @@
 import React, { type FC, useState, useEffect, type ChangeEvent, useCallback } from 'react';
 import { modelManager } from '../utils/modelManager';
 import { detectGpuCapabilities } from '../utils/gpuCapabilities';
+import {
+  getLocalEngineChoice,
+  setLocalEngineChoice,
+  type LocalEngineChoice
+} from '../utils/modelRuntime';
 
 void React;
 
@@ -50,6 +55,34 @@ const AVAILABLE_MODELS: ModelConfig[] = [
     dtype: 'q8',
     device: 'wasm',
     filename: 'model_q8f16.onnx',
+    recommended: true
+  },
+  // Inflect v2 — VITS-family, complete text-to-waveform under 10M parameters.
+  // These exist because Kokoro's 82M does not survive iOS Safari's WASM limits.
+  // Only FP32 ships upstream: the author does not publish INT8 because naive
+  // quantization audibly damages the integrated waveform decoder.
+  {
+    id: 'inflect-nano-v2',
+    name: 'Voice Engine — Inflect Nano',
+    description: 'Tiny 4M model. Best choice on iPhone and low-memory devices.',
+    size: '16MB',
+    quality: 'fast',
+    url: 'owensong/Inflect-Nano-v2-ONNX',
+    dtype: 'fp32',
+    device: 'wasm',
+    filename: 'onnx/decode.onnx',
+    recommended: true
+  },
+  {
+    id: 'inflect-micro-v2',
+    name: 'Voice Engine — Inflect Micro',
+    description: 'Tiny 9M model. Better quality than Nano, still phone-friendly.',
+    size: '38MB',
+    quality: 'balanced',
+    url: 'owensong/Inflect-Micro-v2-ONNX',
+    dtype: 'fp32',
+    device: 'wasm',
+    filename: 'onnx/decode.onnx',
     recommended: true
   },
 ];
@@ -144,6 +177,22 @@ const ModelSelector: FC<ModelSelectorProps> = ({
     [onDeviceChange]
   );
 
+  const [localEngine, setLocalEngine] = useState<LocalEngineChoice>(() => getLocalEngineChoice());
+
+  const handleLocalEngineChange = useCallback(
+    (e: ChangeEvent<HTMLSelectElement>) => {
+      const choice = e.target.value as LocalEngineChoice;
+      setLocalEngine(choice);
+      setLocalEngineChoice(choice);
+      // selectedModel is derived from preferredDevice upstream, so nudge the
+      // device through unchanged to force the model to be re-resolved.
+      if (effectiveDevice === 'wasm' || effectiveDevice === 'cpu') {
+        onDeviceChange?.(effectiveDevice);
+      }
+    },
+    [effectiveDevice, onDeviceChange]
+  );
+
   // After the useEffect for loading preferences, add this new useEffect for device fallback
   useEffect(() => {
     if (gpuCheckComplete && !gpuAvailable && effectiveDevice === 'webgpu') {
@@ -210,6 +259,33 @@ const ModelSelector: FC<ModelSelectorProps> = ({
           </p>
         )}
       </div>
+
+      {/* Local voice engine — only meaningful when synthesis runs on-device */}
+      {(effectiveDevice === 'wasm' || effectiveDevice === 'cpu') && (
+        <div className="space-y-2">
+          <label className="block text-sm font-semibold text-slate-200">
+            Local voice engine
+          </label>
+          <select
+            value={localEngine}
+            onChange={handleLocalEngineChange}
+            disabled={disabled}
+            className={`w-full p-2 bg-[#111827] border border-slate-700 rounded-sm text-slate-200 text-sm font-semibold transition-colors ${disabled ? 'opacity-50 cursor-not-allowed' : 'hover:border-slate-500 focus:border-blue-500 focus:ring-1 focus:ring-blue-500'
+              }`}
+          >
+            <option value="auto">Automatic (Inflect on iPhone, Kokoro elsewhere)</option>
+            <option value="kokoro">Kokoro 82M — 50+ voices, 82MB (not iPhone-safe)</option>
+            <option value="inflect-nano">Inflect Nano — 1 voice, 16MB (fastest, iPhone-safe)</option>
+            <option value="inflect-micro">Inflect Micro — 1 voice, 38MB (better quality)</option>
+          </select>
+          {localEngine.startsWith('inflect') && (
+            <p className="text-xs text-slate-400">
+              Inflect ships a single fixed English male voice — the voice picker is
+              disabled while it is selected.
+            </p>
+          )}
+        </div>
+      )}
     </div>
   );
 };

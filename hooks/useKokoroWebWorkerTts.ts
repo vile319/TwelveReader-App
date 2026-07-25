@@ -2,7 +2,8 @@ import React, { useState, useCallback, useRef, useEffect } from 'react';
 /* eslint-disable @typescript-eslint/no-unused-vars */
 // Touch the default import to avoid TS6133 (React might still be needed by JSX in future refactor)
 void React;
-import { KokoroTTS } from 'kokoro-js';
+import { loadTtsEngine, getEngineFamily, resolveVoiceForModel } from '../utils/ttsEngine';
+import { INFLECT_DEFAULT_VOICE } from '../utils/inflect';
 import { configureOnnxRuntimeForIOS } from '../utils/onnxIosConfig';
 import { modelManager } from '../utils/modelManager';
 import { detectGpuCapabilities } from '../utils/gpuCapabilities';
@@ -303,7 +304,7 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
   const lastSynthesizedSampleRateRef = useRef<number>(24000);
 
   // Complete list of all Kokoro voices from Hugging Face
-  const voices = [
+  const kokoroVoices = [
     // American Female
     { name: 'af_alloy', label: '🇺🇸 Alloy (American Female)', nationality: 'American', gender: 'Female' },
     { name: 'af_aoede', label: '🇺🇸 Aoede (American Female)', nationality: 'American', gender: 'Female' },
@@ -340,6 +341,15 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
     { name: 'bm_george', label: '🇬🇧 George (British Male)', nationality: 'British', gender: 'Male' },
     { name: 'bm_lewis', label: '🇬🇧 Lewis (British Male)', nationality: 'British', gender: 'Male' },
   ];
+
+  // Inflect v2 is a single-speaker model. There is no speaker embedding to swap
+  // and no zero-shot cloning, so the picker collapses to one entry rather than
+  // offering 50 voices that would all render identically.
+  const inflectVoices = [
+    { name: INFLECT_DEFAULT_VOICE, label: '🎙️ Owen (English Male)', nationality: 'American', gender: 'Male' },
+  ];
+
+  const voices = getEngineFamily(selectedModel) === 'inflect' ? inflectVoices : kokoroVoices;
 
   // Deprecated: kept as a placeholder for backwards-compatibility with older saves
   // const addAudioChunk = useCallback((audioData: Float32Array, sampleRate: number) => {
@@ -972,7 +982,7 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
 
       if (getIsCancelled?.()) return null;
       const modelLoadStart = performance.now();
-      const tts = await KokoroTTS.from_pretrained('onnx-community/Kokoro-82M-v1.0-ONNX', {
+      const tts = await loadTtsEngine(selectedModel, {
         dtype: dtype,
         device: device,
         progress_callback: (progress: { status: string; progress?: number }) => {
@@ -1012,8 +1022,11 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
         setStatus('⚠️ GPU failed, trying CPU fallback...');
 
         try {
-          const tts = await KokoroTTS.from_pretrained('onnx-community/Kokoro-82M-v1.0-ONNX', {
-            dtype: 'q8',
+          // Fall back to whichever engine the user selected, on CPU. For Inflect
+          // this stays FP32 (no quantized export exists); for Kokoro it drops to q8.
+          const fallbackIsInflect = getEngineFamily(selectedModel) === 'inflect';
+          const tts = await loadTtsEngine(selectedModel, {
+            dtype: fallbackIsInflect ? 'fp32' : 'q8',
             device: 'wasm',
             progress_callback: (progress: { status: string; progress?: number }) => {
               if (getIsCancelled?.()) return;
@@ -1313,7 +1326,10 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
 
             const runGenerate = async (inputChunk: string) => {
               try {
-                const result = await ttsRef.current!.generate(inputChunk, { voice });
+                // Inflect has a single fixed voice; Kokoro voice ids mean nothing
+                // to it, so remap rather than passing an id it would ignore silently.
+                const engineVoice = resolveVoiceForModel(selectedModel, voice);
+                const result = await ttsRef.current!.generate(inputChunk, { voice: engineVoice });
                 return { result, threw: false };
               } catch (genErr: any) {
                 console.error(`❌ generate() threw for chunk ${i + 1} (${inputChunk.length} chars):`, genErr?.message ?? genErr);
@@ -1630,7 +1646,10 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
               });
             } catch { /* ignore */ }
           }
-          const wasmTts = await KokoroTTS.from_pretrained('onnx-community/Kokoro-82M-v1.0-ONNX', { dtype: 'q8', device: 'wasm' });
+          const wasmTts = await loadTtsEngine(selectedModel, {
+            dtype: getEngineFamily(selectedModel) === 'inflect' ? 'fp32' : 'q8',
+            device: 'wasm'
+          });
           ttsRef.current = wasmTts;
           setCurrentDevice('wasm');
           setIsReady(true);
@@ -1982,7 +2001,9 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
     const startTime = performance.now();
 
     try {
-      const testAudio = await ttsRef.current.generate(testText, { voice: 'af_bella' });
+      const testAudio = await ttsRef.current.generate(testText, {
+        voice: resolveVoiceForModel(selectedModel, 'af_bella')
+      });
       const endTime = performance.now();
 
       let audioData: Float32Array | null = null;
