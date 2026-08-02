@@ -6,6 +6,7 @@ import ModelWarningModal from './components/modals/ModelWarningModal';
 import OnboardingModal from './components/modals/OnboardingModal';
 import HelpModal from './components/modals/HelpModal';
 import AdSensePopup from './components/AdSensePopup';
+import { Analytics } from '@vercel/analytics/react';
 import { useAppContext } from './contexts/AppContext';
 
 void React;
@@ -66,6 +67,8 @@ const App: FC = () => {
   return (
     <AppProvider>
       <AppContent />
+      {/* Vercel Web Analytics. Dev runs log to console instead of counting as real traffic. */}
+      <Analytics mode={import.meta.env.PROD ? 'production' : 'development'} />
     </AppProvider>
   );
 };
