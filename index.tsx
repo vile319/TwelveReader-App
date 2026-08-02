@@ -19,16 +19,19 @@ root.render(
   </React.StrictMode>
 );
 
-// Register service worker for model caching (once page loads)
+// Service worker registration is handled by vite-plugin-pwa (registerType: 'autoUpdate').
+// Its workbox runtimeCaching already CacheFirsts huggingface.co model files, so the old
+// manual /service-worker.js registration was redundant — and worse, it claimed the same
+// root scope, so the two registrations overwrote each other nondeterministically.
+
+// One-time cleanup: unregister the legacy worker still installed in returning visitors'
+// browsers. Safe to delete this block once traffic has cycled through.
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker
-      .register('/service-worker.js')
-      .then(() => {
-        console.log('🛟 Service worker registered – model files will be cached for offline use.');
-      })
-      .catch((err) => {
-        console.warn('⚠️ Service worker registration failed:', err);
-      });
+    navigator.serviceWorker.getRegistrations().then((registrations) => {
+      registrations
+        .filter((r) => r.active?.scriptURL.endsWith('/service-worker.js'))
+        .forEach((r) => void r.unregister());
+    });
   });
 }
