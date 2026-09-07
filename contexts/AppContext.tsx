@@ -3,13 +3,12 @@ import useKokoroWebWorkerTts from '../hooks/useKokoroWebWorkerTts';
 import { BRAND_NAME } from '../utils/branding';
 import { AppContextType, AppState, AppToast, SampleText, TextSet } from '../types.ts';
 import { driveSync } from '../utils/GoogleDriveSync';
-import { localDB } from '../utils/localDatabase';
+import { localDB, CHECKPOINT_CHUNKER_VERSION } from '../utils/localDatabase';
 import { modelManager } from '../utils/modelManager';
 import { detectGpuCapabilities } from '../utils/gpuCapabilities';
 import { getDefaultModelForDevice, isInflectModel } from '../utils/modelRuntime';
-import { INFLECT_DEFAULT_VOICE } from '../utils/inflect';
+import { INFLECT_DEFAULT_VOICE } from '../utils/engineFamily';
 import { useGoogleLogin } from '@react-oauth/google';
-import JSZip from 'jszip';
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
@@ -315,7 +314,8 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
           resumeChunkIndex: stats.chunksGenerated,
           totalChunks: stats.totalChunks,
           isPartialGeneration: true,
-          textHash
+          textHash,
+          chunkerVersion: CHECKPOINT_CHUNKER_VERSION
         });
 
         // Mark the active set as having partial audio for UI badge
@@ -373,6 +373,12 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
           prev.map((s) => (s.id === currentSetId ? { ...s, hasPartialAudio: false, audioGenerated: true } : s))
         );
         if (tts.generationProgressRef) tts.generationProgressRef.current = 100;
+      } else if (result && !result.ok) {
+        // Resume failed (e.g. stale checkpoint from an older chunking scheme).
+        // Drop the checkpoint so the badge doesn't offer a broken resume again;
+        // the user can regenerate from scratch with Listen. Head audio stays loaded.
+        await localDB.deleteGenerationCheckpoint(currentSetId).catch(() => {});
+        setGenerationCheckpoint(null);
       }
 
       setIsGenerating(false);
@@ -432,6 +438,8 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     try {
       console.log('📚 Starting EPUB text extraction...');
       const arrayBuffer = await file.arrayBuffer();
+      // Lazy-load jszip only for EPUB uploads — keeps it out of first paint.
+      const { default: JSZip } = await import('jszip');
       const zip = await JSZip.loadAsync(arrayBuffer);
 
       // Collect XHTML/HTML files (typical for EPUB content)
@@ -853,7 +861,9 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       const checkpoint = await localDB.getGenerationCheckpoint(id);
       if (checkpoint?.isPartialGeneration) {
         const currentHash = await hashText(set.text.trim());
-        if (checkpoint.textHash === currentHash) {
+        // Discard checkpoints from older chunking schemes: their resume index
+        // points at the wrong text offset and resuming would corrupt the audio.
+        if (checkpoint.textHash === currentHash && checkpoint.chunkerVersion === CHECKPOINT_CHUNKER_VERSION) {
           setGenerationCheckpoint({ setId: id, resumeChunkIndex: checkpoint.resumeChunkIndex, totalChunks: checkpoint.totalChunks });
         } else {
           await localDB.deleteGenerationCheckpoint(id);

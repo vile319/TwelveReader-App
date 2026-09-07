@@ -34,7 +34,11 @@ export default defineConfig(({ mode }) => {
           ]
         },
         workbox: {
-          globPatterns: ['**/*.{js,css,html,ico,png,svg,wasm,onnx}'],
+          // NOTE: wasm/onnx are deliberately NOT precached. Precaching the 21MB
+          // ORT runtime delayed service-worker install on every visit (brutal on
+          // iOS cellular) for files Cloud users never need. They are
+          // runtime-cached on first actual local use instead (see below).
+          globPatterns: ['**/*.{js,css,html,ico,png,svg}'],
           maximumFileSizeToCacheInBytes: 500 * 1024 * 1024, // 500MB to allow for ONNX models if local
           runtimeCaching: [
             {
@@ -44,6 +48,22 @@ export default defineConfig(({ mode }) => {
                 cacheName: 'kokoro-models-cache',
                 expiration: {
                   maxEntries: 50,
+                  maxAgeSeconds: 60 * 60 * 24 * 365 // 1 year
+                },
+                cacheableResponse: {
+                  statuses: [0, 200]
+                }
+              }
+            },
+            {
+              // ORT wasm + pdf worker + lazy model chunks: fetch once, serve
+              // from cache after. Same-origin so no CORS concerns.
+              urlPattern: /\.(?:wasm|onnx|mjs)$/i,
+              handler: 'CacheFirst',
+              options: {
+                cacheName: 'runtime-binaries-cache',
+                expiration: {
+                  maxEntries: 30,
                   maxAgeSeconds: 60 * 60 * 24 * 365 // 1 year
                 },
                 cacheableResponse: {

@@ -1,18 +1,4 @@
 import { type FC, useEffect } from 'react';
-import * as pdfjsLib from 'pdfjs-dist';
-// Vite bundles the worker locally so PDF extraction works offline /
-// without relying on a CDN script that never sets window.pdfjsLib.
-import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
-
-if (typeof window !== 'undefined' && pdfjsLib.GlobalWorkerOptions) {
-  try {
-    pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
-  } catch {
-    // Fallback to CDN worker matching the installed pdfjs-dist version.
-    pdfjsLib.GlobalWorkerOptions.workerSrc =
-      'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.worker.min.mjs';
-  }
-}
 
 interface PDFReaderProps {
   file: File;
@@ -40,6 +26,20 @@ const PDFReader: FC<PDFReaderProps> = ({
     try {
       console.log('📄 Starting PDF text extraction...');
       
+      // Lazy-load pdf.js only when a PDF is actually uploaded — keeps ~350KB
+      // out of the initial bundle so first paint stays fast (esp. on iOS).
+      // Vite bundles the worker locally so extraction works offline.
+      const [pdfjsLib, { default: pdfWorkerUrl }] = await Promise.all([
+        import('pdfjs-dist'),
+        import('pdfjs-dist/build/pdf.worker.min.mjs?url'),
+      ]);
+      try {
+        pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
+      } catch {
+        pdfjsLib.GlobalWorkerOptions.workerSrc =
+          'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.worker.min.mjs';
+      }
+
       const arrayBuffer = await file.arrayBuffer();
       pdf = await pdfjsLib.getDocument({ 
         data: arrayBuffer,

@@ -10,7 +10,17 @@ export type GenerationCheckpoint = {
     totalChunks: number;
     isPartialGeneration: boolean;
     textHash: string;
+    /**
+     * Chunking scheme version. Chunk sizes changed in v2 (cloud uses larger
+     * chunks), so a resume index from v1 points at the wrong text offset.
+     * Checkpoints with a missing/mismatched version must be discarded and the
+     * text regenerated from scratch — never resumed.
+     */
+    chunkerVersion?: number;
 };
+
+/** Bump whenever chunk sizes/counts change (see speak() in useKokoroWebWorkerTts). */
+export const CHECKPOINT_CHUNKER_VERSION = 2;
 
 export class LocalDatabase {
     private db: IDBDatabase | null = null;

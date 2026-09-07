@@ -2,9 +2,8 @@ import React, { useState, useCallback, useRef, useEffect } from 'react';
 /* eslint-disable @typescript-eslint/no-unused-vars */
 // Touch the default import to avoid TS6133 (React might still be needed by JSX in future refactor)
 void React;
-import { loadTtsEngine, getEngineFamily, resolveVoiceForModel } from '../utils/ttsEngine';
-import { INFLECT_DEFAULT_VOICE } from '../utils/inflect';
-import { configureOnnxRuntimeForIOS } from '../utils/onnxIosConfig';
+import { getEngineFamily, resolveVoiceForModel } from '../utils/engineFamily';
+import { INFLECT_DEFAULT_VOICE } from '../utils/engineFamily';
 import { modelManager } from '../utils/modelManager';
 import { detectGpuCapabilities } from '../utils/gpuCapabilities';
 import {
@@ -50,35 +49,20 @@ const floatToWav = (float32Array: Float32Array, sampleRate: number): Blob => {
 // === HuggingFace Space TTS API URL ===
 const HF_TTS_API_URL = 'https://oronto-kokoro-tts-api.hf.space';
 
-
-// Force enable caching for transformers.js
-if (typeof window !== 'undefined') {
-  // Enable caching explicitly
-  const enableCaching = async () => {
-    try {
-      // Check if we can access the transformers.js env
-      const { env } = await import('@huggingface/transformers');
-      console.log('🔧 Configuring transformers.js caching...');
-
-      // By default, transformers.js caches everything in the Cache API.
-      // We rely on the ModelManager `cleanupUnwantedModels` to purge models the user didn't check
-      // "Keep cached" for upon refresh, rather than disabling caching at the global library level
-      // which breaks downloading entirely.
-      env.useBrowserCache = true;
-
-      // Optional: Also enable file system cache if available
-      if (env.backends && env.backends.onnx) {
-        env.backends.onnx.useBrowserCache = true;
-      }
-
-      console.log('✅ Browser cache enabled for transformers.js');
-    } catch (error) {
-      console.warn('⚠️ Could not configure transformers.js caching:', error);
+// transformers.js browser-cache flag is only needed for the local path.
+// Configured lazily inside initializeTts so Cloud-default first paint never
+// downloads the transformers runtime.
+const ensureTransformersCacheEnabled = async (): Promise<void> => {
+  try {
+    const { env } = await import('@huggingface/transformers');
+    env.useBrowserCache = true;
+    if (env.backends && env.backends.onnx) {
+      env.backends.onnx.useBrowserCache = true;
     }
-  };
-
-  enableCaching();
-}
+  } catch (error) {
+    console.warn('⚠️ Could not configure transformers.js caching:', error);
+  }
+};
 
 interface UseKokoroWebWorkerTtsProps {
   onError: (error: { title: string; message: string }) => void;
@@ -933,21 +917,11 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
     setIsLoading(true);
     setStatus('Initializing model...');
 
-    // Configure ONNX Runtime for iOS compatibility before any model loading
-    try {
-      await configureOnnxRuntimeForIOS();
-    } catch (error) {
-      console.warn('⚠️ iOS configuration failed, continuing with defaults:', error);
-    }
-    if (getIsCancelled?.()) return;
-
-    // All device and dtype decision logic is now consolidated in resolveRuntimeConfig.
-    // Use iOS-optimized settings if available (now bypassing local WASM entirely)
-    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-
     // === CLOUD FIRST: Use HuggingFace Space TTS by default for all devices ===
     // This gives the best quality (full fp32 PyTorch model) and works everywhere.
     // Local WASM is only used when explicitly requested (for offline use).
+    // NOTE: ONNX/transformers setup stays entirely off this path so Cloud
+    // first paint never downloads the ~2MB ML runtime.
     const wantsLocal = preferredDevice === 'wasm' || preferredDevice === 'webgpu' || preferredDevice === 'cpu';
 
     if (!wantsLocal) {
@@ -958,8 +932,31 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
       setCurrentDevice('serverless');
       setStatus('Ready - generating with Cloud [fp32]');
       setIsLoading(false);
+      // Warm the Space while the user is still picking text/voice: cold starts
+      // (30-60s on a sleeping Space) are the #1 "it's so slow" complaint and
+      // this moves the wake-up off the critical Listen path. Any HTTP hit wakes
+      // the container; no-cors + short timeout keeps it fire-and-forget.
+      try {
+        const warmAbort = new AbortController();
+        setTimeout(() => warmAbort.abort(), 8000);
+        void fetch(HF_TTS_API_URL, { mode: 'no-cors', cache: 'no-store', signal: warmAbort.signal }).catch(() => {});
+      } catch { /* warm-up is best-effort */ }
       return;
     }
+
+    // Local-only setup, deferred until actually needed.
+    try {
+      const { configureOnnxRuntimeForIOS } = await import('../utils/onnxIosConfig');
+      await configureOnnxRuntimeForIOS();
+    } catch (error) {
+      console.warn('⚠️ iOS configuration failed, continuing with defaults:', error);
+    }
+    if (getIsCancelled?.()) return;
+    await ensureTransformersCacheEnabled();
+    if (getIsCancelled?.()) return;
+
+    // All device and dtype decision logic is now consolidated in resolveRuntimeConfig.
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
 
     // Local WASM path — user explicitly wants offline/local
     if (isIOS) {
@@ -1009,6 +1006,8 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
 
       if (getIsCancelled?.()) return null;
       const modelLoadStart = performance.now();
+      const { loadTtsEngine } = await import('../utils/ttsEngine');
+      if (getIsCancelled?.()) return null;
       const tts = await loadTtsEngine(selectedModel, {
         dtype: dtype,
         device: device,
@@ -1052,6 +1051,8 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
           // Fall back to whichever engine the user selected, on CPU. For Inflect
           // this stays FP32 (no quantized export exists); for Kokoro it drops to q8.
           const fallbackIsInflect = getEngineFamily(selectedModel) === 'inflect';
+          const { loadTtsEngine } = await import('../utils/ttsEngine');
+          if (getIsCancelled?.()) return null;
           const tts = await loadTtsEngine(selectedModel, {
             dtype: fallbackIsInflect ? 'fp32' : 'q8',
             device: 'wasm',
@@ -1182,7 +1183,7 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
     }
     onProgress?.(0);
 
-    const startChunkIndex = options?.startChunkIndex ?? 0;
+    const requestedStartChunk = options?.startChunkIndex ?? 0;
     const preserveStreamingSeed = options?.preserveStreamingSeed ?? false;
 
     // Clear previous audio buffer and scrubbing state
@@ -1242,13 +1243,29 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
       // fp32/WebGPU uses fewer chars per chunk to avoid token-limit truncation.
       // The Kokoro model has a ~510 phoneme-token cap; fp32 on WebGPU may silently
       // drop tokens beyond that, causing whole sentences to disappear from the output.
-      // iOS uses even smaller chunks: less peak memory for local Nano/Micro and
-      // faster first-audio on cellular for cloud.
-      const maxChunkChars = isIOSDevice() ? 350 : currentDevice === 'webgpu' ? 400 : 600;
-      const chunks = chunkText(text, maxChunkChars, maxChunkChars);
+      // iOS local uses even smaller chunks: less peak memory for Nano/Micro.
+      // Cloud uses LARGE chunks (1000 chars ≈ 300 tokens, safely under the cap):
+      // each chunk is one sequential HTTP round-trip, so fewer chunks means a
+      // much faster book. The first chunk stays small (350) so playback starts
+      // fast while the big chunks follow.
+      // NOTE: CHECKPOINT_CHUNKER_VERSION (localDatabase.ts) must be bumped if
+      // these sizes change — resume indexes are chunk-based, not char-based.
+      const maxChunkChars = isServerless ? 1000 : isIOSDevice() ? 350 : currentDevice === 'webgpu' ? 400 : 600;
+      const firstChunkChars = isServerless ? 350 : maxChunkChars;
+      const chunks = chunkText(text, maxChunkChars, firstChunkChars);
       lastChunkListRef.current = chunks;
       lastSynthesisTextRef.current = text;
       console.log(`📝 Split into ${chunks.length} chunks for processing`);
+
+      // Guard: a resume index from an older chunking scheme (or shortened text)
+      // can point past the end of this chunk list. Resuming there would silently
+      // export head-only audio marked "complete". Throw so the caller falls back
+      // to full regeneration (validated checkpoints should prevent this; this is
+      // belt-and-braces against silent corruption).
+      if (requestedStartChunk >= chunks.length) {
+        throw new Error('Resume point is stale (text or chunking changed). Please regenerate from the start.');
+      }
+      const startChunkIndex = requestedStartChunk;
 
       // Process all chunks but in smaller batches to prevent stack overflow
       console.log(`📦 Will process ${chunks.length} chunks (${text.length} characters total)`);
@@ -1694,6 +1711,7 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
               });
             } catch { /* ignore */ }
           }
+          const { loadTtsEngine } = await import('../utils/ttsEngine');
           const wasmTts = await loadTtsEngine(selectedModel, {
             dtype: getEngineFamily(selectedModel) === 'inflect' ? 'fp32' : 'q8',
             device: 'wasm'
