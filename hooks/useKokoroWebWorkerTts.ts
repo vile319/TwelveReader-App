@@ -4,6 +4,7 @@ import React, { useState, useCallback, useRef, useEffect } from 'react';
 void React;
 import { getEngineFamily, resolveVoiceForModel } from '../utils/engineFamily';
 import { INFLECT_DEFAULT_VOICE } from '../utils/engineFamily';
+import { estimateWordTimings } from '../utils/wordAlign';
 import { modelManager } from '../utils/modelManager';
 import { detectGpuCapabilities } from '../utils/gpuCapabilities';
 import {
@@ -660,10 +661,15 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
       // Pause - capture current time BEFORE stopping to avoid jumping to end
       console.log('⏸️ Pausing audio');
 
-      // Calculate and save current position before stopping
+      // Calculate and save current position before stopping.
+      // NOTE: must read currentTimeRef, NOT the `currentTime` React state — state
+      // goes stale during streaming (the 60Hz tracker writes the ref only, to
+      // avoid re-renders). Reading state here is what made resume restart from
+      // a stale position (e.g. chunk start) instead of the pause point.
       if (isStreaming && audioContextRef.current) {
-        // For streaming mode, use the current time from progress tracking
-        const pausedTime = Math.max(0, Math.min(currentTime, synthesizedDuration));
+        // For streaming mode, use the live ref position from progress tracking
+        const liveMax = synthesizedDurationRef.current || synthesizedDuration;
+        const pausedTime = Math.max(0, Math.min(currentTimeRef.current, liveMax));
         console.log(`⏸️ Pausing streaming at ${pausedTime.toFixed(2)}s`);
         setCurrentTimeBoth(pausedTime);
         playbackOffsetRef.current = pausedTime;
@@ -707,21 +713,24 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
 
       console.log('⏸️ Paused - all playback stopped');
     } else {
-      // Play from current position
+      // Play from current position — again from the live ref, for the same
+      // staleness reason as above. After a fixed pause the state is correct,
+      // but the ref is always correct, so prefer it unconditionally.
       console.log('▶️ Starting audio playback');
       setIsPlaying(true);
 
       // If we're at (or very near) the end, restart from the beginning
-      const effectiveDuration = isStreaming ? synthesizedDuration : duration;
-      const atEnd = effectiveDuration > 0 && currentTime >= effectiveDuration - 0.3;
-      const startPosition = atEnd ? 0 : currentTime;
+      const posNow = currentTimeRef.current;
+      const maxNow = isStreaming ? (synthesizedDurationRef.current || synthesizedDuration) : (durationRef.current || duration);
+      const atEnd = maxNow > 0 && posNow >= maxNow - 0.3;
+      const startPosition = atEnd ? 0 : posNow;
       if (atEnd) {
         setCurrentTimeBoth(0);
         playbackOffsetRef.current = 0;
         console.log('🔁 At end — restarting from beginning');
       }
 
-      if (isStreaming && !atEnd && currentTime < synthesizedDuration) {
+      if (isStreaming && !atEnd && currentTimeRef.current < (synthesizedDurationRef.current || synthesizedDuration)) {
         startStreamingFromPosition(startPosition);
       } else if (completeAudioBufferRef.current || completeHtmlAudioRef.current) {
         // Use ref (always fresh) instead of potentially-stale React state
@@ -729,7 +738,7 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
         playCompleteAudio(startPosition);
       }
     }
-  }, [canScrub, isPlaying, currentTime, isStreaming, synthesizedDuration, duration, startStreamingFromPosition, playCompleteAudio]);
+  }, [canScrub, isPlaying, isStreaming, synthesizedDuration, duration, startStreamingFromPosition, playCompleteAudio]);
 
   // Don't auto-play - let user control playback
   // Audio is ready when completeAudioBuffer is set
@@ -1503,35 +1512,37 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
               wordTimingsAccumRef.current.push(...alignedTimings);
             }
           } else {
-            // Fallback to provisional timings if alignments are not available
+            // No model-provided alignments (cloud WAVs, kokoro-js, and Inflect
+            // all land here): estimate timings from actual speech energy so
+            // words snap to real pauses instead of being smeared evenly across
+            // silences by character count. See utils/wordAlign.ts.
             const chunkDuration = audioData!.length / sampleRate;
             const chunkOffset = currentStreamDuration - chunkDuration;
             const wordsInChunk = chunk.split(/\s+/).filter((w: string) => w.length > 0);
 
-            // Kokoro typically adds ~250ms of trailing silence after a chunk (punctuation)
-            const trailingSilence = 0.25;
-            const activeDuration = Math.max(0.1, chunkDuration - trailingSilence);
-            const totalChars = wordsInChunk.reduce((sum: number, word: string) => sum + word.length, 0);
-            const timePerChar = totalChars > 0 ? activeDuration / totalChars : 0;
-
-            let wordStart = chunkOffset;
-            const provisionalTimings = wordsInChunk.map((w: string, idx: number) => {
-              const isLastWord = idx === wordsInChunk.length - 1;
-              const wordActiveDur = totalChars > 0 ? (w.length * timePerChar) : (activeDuration / wordsInChunk.length);
-
-              // Only the last word in the chunk holds through the trailing silence
-              const wordDur = wordActiveDur + (isLastWord ? (chunkDuration - activeDuration) : 0);
-              const timing = {
-                word: w,
-                start: wordStart,
-                end: wordStart + wordDur,
-              };
-              wordStart += wordDur;
-              return timing;
-            });
-
-            if (provisionalTimings.length) {
-              wordTimingsAccumRef.current.push(...provisionalTimings);
+            if (wordsInChunk.length > 0) {
+              try {
+                const estimated = estimateWordTimings(
+                  audioData!,
+                  sampleRate,
+                  wordsInChunk,
+                  chunkOffset,
+                  chunkDuration
+                );
+                if (estimated.length > 0) {
+                  wordTimingsAccumRef.current.push(...estimated);
+                }
+              } catch (alignError) {
+                console.warn(`⚠️ Energy alignment failed for chunk ${i + 1}, using even split:`, alignError);
+                const per = chunkDuration / wordsInChunk.length;
+                wordTimingsAccumRef.current.push(
+                  ...wordsInChunk.map((w: string, idx: number) => ({
+                    word: w,
+                    start: chunkOffset + idx * per,
+                    end: idx === wordsInChunk.length - 1 ? chunkOffset + chunkDuration : chunkOffset + (idx + 1) * per,
+                  }))
+                );
+              }
             }
           }
 
@@ -1671,7 +1682,8 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
         setStatus(`🎵 Audio complete! ${(combinedAudio.length / sampleRate).toFixed(1)}s of audio ready`);
       }
 
-      // Word timings are now generated provisionally, no final calculation needed.
+      // Word timings were accumulated per-chunk above (model alignments when
+      // available, otherwise energy-based estimation) — no final pass needed.
 
       console.log(`📊 Synthesis Performance:
         • Total characters: ${text.length.toLocaleString()}
