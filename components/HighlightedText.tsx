@@ -38,7 +38,10 @@ const wordStyleFuture: React.CSSProperties = {
 const RenderLine = memo(({ index, style: rowStyle, data }: ListChildComponentProps) => {
   const { textLines, lineWordRanges, currentWordIndex, wordTimings, onWordClick } = data as LineData;
   const line = textLines[index];
-  if (!line) return null;
+  if (line == null) return null;
+  if (!line.trim()) {
+    return <div style={{ ...rowStyle, padding: '0 24px' }} className="py-2 md:py-3">{'\u00A0'}</div>;
+  }
 
   const range = lineWordRanges[index];
   if (!range) {
@@ -80,8 +83,8 @@ const RenderLine = memo(({ index, style: rowStyle, data }: ListChildComponentPro
   });
 
   return (
-    <div style={{ ...rowStyle, padding: '0 24px' }}
-      className="font-serif text-xl md:text-2xl leading-relaxed py-2 md:py-3 tracking-wide whitespace-pre-wrap">
+    <div style={{ ...rowStyle, padding: '0 24px', overflow: 'hidden' }}
+      className="font-serif text-xl md:text-2xl leading-relaxed py-2 md:py-3 tracking-wide whitespace-pre-wrap break-words">
       {elements}
     </div>
   );
@@ -126,8 +129,53 @@ const renderLineAreEqual = (prevProps: ListChildComponentProps, nextProps: ListC
 const MemoizedRenderLine = memo(RenderLine, renderLineAreEqual);
 MemoizedRenderLine.displayName = 'RenderLine';
 
+/**
+ * Split raw text into display rows for the virtual list.
+ * Raw input is often a single huge paragraph (PDF/EPUB extraction collapses
+ * whitespace), which would render as ONE 60px-clipped row. We wrap long
+ * paragraphs at word boundaries so every row fits its fixed height and the
+ * full book stays scrollable. Explicit \n paragraph breaks are preserved.
+ */
+const wrapTextToDisplayLines = (text: string, maxChars = 110): string[] => {
+  if (!text) return [''];
+  const lines: string[] = [];
+  const paragraphs = text.split('\n');
+  for (const para of paragraphs) {
+    const trimmed = para.trimEnd();
+    if (!trimmed.trim()) {
+      // Preserve blank lines as spacers (skip leading blanks).
+      if (lines.length > 0) lines.push('');
+      continue;
+    }
+    const words = trimmed.split(/\s+/);
+    let current = '';
+    for (const word of words) {
+      // Very long single token (URL etc): hard-split it.
+      if (word.length > maxChars) {
+        if (current.trim()) {
+          lines.push(current.trim());
+          current = '';
+        }
+        for (let i = 0; i < word.length; i += maxChars) {
+          lines.push(word.slice(i, i + maxChars));
+        }
+        continue;
+      }
+      const next = current ? `${current} ${word}` : word;
+      if (next.length > maxChars && current) {
+        lines.push(current);
+        current = word;
+      } else {
+        current = next;
+      }
+    }
+    if (current.trim() || lines.length === 0) lines.push(current);
+  }
+  return lines.length > 0 ? lines : [''];
+};
+
 const HighlightedText: FC<HighlightedTextProps> = memo((props) => {
-  const textLines = useMemo(() => props.text.split('\n'), [props.text]);
+  const textLines = useMemo(() => wrapTextToDisplayLines(props.text), [props.text]);
   const listRef = useRef<FixedSizeList>(null);
 
   // lineWordRanges[i] = { startWord, wordCount } for line i
@@ -183,14 +231,14 @@ const HighlightedText: FC<HighlightedTextProps> = memo((props) => {
         <FixedSizeList
           height={500}
           itemCount={textLines.length}
-          itemSize={60}
+          itemSize={72}
           width='100%'
           ref={listRef}
         >
           {({ index, style }) => (
-            <div style={{ ...style, padding: '0 24px' }}
-              className="text-slate-300 font-serif text-xl md:text-2xl leading-relaxed py-2 md:py-3 tracking-wide">
-              {textLines[index]}
+            <div style={{ ...style, padding: '0 24px', overflow: 'hidden' }}
+              className="text-slate-300 font-serif text-xl md:text-2xl leading-relaxed py-2 md:py-3 tracking-wide break-words">
+              {textLines[index] || '\u00A0'}
             </div>
           )}
         </FixedSizeList>
@@ -203,7 +251,7 @@ const HighlightedText: FC<HighlightedTextProps> = memo((props) => {
       <FixedSizeList
         height={500}
         itemCount={textLines.length}
-        itemSize={60}
+        itemSize={72}
         width='100%'
         itemData={itemData}
         ref={listRef}

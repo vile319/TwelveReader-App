@@ -439,6 +439,7 @@ const TextInputPanel: FC = () => {
           <PDFReader
             file={state.uploadedPDF}
             onTextExtracted={actions.handlePDFTextExtracted}
+            onError={actions.handlePDFError}
             onProgress={(page, total) => setPdfExtractProgress({ page, total })}
           />
         </div>

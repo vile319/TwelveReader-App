@@ -1,65 +1,37 @@
 import { type FC, useEffect } from 'react';
+import * as pdfjsLib from 'pdfjs-dist';
+// Vite bundles the worker locally so PDF extraction works offline /
+// without relying on a CDN script that never sets window.pdfjsLib.
+import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 
-// --- New Robust PDF.js Loader ---
-// This promise ensures we only try to load the script once.
-let pdfjsLibPromise: Promise<any> | null = null;
-
-const loadPdfJs = () => {
-  if (!pdfjsLibPromise) {
-    pdfjsLibPromise = new Promise((resolve, reject) => {
-      const scriptId = 'pdfjs-script';
-      
-      // If the script is already in the DOM, assume it's loaded or loading.
-      if (document.getElementById(scriptId)) {
-        // A simple polling mechanism to wait for the library to be available.
-        const interval = setInterval(() => {
-          if ((window as any).pdfjsLib) {
-            clearInterval(interval);
-            resolve((window as any).pdfjsLib);
-          }
-        }, 100);
-        return;
-      }
-
-      const script = document.createElement('script');
-      script.id = scriptId;
-      script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.269/pdf.min.mjs';
-      script.type = 'module';
-      script.onload = () => {
-        console.log('✅ pdf.js script loaded.');
-        // Poll to ensure the library is attached to the window object.
-        const interval = setInterval(() => {
-          if ((window as any).pdfjsLib) {
-            clearInterval(interval);
-            resolve((window as any).pdfjsLib);
-          }
-        }, 100);
-      };
-      script.onerror = () => {
-        console.error('❌ Failed to load pdf.js script.');
-        reject(new Error('Could not load the PDF processing library. Please check your internet connection and try again.'));
-      };
-      document.body.appendChild(script);
-    });
+if (typeof window !== 'undefined' && pdfjsLib.GlobalWorkerOptions) {
+  try {
+    pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
+  } catch {
+    // Fallback to CDN worker matching the installed pdfjs-dist version.
+    pdfjsLib.GlobalWorkerOptions.workerSrc =
+      'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.worker.min.mjs';
   }
-  return pdfjsLibPromise;
-};
+}
 
 interface PDFReaderProps {
   file: File;
   onTextExtracted: (text: string) => void;
+  onError?: (message: string) => void;
   onProgress?: (page: number, totalPages: number) => void;
 }
 
-const PDFReader: FC<PDFReaderProps> = ({ 
-  file, 
-  onTextExtracted, 
+const PDFReader: FC<PDFReaderProps> = ({
+  file,
+  onTextExtracted,
+  onError,
   onProgress
 }) => {
   useEffect(() => {
     if (file) {
       extractPDFText();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [file]);
 
   const extractPDFText = async () => {
@@ -67,11 +39,6 @@ const PDFReader: FC<PDFReaderProps> = ({
     
     try {
       console.log('📄 Starting PDF text extraction...');
-      
-      const pdfjsLib = await loadPdfJs();
-      
-      // Configure worker to use CDN version that matches the library version
-      pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.269/pdf.worker.min.mjs`;
       
       const arrayBuffer = await file.arrayBuffer();
       pdf = await pdfjsLib.getDocument({ 
@@ -99,7 +66,9 @@ const PDFReader: FC<PDFReaderProps> = ({
             .trim();
             
           if (pageText && pageText.length > 0) {
-            allText += pageText + ' ';
+            // Preserve page boundaries as paragraph breaks so the reader view
+            // can split into multiple virtual rows (prevents single-line clipping).
+            allText += pageText + '\n\n';
             console.log(`✅ Page ${i}: ${pageText.length} characters`);
           }
 
@@ -114,11 +83,12 @@ const PDFReader: FC<PDFReaderProps> = ({
       }
       
       if (allText.trim() && allText.length > 50) {
-        // Clean up the final text for TTS
+        // Clean up the final text for TTS (preserve paragraph breaks).
         const finalText = allText
-          .replace(/\s+/g, ' ') // Normalize whitespace
+          .replace(/[ \t]+/g, ' ') // Normalize horizontal whitespace, keep \n
+          .replace(/[ \t]*\n[ \t]*/g, '\n')
+          .replace(/\n{3,}/g, '\n\n')
           .replace(/([.!?])\s*([A-Z])/g, '$1 $2') // Ensure proper sentence spacing
-          .replace(/([a-z])([A-Z])/g, '$1. $2') // Add periods between sentences
           .trim();
           
         console.log(`🎯 Final text ready: ${finalText.length} characters`);
@@ -136,7 +106,9 @@ const PDFReader: FC<PDFReaderProps> = ({
       
     } catch (error) {
       console.error('❌ PDF extraction failed:', error);
-      onTextExtracted(''); // Pass empty text instead of error message
+      const message = error instanceof Error ? error.message : 'Unable to extract text from this PDF.';
+      onError?.(message);
+      onTextExtracted(''); // Keep legacy contract; caller shows error via onError/toast
     }
   };
 

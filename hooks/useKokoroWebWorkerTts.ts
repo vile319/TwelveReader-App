@@ -145,6 +145,26 @@ const getRuntimeBackendLabel = (device: 'webgpu' | 'wasm' | 'cpu' | 'serverless'
   }
 };
 
+// iOS Safari needs special-casing: it ignores/fails custom AudioContext sample
+// rates (hardware rate wins), and closing the context revokes the user-gesture
+// unlock, forcing another tap. Centralize creation so all call sites behave.
+const isIOSDevice = (): boolean => {
+  if (typeof navigator === 'undefined') return false;
+  return (
+    /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+    ((navigator as any).platform === 'MacIntel' && (navigator as any).maxTouchPoints > 1)
+  );
+};
+
+const createAudioContext = (preferredSampleRate?: number): AudioContext => {
+  const Ctor = window.AudioContext || (window as any).webkitAudioContext;
+  // On iOS, omit sampleRate so Safari uses the hardware rate (usually 44100/
+  // 48000). Requesting 24000 can fail or force costly resampling. Elsewhere,
+  // request our synthesis rate for exact timing math.
+  if (isIOSDevice() || !preferredSampleRate) return new Ctor();
+  return new Ctor({ sampleRate: preferredSampleRate });
+};
+
 const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokoro-82m-fp32', preferredDevice, preferredDtype }: UseKokoroWebWorkerTtsProps) => {
   const [isReady, setIsReady] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -288,6 +308,9 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
   // Ref to playCompleteAudio so speak() (which doesn't have it in its deps)
   // always calls the LATEST version, never the stale mount-time closure.
   const playCompleteAudioRef = useRef<(startTime?: number) => Promise<void>>(() => Promise.resolve());
+  // Same for streaming restart — seekToTime is defined before
+  // startStreamingFromPosition and would otherwise capture a stale closure.
+  const startStreamingFromPositionRef = useRef<(startTime?: number) => Promise<void>>(() => Promise.resolve());
 
   // New continuous audio buffer system
   const audioBufferRef = useRef<Float32Array[]>([]);
@@ -358,7 +381,8 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
 
   // Old continuous playback system removed - now using streaming system
 
-  // Scrubbing functions
+  // Scrubbing functions (use refs for playback fns to avoid stale closures;
+  // seekToTime is defined before startStreamingFromPosition/playCompleteAudio)
   const seekToTime = useCallback((time: number) => {
     if (!canScrub) return;
 
@@ -404,11 +428,11 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
       seekTimeoutRef.current = setTimeout(() => {
         seekTimeoutRef.current = null;
         if (isStreaming && clampedTime < synthesizedDuration) {
-          // For streaming, restart streaming playback from position
-          startStreamingFromPosition(clampedTime);
+          // For streaming, restart streaming playback from position (via ref: latest closure)
+          startStreamingFromPositionRef.current(clampedTime);
         } else if (completeAudioBufferRef.current || completeHtmlAudioRef.current) {
-          // For complete audio, use complete playback
-          playCompleteAudio(clampedTime);
+          // For complete audio, use complete playback (via ref: latest closure)
+          playCompleteAudioRef.current(clampedTime);
         }
       }, 50);
     }
@@ -437,7 +461,7 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
 
     try {
       if (!audioContextRef.current) {
-        audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: sampleRateRef.current });
+        audioContextRef.current = createAudioContext(sampleRateRef.current);
       }
 
       if (audioContextRef.current.state === 'suspended') {
@@ -636,10 +660,13 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
     }
   }, [duration, updateCurrentWordIndex]);
 
-  // Keep playCompleteAudioRef in sync whenever playCompleteAudio is re-created.
-  // This lets speak() (which has a stale closure) always call the latest version.
+  // Keep playback refs in sync whenever the callbacks are re-created.
+  // This lets speak()/seekToTime (which have stale closures) always call the latest version.
   useEffect(() => {
     playCompleteAudioRef.current = playCompleteAudio;
+  });
+  useEffect(() => {
+    startStreamingFromPositionRef.current = startStreamingFromPosition;
   });
 
   const togglePlayPause = useCallback(() => {
@@ -727,7 +754,7 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
   useEffect(() => {
     if (canScrub && !audioContextRef.current) {
       console.log('🎵 Initializing audio context for scrubbing');
-      audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
+      audioContextRef.current = createAudioContext(24000);
     }
   }, [canScrub]);
 
@@ -1163,6 +1190,14 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
     if (!preserveStreamingSeed) {
       streamingAudioRef.current = [];
     }
+    // Snapshot the preserved head so the final WAV can prepend it.
+    // streamingAudioRef already holds head+new during resume; allAudioChunks
+    // only holds newly generated tail chunks — without this seed the export
+    // would be tail-only and timings/duration would be offset.
+    const seedAudioChunks: Float32Array[] = preserveStreamingSeed
+      ? [...streamingAudioRef.current]
+      : [];
+    const seedSamples = seedAudioChunks.reduce((sum, c) => sum + c.length, 0);
     isPlaybackActiveRef.current = false;
 
     if (streamingTimeoutRef.current) {
@@ -1207,7 +1242,9 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
       // fp32/WebGPU uses fewer chars per chunk to avoid token-limit truncation.
       // The Kokoro model has a ~510 phoneme-token cap; fp32 on WebGPU may silently
       // drop tokens beyond that, causing whole sentences to disappear from the output.
-      const maxChunkChars = currentDevice === 'webgpu' ? 400 : 600;
+      // iOS uses even smaller chunks: less peak memory for local Nano/Micro and
+      // faster first-audio on cellular for cloud.
+      const maxChunkChars = isIOSDevice() ? 350 : currentDevice === 'webgpu' ? 400 : 600;
       const chunks = chunkText(text, maxChunkChars, maxChunkChars);
       lastChunkListRef.current = chunks;
       lastSynthesisTextRef.current = text;
@@ -1218,8 +1255,12 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
       setStatus(`📦 Processing ${chunks.length} chunks...`);
 
       const allAudioChunks: Float32Array[] = [];
-      let totalSamples = 0;
+      let totalSamples = seedSamples;
       let sampleRate = 24000;
+      // If resuming, inherit the head's sample rate so head+tail combine consistently.
+      if (seedAudioChunks.length > 0) {
+        sampleRate = lastSynthesizedSampleRateRef.current || sampleRateRef.current || 24000;
+      }
       const startTime = performance.now();
 
       // Process chunks one at a time to allow the event loop to breathe (keeps UI responsive)  
@@ -1241,7 +1282,7 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
           if (currentSynthesisRef.current !== text) {
             console.log(`🛑 Synthesis stopped after generate() – discarding chunk ${i + 1}`);
             setIsSynthesizing(false);
-            return { ok: true, completed: false, cancelled: true, chunksGenerated: allAudioChunks.length, totalChunks: chunks.length };
+            return { ok: true, completed: false, cancelled: true, chunksGenerated: seedAudioChunks.length + allAudioChunks.length, totalChunks: chunks.length };
           }
 
           console.log(`🔄 Processing chunk ${i + 1}: ${chunk.length} characters`);
@@ -1287,7 +1328,7 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
             // The API returns a WAV file blob. We need to decode it back into a Float32Array for the chunker.
             const arrayBuffer = await response.arrayBuffer();
                     if (!audioContextRef.current) {
-              audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
+              audioContextRef.current = createAudioContext(24000);
             }
             const decodedBuffer = await audioContextRef.current.decodeAudioData(arrayBuffer);
             const rawAudioData = new Float32Array(decodedBuffer.getChannelData(0)); // Copy out of AudioBuffer for stable downstream processing
@@ -1390,7 +1431,7 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
           if (currentSynthesisRef.current !== text) {
             console.log(`🛑 Synthesis stopped after generate() – discarding chunk ${i + 1}`);
             setIsSynthesizing(false);
-            return { ok: true, completed: false, cancelled: true, chunksGenerated: allAudioChunks.length, totalChunks: chunks.length };
+            return { ok: true, completed: false, cancelled: true, chunksGenerated: seedAudioChunks.length + allAudioChunks.length, totalChunks: chunks.length };
           }
 
           if (!audioData || audioData.length === 0) {
@@ -1485,8 +1526,11 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
             flushWordTimings();
             setCanScrub(true);
             setIsStreaming(true);
-            const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-            if (!isIOS && !hasAutoStartedStreamingRef.current) {
+            // Autoplay is allowed here: Listen/Play was a user tap that primed
+            // the AudioContext, so iOS Safari accepts playback without a second
+            // tap. If the gesture expired, startStreaming handles the rejection
+            // and the user can tap play (no forced pause anymore).
+            if (!hasAutoStartedStreamingRef.current) {
               hasAutoStartedStreamingRef.current = true;
               startStreamingFromPosition(0);
             }
@@ -1506,25 +1550,28 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
       // Final flush of any remaining accumulated word timings before we mark synthesis complete
       flushWordTimings();
 
-      // Combine all audio chunks
+      // Combine all audio chunks (prepend preserved head on resume)
       setStatus('🔄 Combining audio chunks...');
       onProgress?.(95);
 
-      if (allAudioChunks.length === 0) {
+      const finalChunks: Float32Array[] =
+        seedAudioChunks.length > 0 ? [...seedAudioChunks, ...allAudioChunks] : allAudioChunks;
+
+      if (finalChunks.length === 0) {
         throw new Error('No audio data generated from any chunks');
       }
 
       const combinedAudio = new Float32Array(totalSamples);
       let offset = 0;
 
-      for (const chunk of allAudioChunks) {
+      for (const chunk of finalChunks) {
         combinedAudio.set(chunk, offset);
         offset += chunk.length;
       }
 
       const synthTime = performance.now() - startTime;
       console.log(`✅ All text synthesized successfully:`);
-      console.log(`   Total chunks: ${allAudioChunks.length}`);
+      console.log(`   Total chunks: ${finalChunks.length}`);
       console.log(`   Total audio: ${combinedAudio.length} samples at ${sampleRate}Hz`);
       console.log(`   Duration: ${(combinedAudio.length / sampleRate).toFixed(1)}s`);
       console.log(`   Time: ${synthTime.toFixed(0)}ms`);
@@ -1588,19 +1635,20 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
 
       setIsStreaming(false); // Switch from streaming to complete mode
 
-      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-      if (wasPlaying && !isIOS) {
+      // Continue playback across the streaming→complete switch without a second
+      // tap (the Listen tap is still a valid gesture). playCompleteAudio catches
+      // autoplay rejections internally, so on iOS the worst case is the user
+      // taps ▶ once — never a forced pause when playback was already running.
+      if (wasPlaying) {
         console.log('🔄 Switching from streaming to complete audio playback');
         // Use ref — speak()'s closure doesn't include playCompleteAudio in its deps,
         // so the direct call would use the stale mount-time version with duration=0.
-        playCompleteAudioRef.current(currentTimeRef.current);
+        void playCompleteAudioRef.current(currentTimeRef.current);
       }
 
       onProgress?.(100);
-      if (isIOS) {
-        setIsPlaying(false);
-        isPlaybackActiveRef.current = false;
-        setStatus(`✅ Ready — tap ▶ to play`);
+      if (isIOSDevice()) {
+        setStatus(`🎵 Audio complete! ${(combinedAudio.length / sampleRate).toFixed(1)}s — tap ▶ if paused`);
         setCanScrub(true);
       } else {
         setStatus(`🎵 Audio complete! ${(combinedAudio.length / sampleRate).toFixed(1)}s of audio ready`);
@@ -1610,7 +1658,7 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
 
       console.log(`📊 Synthesis Performance:
         • Total characters: ${text.length.toLocaleString()}
-        • Total chunks: ${allAudioChunks.length}
+        • Total chunks: ${finalChunks.length}
         • Synthesis time: ${(synthTime / 1000).toFixed(1)}s
         • Characters per second: ${(text.length / (synthTime / 1000)).toFixed(0)}`);
 
@@ -1669,13 +1717,10 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
     }
     setIsSynthesizing(false);
     return { ok: true, completed: true };
-  }, [isReady, onError, chunkText, currentDevice]);
+  }, [isReady, onError, chunkText, currentDevice, selectedModel]);
 
   // Stop current synthesis/playback
   const stop = useCallback(() => {
-    console.log('🛑 STOP called - stopping synthesis and playback');
-    console.trace('Stop function call stack:'); // This will show what called stop()
-
     // Stop current synthesis
     currentSynthesisRef.current = null;
     setIsSynthesizing(false);
@@ -1726,17 +1771,22 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
 
     completeAudioBufferRef.current = null;
 
-    // Close AudioContext to release resources (important on memory-constrained devices)
+    // Suspend (don't close) the AudioContext. Closing revokes the iOS Safari
+    // user-gesture unlock and forces another tap before audio can play again.
+    // Suspend saves battery while keeping the context reusable.
     if (audioContextRef.current) {
       try {
-        // Close returns a promise but we don't need to await inside sync function
-        audioContextRef.current.close();
+        if (audioContextRef.current.state === 'running') {
+          void audioContextRef.current.suspend();
+        }
       } catch { }
-      audioContextRef.current = null;
     }
 
     // Clear audio buffer and reset scrubbing state
     audioBufferRef.current = [];
+    streamingAudioRef.current = [];
+    wordTimingsAccumRef.current = [];
+    lastChunkListRef.current = [];
     playbackPositionRef.current = 0;
     setCompleteAudioBuffer(null);
     setCurrentTimeBoth(0);
@@ -2121,7 +2171,7 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
   const loadAudioFromBlob = useCallback(async (blob: Blob, savedWordTimings?: Array<{ word: string, start: number, end: number }>) => {
     if (!blob) return;
     if (!audioContextRef.current) {
-      audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
+      audioContextRef.current = createAudioContext(24000);
     }
     try {
       const arrayBuffer = await blob.arrayBuffer();
@@ -2151,6 +2201,11 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
 
       setCompleteAudioBuffer(floatData);
       completeAudioSampleRateRef.current = audioBuffer.sampleRate;
+      // Seed the streaming buffer so resume-from-checkpoint (preserveStreamingSeed)
+      // can prepend this head when generating the remaining tail chunks.
+      streamingAudioRef.current = [floatData];
+      lastSynthesizedSampleRateRef.current = audioBuffer.sampleRate;
+      sampleRateRef.current = audioBuffer.sampleRate;
       setDurationBoth(audioBuffer.duration); // Use setDurationBoth for safety
       setCurrentTimeBoth(0);
       setCanScrub(true);
@@ -2183,7 +2238,7 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
     const unlock = () => {
       try {
         if (!audioContextRef.current) {
-          audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
+          audioContextRef.current = createAudioContext(24000);
         }
         if (audioContextRef.current.state === 'suspended') {
           audioContextRef.current.resume();
@@ -2208,7 +2263,7 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
   const primeAudioContext = useCallback(() => {
     try {
       if (!audioContextRef.current) {
-        audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
+        audioContextRef.current = createAudioContext(24000);
       }
       if (audioContextRef.current.state === 'suspended') {
         audioContextRef.current.resume();
@@ -2259,7 +2314,7 @@ const useKokoroWebWorkerTts = ({ onError, enabled = true, selectedModel = 'kokor
     isReady,
     isPlaying,
     isLoading,
-    status,
+    status: statusRef.current,
     voices,
     currentDevice,
     debugMode,

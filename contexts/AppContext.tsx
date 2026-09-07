@@ -6,17 +6,32 @@ import { driveSync } from '../utils/GoogleDriveSync';
 import { localDB } from '../utils/localDatabase';
 import { modelManager } from '../utils/modelManager';
 import { detectGpuCapabilities } from '../utils/gpuCapabilities';
-import { getDefaultModelForDevice } from '../utils/modelRuntime';
+import { getDefaultModelForDevice, isInflectModel } from '../utils/modelRuntime';
+import { INFLECT_DEFAULT_VOICE } from '../utils/inflect';
 import { useGoogleLogin } from '@react-oauth/google';
 import JSZip from 'jszip';
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 const hashText = async (text: string): Promise<string> => {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(text);
-  const digest = await crypto.subtle.digest('SHA-256', data);
-  return Array.from(new Uint8Array(digest)).map((b) => b.toString(16).padStart(2, '0')).join('');
+  try {
+    if (typeof crypto !== 'undefined' && crypto.subtle) {
+      const encoder = new TextEncoder();
+      const data = encoder.encode(text);
+      const digest = await crypto.subtle.digest('SHA-256', data);
+      return Array.from(new Uint8Array(digest)).map((b) => b.toString(16).padStart(2, '0')).join('');
+    }
+  } catch {
+    // Fall through to FNV-1a fallback below (non-secure contexts like http://192.168.x).
+  }
+  // Fallback for non-secure contexts (crypto.subtle undefined on http LAN):
+  // FNV-1a 32-bit is not cryptographic but is stable for checkpoint text matching.
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < text.length; i++) {
+    hash ^= text.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return `fnv1a-${(hash >>> 0).toString(16)}-${text.length}`;
 };
 
 export const useAppContext = () => {
@@ -85,7 +100,12 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
   const [keepLocal, setKeepLocal] = useState(true);
   const [detectedHardwareLabel, setDetectedHardwareLabel] = useState('Detecting...');
   const [detectedHardwareReason, setDetectedHardwareReason] = useState<string | null>(null);
+  // Bumped on every engine/device change — even when the device value itself is
+  // unchanged (e.g. switching Nano ↔ Micro ↔ Kokoro while staying on wasm).
+  // Forces a re-render so getDefaultModelForDevice() re-reads localStorage.
+  const [engineNonce, setEngineNonce] = useState(0);
 
+  void engineNonce;
   const derivedModelConfig = getDefaultModelForDevice(preferredDevice);
   const selectedModel = derivedModelConfig.modelId;
   const preferredDtype = derivedModelConfig.dtype;
@@ -161,6 +181,19 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     preferredDtype
   });
 
+  // Keep voice in sync with engine family: Inflect ships a single fixed voice,
+  // Kokoro needs a kokoro voice id. Without this the picker shows a stale
+  // value (blank label) or Kokoro is fed 'im_owen' and fails chunks.
+  const KOKORO_FALLBACK_VOICE = 'af_heart';
+  useEffect(() => {
+    if (isInflectModel(selectedModel)) {
+      if (selectedVoice !== INFLECT_DEFAULT_VOICE) setSelectedVoice(INFLECT_DEFAULT_VOICE);
+    } else if (selectedVoice === INFLECT_DEFAULT_VOICE) {
+      setSelectedVoice(KOKORO_FALLBACK_VOICE);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedModel]);
+
   // Action handlers
   const handleStartReading = async (providedText?: string) => {
     const textToRead = (providedText ?? inputText).trim();
@@ -233,6 +266,10 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
           console.error('❌ Error during synthesis:', error);
           setToast({ title: 'Reading Error', message: 'Failed to synthesize the full text. Check console.', type: 'error' });
           setIsGenerating(false); // Reset isGenerating on error
+          // Return to editing view so the user is not stranded in an empty reader
+          // with no audio and no way back except a manual mode switch.
+          setIsReading(false);
+          setCurrentSentence('');
         });
 
     } catch (error) {
@@ -493,7 +530,13 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
   };
 
   const handleDeviceChange = useCallback((device: 'webgpu' | 'wasm' | 'cpu' | 'serverless') => {
-    setPreferredDevice(device);
+    // Always bump the nonce: ModelSelector nudges with the SAME device value when
+    // only the local engine (Nano/Micro/Kokoro) changed, and setState with an
+    // identical value would otherwise bail out with no re-render.
+    setEngineNonce((n) => n + 1);
+    setPreferredDevice((prev) => (prev === device ? prev : device));
+    // Force a render even when prev === device (React bails out above).
+    // setEngineNonce already guarantees a render; this keeps intent explicit.
     modelManager.savePreferences({ preferredDevice: device });
     const isLocal = device === 'webgpu' || device === 'wasm' || device === 'cpu';
     if (isLocal && !modelAccepted) {
@@ -527,18 +570,36 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
   // Auto-start reading once model finishes downloading
   useEffect(() => {
     if (tts.isReady && pendingRead) {
+      const { text, voice } = pendingRead;
+      // Mirror handleStartReading UI state so the first Listen after model
+      // consent shows progress/reader immediately instead of generating silently.
+      setIsReading(true);
+      setCurrentSentence(text);
+      setIsGenerating(true);
+      if (tts.generationProgressRef) tts.generationProgressRef.current = 0;
       (async () => {
         try {
-          await tts.speak(pendingRead.text, pendingRead.voice);
-        } catch { }
+          await tts.speak(text, voice);
+          if (tts.generationProgressRef) tts.generationProgressRef.current = 100;
+        } catch (e) {
+          console.warn('Pending read failed:', e);
+          // Don't strand the user in an empty reader on failure.
+          setIsReading(false);
+          setCurrentSentence('');
+        } finally {
+          setIsGenerating(false);
+        }
         setPendingRead(null);
       })();
     }
   }, [tts.isReady, pendingRead, tts.speak]);
 
-  // Clean up unwanted cached models on mount
+  // Sync cache UI state with what is actually in the browser cache.
+  // NOTE: we intentionally do NOT call cleanupUnwantedModels() on mount —
+  // getModelKeepLocal() defaults to false, so that would delete every
+  // freshly downloaded 80–300MB model on the next refresh and force a re-download loop.
   useEffect(() => {
-    modelManager.cleanupUnwantedModels();
+    modelManager.verifyCacheStatus().catch(() => {});
   }, []);
 
   useEffect(() => {

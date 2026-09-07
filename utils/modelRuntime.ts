@@ -55,6 +55,14 @@ export const getDefaultModelForDevice = (device: PreferredDevice): { modelId: st
       return { modelId: 'kokoro-82m-fp32', dtype: 'fp32' };
     case 'wasm':
     case 'cpu':
+      // iPhone safety first: Kokoro 82M OOMs in iOS Safari even when explicitly
+      // selected, so always use Inflect there (Micro if chosen, else Nano).
+      if (isIOSDevice()) {
+        if (getLocalEngineChoice() === 'inflect-micro') {
+          return { modelId: 'inflect-micro-v2', dtype: 'fp32' };
+        }
+        return { modelId: 'inflect-nano-v2', dtype: 'fp32' };
+      }
       switch (getLocalEngineChoice()) {
         case 'inflect-nano':
           return { modelId: 'inflect-nano-v2', dtype: 'fp32' };
@@ -63,9 +71,6 @@ export const getDefaultModelForDevice = (device: PreferredDevice): { modelId: st
         case 'kokoro':
           return { modelId: 'kokoro-82m-q8', dtype: 'q8' };
         default:
-          // Kokoro's 82M is the thing that does not survive iOS Safari. Inflect
-          // Nano is ~16MB of FP32 weights and runs single-threaded without SIMD.
-          if (isIOSDevice()) return { modelId: 'inflect-nano-v2', dtype: 'fp32' };
           return { modelId: 'kokoro-82m-q8', dtype: 'q8' };
       }
     case 'serverless':

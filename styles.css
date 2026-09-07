@@ -53,6 +53,21 @@ button:focus-visible {
   outline-offset: 2px;
 }
 
+/* iOS: kill double-tap-to-zoom delay and prevent text-size inflation */
+button, select, a {
+  touch-action: manipulation;
+}
+html {
+  -webkit-text-size-adjust: 100%;
+}
+/* iOS Safari needs an explicit height chain for 100dvh layouts + notch padding */
+html, body, #root {
+  min-height: 100%;
+}
+body {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
 /* Clean Editor Typography */
 .prose-editor {
   font-size: 1.125rem;

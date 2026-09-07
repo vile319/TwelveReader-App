@@ -24,6 +24,20 @@ export interface ModelKeepLocalSettings {
   [modelId: string]: boolean;
 }
 
+/**
+ * Match a cache URL to a specific model. Both Inflect Nano and Micro ship
+ * `onnx/decode.onnx`, so matching on filename alone marks/deletes both.
+ * We also require a repo-specific token from the model URL.
+ */
+const matchesModelUrl = (model: ModelConfig, url: string): boolean => {
+  if (!url.includes(model.filename)) return false;
+  const repo = model.url.toLowerCase();
+  if (repo.includes('inflect-nano')) return url.toLowerCase().includes('inflect-nano');
+  if (repo.includes('inflect-micro')) return url.toLowerCase().includes('inflect-micro');
+  if (repo.includes('kokoro')) return url.toLowerCase().includes('kokoro');
+  return true;
+};
+
 export class ModelManager {
   private static instance: ModelManager;
   private preferences: ModelPreferences;
@@ -196,7 +210,7 @@ export class ModelManager {
         const requests = await cache.keys();
         for (const req of requests) {
           allModels.forEach(model => {
-            if (req.url.includes(model.filename)) {
+            if (matchesModelUrl(model, req.url)) {
               foundModels.add(model.id);
             }
           });
@@ -248,7 +262,7 @@ export class ModelManager {
       const modelConfig = getModelInfo(modelId);
       const filename = modelConfig?.filename;
 
-      if (!filename) {
+      if (!filename || !modelConfig) {
         console.warn(`Could not find config for model ${modelId} during cleanup`);
         return;
       }
@@ -267,7 +281,7 @@ export class ModelManager {
           // ONLY delete the ONNX payload file. The small configs (.json) and WASM binaries 
           // are shared between all Kokoro variants and MUST be kept if they plan to use another variant.
           for (const request of requests) {
-            if (request.url.endsWith(filename)) {
+            if (matchesModelUrl(modelConfig, request.url)) {
               await cache.delete(request);
             }
           }

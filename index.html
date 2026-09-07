@@ -4,65 +4,27 @@
 <head>
   <meta charset="UTF-8" />
   <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <meta name="theme-color" content="#0f172a" />
+  <!-- iOS PWA: standalone, no Safari chrome, edge-to-edge on notch devices -->
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="TwelveReader" />
   <link rel="apple-touch-icon" href="/pwa-192x192.png" />
   <meta name="google-adsense-account" content="ca-pub-7907977784876827">
-  <title>PDFtoAudio - AI-Powered Reading Assistant</title>
+  <title>TwelveReader - AI-Powered Reading Assistant</title>
 
-  <!-- Google AdSense -->
-  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-7907977784876827"
-    crossorigin="anonymous"></script>
+  <!-- NOTE: Tailwind comes from the Vite build (see styles.css), not the CDN —
+    the CDN script was redundant, warned in production, and cost ~100KB on iOS
+    cellular. Likewise the esm.sh importmap is removed: Vite bundles
+    react/pdfjs-dist, and the pinned esm.sh pdfjs (4.4.168) conflicted with the
+    installed 4.10.38. AdSense loads lazily via components for non-premium
+    users instead of blocking first paint. -->
 
-  <!-- Using Tailwind CDN for demo purposes - suppress production warning -->
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script>
-    // Suppress Tailwind CDN production warning for this demo
-    if (typeof console !== 'undefined' && console.warn) {
-      const originalWarn = console.warn;
-      console.warn = function (...args) {
-        if (args[0] && args[0].includes && args[0].includes('cdn.tailwindcss.com should not be used in production')) {
-          return; // Suppress this warning
-        }
-        originalWarn.apply(console, args);
-      };
-    }
-  </script>
-  <script>
-    tailwind.config = {
-      theme: {
-        extend: {
-          colors: {
-            'brand-primary': '#1e40af',
-            'brand-secondary': '#3b82f6',
-            'brand-light': '#dbeafe',
-            'brand-dark': '#1e3a8a',
-            'base-100': '#ffffff',
-            'base-200': '#f3f4f6',
-            'base-300': '#e5e7eb',
-            'content-primary': '#111827',
-            'content-secondary': '#4b5563',
-          }
-        }
-      }
-    }
-  </script>
-  <script type="importmap">
-{
-  "imports": {
-    "react": "https://esm.sh/react@19.1.0",
-    "react-dom/client": "https://esm.sh/react-dom@19.1.0/client",
-    "pdfjs-dist": "https://esm.sh/pdfjs-dist@4.4.168",
-    "@google/genai": "https://esm.sh/@google/genai@1.7.0?target=browser&bundle",
-    "react-dom/": "https://esm.sh/react-dom@19.1.0/",
-    "react/": "https://esm.sh/react@19.1.0/",
-    "buffer": "https://esm.sh/buffer@6.0.3",
-    "long": "https://esm.sh/long@5.2.3",
-    "@xenova/transformers": "https://esm.sh/@xenova/transformers@^2.17.2"
-  }
-}
-</script>
   <!-- Inter font for modern typography -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/styles.css" />
 </head>

@@ -212,6 +212,10 @@ const ModelSelector: FC<ModelSelectorProps> = ({
   ]);
 
   const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
+  const isIOS =
+    typeof navigator !== 'undefined' &&
+    (/iPad|iPhone|iPod/.test(navigator.userAgent) ||
+      ((navigator as any).platform === 'MacIntel' && (navigator as any).maxTouchPoints > 1));
   const fallbackDevice: 'serverless' | 'wasm' = isOnline ? 'serverless' : 'wasm';
   const effectiveSelectValue =
     effectiveDevice === 'webgpu' && !gpuAvailable ? fallbackDevice : effectiveDevice;
@@ -221,7 +225,7 @@ const ModelSelector: FC<ModelSelectorProps> = ({
 
   return (
     <div className="space-y-4">
-      {/* Device Selection */}
+      {/* Device Selection — simplified: Cloud default; local only when useful */}
       <div className="space-y-2">
         <label className="block text-sm font-semibold text-slate-200">
           Processing mode
@@ -234,28 +238,27 @@ const ModelSelector: FC<ModelSelectorProps> = ({
             }`}
         >
           <option value="serverless">
-            Cloud (recommended — best quality)
+            Cloud (recommended — works on iPhone)
           </option>
-          {gpuAvailable ? (
+          {!isIOS && gpuAvailable ? (
             <option value="webgpu">Local GPU — WebGPU</option>
-          ) : gpuCheckComplete ? (
+          ) : !isIOS && gpuCheckComplete ? (
             <option value="webgpu" disabled>Local GPU — WebGPU (unavailable)</option>
           ) : null}
           <option value="wasm">
-            Local CPU — offline (may not work on iPhone)
-          </option>
-          <option value="cpu">
-            Local CPU (native) — offline (may not work on iPhone)
+            {isIOS ? 'Local CPU — offline (iPhone-safe engines only)' : 'Local CPU — offline'}
           </option>
         </select>
-        {localGpuMessage && (
+        {localGpuMessage && !isIOS && (
           <p className="text-xs text-slate-400">
             {localGpuMessage}
           </p>
         )}
         {(effectiveDevice === 'wasm' || effectiveDevice === 'cpu' || effectiveDevice === 'webgpu') && (
           <p className="text-xs text-amber-400 flex items-center gap-1">
-            Local mode works offline but may crash on iPhone. Use cloud for best experience.
+            {isIOS
+              ? 'On iPhone, only Inflect Nano/Micro run locally. Kokoro needs Cloud.'
+              : 'Local mode works offline but may crash on iPhone. Use cloud for best experience.'}
           </p>
         )}
       </div>
@@ -274,7 +277,7 @@ const ModelSelector: FC<ModelSelectorProps> = ({
               }`}
           >
             <option value="auto">Automatic (Inflect on iPhone, Kokoro elsewhere)</option>
-            <option value="kokoro">Kokoro 82M — 50+ voices, 82MB (not iPhone-safe)</option>
+            {!isIOS && <option value="kokoro">Kokoro 82M — 50+ voices, 82MB (not iPhone-safe)</option>}
             <option value="inflect-nano">Inflect Nano — 1 voice, 16MB (fastest, iPhone-safe)</option>
             <option value="inflect-micro">Inflect Micro — 1 voice, 38MB (better quality)</option>
           </select>

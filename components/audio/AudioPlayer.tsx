@@ -78,7 +78,9 @@ const AudioPlayer: FC = () => {
       "fixed bottom-0 left-0 right-0 z-50 transition-transform duration-500 ease-out",
       "glass-floating-bar px-4 py-3 md:px-8",
       disabled && !state.inputText.trim() ? "translate-y-full" : "translate-y-0"
-    )}>
+    )}
+      style={{ paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom, 0px))' }}
+    >
       <div className="max-w-5xl mx-auto flex flex-col md:flex-row items-center gap-4 md:gap-8">
 
         {/* Playback Controls */}
@@ -169,6 +171,14 @@ const AudioPlayer: FC = () => {
                 const rect = e.currentTarget.getBoundingClientRect();
                 const clickPosition = (e.clientX - rect.left) / rect.width;
                 actions.seekToTime(clickPosition * safeDuration);
+              }}
+              onTouchEnd={(e: React.TouchEvent<HTMLDivElement>) => {
+                if (!state.audio.canScrub) return;
+                const touch = e.changedTouches[0];
+                if (!touch) return;
+                const rect = e.currentTarget.getBoundingClientRect();
+                const tapPosition = (touch.clientX - rect.left) / rect.width;
+                actions.seekToTime(Math.max(0, Math.min(1, tapPosition)) * safeDuration);
               }}
               onMouseUp={() => { if (!state.audio.canScrub) return; }}
             >
