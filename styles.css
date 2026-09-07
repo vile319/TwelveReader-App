@@ -1,3 +1,15 @@
+/* Tailwind v4 — compiled at build time by @tailwindcss/vite.
+ * (Previously loaded from the CDN at runtime; the CDN script was removed for
+ * first-paint speed, so utilities MUST come from here or the GUI is unstyled.)
+ */
+@import "tailwindcss";
+@import "tw-animate-css";
+
+/* Makes the `font-inter` class used in App.tsx work (Tailwind v4 theme var). */
+@theme {
+  --font-inter: "Inter", system-ui, -apple-system, sans-serif;
+}
+
 /* Premium Reader Styles (ElevenLabs Inspired) */
 
 /* Base Typography Tuning */
